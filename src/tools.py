@@ -50,19 +50,22 @@ TOOLS = {
 
 
 def get_tool_schemas() -> list[dict]:
-    """Return tool schemas in Anthropic API format."""
+    """Return tool schemas in OpenAI API format."""
     schemas = []
     for name, tool in TOOLS.items():
         schemas.append({
-            "name": name,
-            "description": tool["description"],
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    k: {"type": v, "description": k}
-                    for k, v in tool["parameters"].items()
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": tool["description"],
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        k: {"type": v, "description": k}
+                        for k, v in tool["parameters"].items()
+                    },
+                    "required": list(tool["parameters"].keys()),
                 },
-                "required": list(tool["parameters"].keys()),
             },
         })
     return schemas
