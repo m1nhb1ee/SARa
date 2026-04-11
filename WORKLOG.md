@@ -46,13 +46,13 @@ Observe → Describe → Interpret → DDx → Conclusion.
 | Task | Người làm | Deadline | Trạng thái |
 |---|---|---|---|
 | Xác định target user và phân tích pain point | Cả nhóm | 09/04 | ✅ Xong |
-| Ước lượng thị trường (TAM / SAM / SOM) | Cả nhóm | 09/04 | ✅ Xong |
-| Hoàn thành Phân tích nghiệp vụ (PRD v2.2.1) | Cả nhóm | 11/04 | ✅ Xong |
-| Xác định 8 user stories (US-01 → US-08) | Cả nhóm | 11/04 | ✅ Xong |
-| Hoàn thành MVP Scope và 7 tính năng (F-01 → F-07) | Cả nhóm | 11/04 | ✅ Xong |
-| Thử nghiệm model open-source (MedGemma-1.5-4B, medvlm-r1) | Nguyễn Trọng Tiến | 11/04 | ✅ Xong |
-| Gửi kết quả model và nhận feedback từ bác sĩ | Nguyễn Trọng Tiến | 11/04 | ✅ Xong |
-| Tìm nguồn data ảnh y khoa | Cả nhóm | 11/04 | 🔄 Đang làm |
+| Ước lượng thị trường (TAM / SAM / SOM) | Minh | 09/04 | ✅ Xong |
+| Hoàn thành Phân tích nghiệp vụ  | Tiến | 11/04 | ✅ Xong |
+| Xác định 8 user stories (US-01 → US-08) | Tiến | 11/04 | ✅ Xong |
+| Hoàn thành MVP Scope | Minh và Khôi | 11/04 | ✅ Xong |
+| Thử nghiệm model open-source (MedGemma-1.5-4B, medvlm-r1) | Tiến và Minh | 11/04 | ✅ Xong |
+| Gửi kết quả model và nhận feedback từ bác sĩ | Tiến | 11/04 | ✅ Xong |
+| Tìm nguồn data ảnh y khoa | Khôi | 11/04 | 🔄 Đang làm |
 
 ---
 
@@ -75,3 +75,4 @@ Observe → Describe → Interpret → DDx → Conclusion.
 **Kết luận:** Chọn VLM → LLM. VLM đưa ra quan sát theo pipeline Observe → Describe →
 Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 Ưu tiên model nhẹ, khả thi để deploy trong giai đoạn MVP.
+S
