@@ -1,19 +1,108 @@
 # Environment
 .env
+.env.*
+!.env.example
+!.env.local.example
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
 venv/
 .venv/
+env/
+ENV/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 .pytest_cache/
 .mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.ruff_cache/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+
+# Node / NPM / Yarn
+node_modules/
+npm-debug.log*
+npm-error.log*
+yarn-debug.log*
+yarn-error.log*
+yarn-integrity
+pnpm-debug.log*
+pnpm-error.log*
+.pnpm-store/
+.npm/
+.yarn/
+.yarn/cache/
+.yarn/unplugged
+.parcel-cache
+.pnp
+.pnp.js
+
+# Build & dist
+dist/
+dist-ssr/
+*.local
+.next/
+.nuxt/
+.svelte-kit/
+.uniapp/
+out/
+coverage/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.vscode-wsl/
+.idea/
+*.sublime-workspace
+*.sublime-project
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
 
 # OS
+Thumbs.db
 .DS_Store
+ehthumbs.db
+Desktop.ini
+
+# Misc
+.cache/
+.parcel-cache
+.eslintcache
+.stylelintcache
+*.tgz
+.yarn/install-state.gz
 
 # AI logs — tracked structure, ignored content
 .ai-log/*.jsonl

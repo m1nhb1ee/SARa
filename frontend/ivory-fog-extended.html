@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ivory Fog — Design System</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ═══════════════════════════════════════════════
+   IVORY FOG — EXTENDED DESIGN SYSTEM TOKENS
+   ═══════════════════════════════════════════════ */
+:root {
+  /* ── Gốc từ mẫu 06 ── */
+  --if-white:   #FFFFFF;
+  --if-cream:   #FAF6F0;
+  --if-amber:   #F5EDCC;
+  --if-gray:    #E8E4DE;
+  --if-taupe:   #A89F8C;
+  --if-brown:   #3D3830;
+  --if-olive:   #7A7060;
+
+  /* ── 60%: Background layers ── */
+  --bg-page:      #FAF8F4;
+  --bg-section:   #F5F0E8;
+  --bg-card:      #FFFFFF;
+  --bg-muted:     #EDE8DF;
+  --bg-subtle:    #E6E0D4;
+
+  /* ── 30%: Borders & Lines ── */
+  --line-hairline: #EDE8DE;  /* table rows, thin dividers */
+  --line-default:  #DAD4C8;  /* card borders, input border */
+  --line-mid:      #C6BEB0;  /* section dividers */
+  --line-strong:   #A89F8C;  /* active input, strong border */
+
+  /* ── 10%: Accent / Action ── */
+  --accent:        #7A7060;  /* primary CTA, links, active */
+  --accent-hover:  #5C5448;  /* hover state */
+  --accent-active: #3D3830;  /* pressed / very deep */
+  --accent-faint:  #F0EAD8;  /* accent bg chip, tag, selection */
+  --accent-soft:   #E0D8C4;  /* slightly stronger chip bg */
+
+  /* ── Typography hierarchy ── */
+  --text-h:       #2A2318;  /* headings, super contrast */
+  --text-body:    #3D3830;  /* body text */
+  --text-sec:     #6B6158;  /* secondary / label */
+  --text-muted:   #9A9088;  /* hints, captions */
+  --text-ph:      #C0B8AE;  /* placeholder */
+  --text-inverse: #FFFFFF;  /* text on dark bg */
+  --text-link:    #7A7060;  /* links */
+
+  /* ── Data visualization (5 series, warm-harmonized) ── */
+  --data-1: #C4922A;  /* amber gold — series 1 (primary) */
+  --data-2: #5E8A6A;  /* sage green — series 2 */
+  --data-3: #A0685C;  /* terracotta — series 3 */
+  --data-4: #6E8898;  /* slate blue — series 4 */
+  --data-5: #907898;  /* dusty mauve — series 5 */
+
+  /* Light variants of data colors (for bar bg, area bg) */
+  --data-1-light: #F5E8C8;
+  --data-2-light: #D4EAD8;
+  --data-3-light: #F0DCD8;
+  --data-4-light: #D4E4EE;
+  --data-5-light: #E4D8EC;
+
+  /* ── Semantic / Status ── */
+  --s-ok-text:  #3A6040;  --s-ok-bg:   #EEF5EC;  --s-ok-line:  #B4D4B8;
+  --s-warn-text:#6A5418;  --s-warn-bg: #FAF0D8;  --s-warn-line:#DFC870;
+  --s-err-text: #7A3028;  --s-err-bg:  #F8EDEC;  --s-err-line: #D4A8A4;
+  --s-info-text:#304858;  --s-info-bg: #EBF0F5;  --s-info-line:#A8C0D4;
+
+  /* ── Shadow (warm-tinted) ── */
+  --sh-xs: 0 1px 3px rgba(60,48,30,0.06);
+  --sh-sm: 0 2px 10px rgba(60,48,30,0.08);
+  --sh-md: 0 4px 24px rgba(60,48,30,0.10);
+  --sh-lg: 0 8px 48px rgba(60,48,30,0.12);
+
+  /* ── Radius ── */
+  --r-xs: 4px;  --r-sm: 8px;  --r-md: 12px;  --r-lg: 16px;  --r-xl: 24px;  --r-full: 999px;
+}
+
+/* ═══════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════ */
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg-page);
+  color: var(--text-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+h1,h2,h3,h4,h5 {
+  font-family: 'Playfair Display', serif;
+  color: var(--text-h);
+  line-height: 1.2;
+}
+a { color: var(--text-link); text-decoration: none; }
+a:hover { color: var(--accent-hover); }
+code, .mono { font-family: 'DM Mono', monospace; font-size: 0.85em; }
+
+/* ═══════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════ */
+.app-wrap { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border-right: 1px solid var(--line-default);
+  display: flex;
+  flex-direction: column;
+  padding: 28px 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.sidebar-logo {
+  padding: 0 24px 28px;
+  border-bottom: 1px solid var(--line-hairline);
+  margin-bottom: 16px;
+}
+.sidebar-logo .logotype {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  color: var(--text-h);
+  letter-spacing: 0.5px;
+}
+.sidebar-logo .logotype span { color: var(--accent); }
+.sidebar-logo .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; letter-spacing: 1px; text-transform: uppercase; }
+.nav-section { padding: 0 12px; margin-bottom: 8px; }
+.nav-label {
+  font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--text-ph); padding: 0 12px; margin-bottom: 4px; margin-top: 16px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: var(--r-sm);
+  font-size: 13px; font-weight: 500; color: var(--text-sec);
+  cursor: pointer; transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.nav-item:hover { background: var(--bg-muted); color: var(--text-body); }
+.nav-item.active {
+  background: var(--accent-faint);
+  color: var(--accent-hover);
+  border-color: var(--accent-soft);
+}
+.nav-item .icon { font-size: 15px; width: 20px; text-align: center; }
+.sidebar-bottom {
+  margin-top: auto;
+  padding: 16px 12px 0;
+  border-top: 1px solid var(--line-hairline);
+}
+.user-chip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--r-sm);
+  cursor: pointer; transition: background 0.15s;
+}
+.user-chip:hover { background: var(--bg-muted); }
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent-hover);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; flex-shrink: 0;
+}
+.user-name { font-size: 13px; font-weight: 500; color: var(--text-body); }
+.user-role { font-size: 11px; color: var(--text-muted); }
+
+/* ── Main content ── */
+.main { flex: 1; overflow: hidden; }
+
+/* ── Topbar ── */
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 32px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--line-default);
+  position: sticky; top: 0; z-index: 10;
+}
+.topbar-title h2 { font-size: 20px; font-family: 'Playfair Display', serif; color: var(--text-h); }
+.breadcrumb { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.breadcrumb span { color: var(--text-muted); }
+.breadcrumb b { color: var(--text-sec); font-weight: 500; }
+.topbar-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+/* ── Content area ── */
+.content { padding: 32px; display: flex; flex-direction: column; gap: 32px; }
+
+/* ═══════════════════════════════════════════════
+   SECTION HEADERS
+   ═══════════════════════════════════════════════ */
+.section-hd {
+  display: flex; align-items: baseline; gap: 12px;
+  margin-bottom: 16px;
+}
+.section-hd h3 { font-size: 17px; }
+.section-hd .sub { font-size: 12px; color: var(--text-muted); font-family: 'DM Sans', sans-serif; font-weight: 400; }
+.section-divider { height: 1px; background: var(--line-hairline); margin-bottom: 24px; }
+
+/* ═══════════════════════════════════════════════
+   CARD
+   ═══════════════════════════════════════════════ */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--line-default);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-xs);
+}
+.card-pad { padding: 24px; }
+.card-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line-hairline);
+}
+.card-hd-title { font-size: 14px; font-weight: 600; color: var(--text-body); }
+.card-hd-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+/* ═══════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════ */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 18px; border-radius: var(--r-sm);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; border: 1px solid transparent;
+  transition: all 0.15s; white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+.btn:active { transform: scale(0.97); }
+
+/* Primary */
+.btn-primary {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+}
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+/* Secondary */
+.btn-secondary {
+  background: var(--accent-faint);
+  color: var(--accent-hover);
+  border-color: var(--accent-soft);
+}
+.btn-secondary:hover { background: var(--accent-soft); }
+
+/* Ghost */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-sec);
+  border-color: var(--line-default);
+}
+.btn-ghost:hover { background: var(--bg-muted); border-color: var(--line-mid); color: var(--text-body); }
+
+/* Destructive */
+.btn-danger {
+  background: var(--s-err-bg);
+  color: var(--s-err-text);
+  border-color: var(--s-err-line);
+}
+.btn-danger:hover { background: #F0E0DC; }
+
+/* Text */
+.btn-text {
+  background: transparent; border-color: transparent;
+  color: var(--text-link); padding-left: 4px; padding-right: 4px;
+}
+.btn-text:hover { color: var(--accent-hover); background: var(--accent-faint); }
+
+/* Sizes */
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: var(--r-xs); }
+.btn-lg { padding: 12px 24px; font-size: 15px; border-radius: var(--r-md); }
+.btn-icon { padding: 8px; border-radius: var(--r-sm); }
+
+/* ═══════════════════════════════════════════════
+   BADGES / TAGS
+   ═══════════════════════════════════════════════ */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: var(--r-full);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+  border: 1px solid transparent;
+}
+.badge-default { background: var(--bg-muted); color: var(--text-sec); border-color: var(--line-default); }
+.badge-accent  { background: var(--accent-faint); color: var(--accent-hover); border-color: var(--accent-soft); }
+.badge-ok      { background: var(--s-ok-bg); color: var(--s-ok-text); border-color: var(--s-ok-line); }
+.badge-warn    { background: var(--s-warn-bg); color: var(--s-warn-text); border-color: var(--s-warn-line); }
+.badge-err     { background: var(--s-err-bg); color: var(--s-err-text); border-color: var(--s-err-line); }
+.badge-info    { background: var(--s-info-bg); color: var(--s-info-text); border-color: var(--s-info-line); }
+
+/* ═══════════════════════════════════════════════
+   FORM ELEMENTS
+   ═══════════════════════════════════════════════ */
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-label { font-size: 12px; font-weight: 600; color: var(--text-sec); letter-spacing: 0.3px; }
+.form-hint  { font-size: 11px; color: var(--text-muted); }
+.input, .select, .textarea {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  background: var(--bg-card);
+  color: var(--text-body);
+  border: 1px solid var(--line-default);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input::placeholder, .textarea::placeholder { color: var(--text-ph); }
+.input:hover, .textarea:hover { border-color: var(--line-mid); }
+.input:focus, .select:focus, .textarea:focus {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 3px rgba(122,112,96,0.12);
+}
+.input-error { border-color: var(--s-err-line); }
+.input-error:focus { box-shadow: 0 0 0 3px rgba(218,100,80,0.12); }
+.input-ok { border-color: var(--s-ok-line); }
+.select { appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239A9088' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
+.textarea { resize: vertical; min-height: 80px; }
+.input-group { display: flex; }
+.input-group .input { border-radius: var(--r-sm) 0 0 var(--r-sm); border-right: none; }
+.input-group .btn { border-radius: 0 var(--r-sm) var(--r-sm) 0; border-left: none; }
+.checkbox-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.checkbox-row input[type=checkbox] {
+  width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════
+   ALERTS
+   ═══════════════════════════════════════════════ */
+.alert {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 16px; border-radius: var(--r-md);
+  border: 1px solid; font-size: 13px;
+}
+.alert-icon { font-size: 15px; margin-top: 1px; flex-shrink: 0; }
+.alert-title { font-weight: 600; margin-bottom: 2px; font-size: 13px; }
+.alert-ok   { background: var(--s-ok-bg);   border-color: var(--s-ok-line);   color: var(--s-ok-text); }
+.alert-warn { background: var(--s-warn-bg); border-color: var(--s-warn-line); color: var(--s-warn-text); }
+.alert-err  { background: var(--s-err-bg);  border-color: var(--s-err-line);  color: var(--s-err-text); }
+.alert-info { background: var(--s-info-bg); border-color: var(--s-info-line); color: var(--s-info-text); }
+
+/* ═══════════════════════════════════════════════
+   KPI STAT CARDS
+   ═══════════════════════════════════════════════ */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--line-default);
+  border-radius: var(--r-lg);
+  padding: 20px 22px;
+  box-shadow: var(--sh-xs);
+}
+.kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+.kpi-value { font-size: 28px; font-family: 'Playfair Display', serif; color: var(--text-h); line-height: 1; margin-bottom: 8px; }
+.kpi-change { font-size: 12px; display: flex; align-items: center; gap: 5px; }
+.kpi-up   { color: var(--s-ok-text); }
+.kpi-down { color: var(--s-err-text); }
+.kpi-flat { color: var(--text-muted); }
+.kpi-bar { height: 3px; border-radius: 2px; background: var(--bg-muted); margin-top: 12px; overflow: hidden; }
+.kpi-bar-fill { height: 100%; border-radius: 2px; }
+
+/* ═══════════════════════════════════════════════
+   BAR CHART (SVG)
+   ═══════════════════════════════════════════════ */
+.chart-wrap { padding: 20px 24px 16px; }
+.chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.legend-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-sec); }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.chart-svg { width: 100%; overflow: visible; }
+
+/* ═══════════════════════════════════════════════
+   DONUT CHART
+   ═══════════════════════════════════════════════ */
+.donut-wrap { padding: 20px 24px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+.donut-svg { width: 140px; height: 140px; flex-shrink: 0; }
+.donut-legend { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.donut-row { display: flex; align-items: center; gap: 10px; }
+.donut-bar-bg { flex: 1; height: 4px; border-radius: 2px; background: var(--bg-muted); overflow: hidden; }
+.donut-bar-fill { height: 100%; border-radius: 2px; }
+.donut-pct { font-size: 12px; color: var(--text-muted); font-family: 'DM Mono', monospace; min-width: 34px; text-align: right; }
+
+/* ═══════════════════════════════════════════════
+   TABLE
+   ═══════════════════════════════════════════════ */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table thead th {
+  text-align: left; padding: 10px 16px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--line-default);
+  background: var(--bg-section);
+}
+.data-table tbody tr { border-bottom: 1px solid var(--line-hairline); transition: background 0.1s; }
+.data-table tbody tr:last-child { border-bottom: none; }
+.data-table tbody tr:hover { background: var(--bg-section); }
+.data-table td { padding: 12px 16px; color: var(--text-body); vertical-align: middle; }
+.td-name { font-weight: 500; color: var(--text-h); }
+.td-mono { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-sec); }
+.td-amount { font-family: 'DM Mono', monospace; font-weight: 500; }
+.user-row { display: flex; align-items: center; gap: 10px; }
+.user-row .avatar { width: 30px; height: 30px; font-size: 11px; }
+
+/* ═══════════════════════════════════════════════
+   LINE CHART (mini sparklines via SVG)
+   ═══════════════════════════════════════════════ */
+.spark { width: 64px; height: 28px; overflow: visible; }
+
+/* ═══════════════════════════════════════════════
+   PROGRESS BAR
+   ═══════════════════════════════════════════════ */
+.progress { height: 6px; border-radius: 3px; background: var(--bg-muted); overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+
+/* ═══════════════════════════════════════════════
+   TYPOGRAPHY SCALE DEMO
+   ═══════════════════════════════════════════════ */
+.type-row { padding: 14px 0; border-bottom: 1px solid var(--line-hairline); display: flex; align-items: baseline; gap: 24px; }
+.type-row:last-child { border-bottom: none; }
+.type-meta { min-width: 200px; }
+.type-meta .type-name { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.5px; }
+.type-meta .type-spec { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-ph); margin-top: 2px; }
+.type-sample-h1  { font-size: 32px; font-family: 'Playfair Display', serif; color: var(--text-h); }
+.type-sample-h2  { font-size: 24px; font-family: 'Playfair Display', serif; color: var(--text-h); }
+.type-sample-h3  { font-size: 18px; font-family: 'Playfair Display', serif; color: var(--text-h); }
+.type-sample-body { font-size: 15px; color: var(--text-body); line-height: 1.6; }
+.type-sample-sec  { font-size: 13px; color: var(--text-sec); }
+.type-sample-cap  { font-size: 11px; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; }
+.type-sample-code { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent-hover); background: var(--accent-faint); padding: 2px 8px; border-radius: var(--r-xs); border: 1px solid var(--accent-soft); }
+
+/* ═══════════════════════════════════════════════
+   COLOR TOKEN TABLE
+   ═══════════════════════════════════════════════ */
+.token-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.token-chip {
+  border-radius: var(--r-md); overflow: hidden;
+  border: 1px solid var(--line-default);
+  box-shadow: var(--sh-xs);
+}
+.token-swatch { height: 48px; }
+.token-info { padding: 8px 10px; background: var(--bg-card); }
+.token-var  { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-sec); }
+.token-hex  { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); }
+.token-role { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+/* ═══════════════════════════════════════════════
+   LINE STYLE DEMO
+   ═══════════════════════════════════════════════ */
+.line-demo { display: flex; flex-direction: column; gap: 14px; }
+.line-item { display: flex; align-items: center; gap: 16px; }
+.line-label { font-size: 12px; color: var(--text-sec); min-width: 120px; }
+.line-sample { flex: 1; }
+
+/* ═══════════════════════════════════════════════
+   UTILITY
+   ═══════════════════════════════════════════════ */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-chart { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+.flex { display: flex; }
+.flex-center { display: flex; align-items: center; }
+.gap-8  { gap: 8px;  }
+.gap-10 { gap: 10px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.gap-20 { gap: 20px; }
+.flex-wrap { flex-wrap: wrap; }
+.ml-auto { margin-left: auto; }
+.mt-4  { margin-top: 4px; }
+.mt-8  { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mb-4  { margin-bottom: 4px; }
+.mb-8  { margin-bottom: 8px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-16 { margin-bottom: 16px; }
+.p-0 { padding: 0; }
+.text-muted { color: var(--text-muted); font-size: 12px; }
+.fw-500 { font-weight: 500; }
+.fw-600 { font-weight: 600; }
+.fs-12 { font-size: 12px; }
+.fs-13 { font-size: 13px; }
+
+/* ═══════════════════════════════════════════════
+   SCROLLBAR
+   ═══════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-page); }
+::-webkit-scrollbar-thumb { background: var(--line-mid); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="app-wrap">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logotype">Ivory<span>Fog</span></div>
+      <div class="sub">Design System</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Workspace</div>
+      <div class="nav-item active"><span class="icon">◈</span> Dashboard</div>
+      <div class="nav-item"><span class="icon">◻</span> Dự án</div>
+      <div class="nav-item"><span class="icon">◎</span> Phân tích</div>
+      <div class="nav-item"><span class="icon">◷</span> Lịch sử</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Hệ thống</div>
+      <div class="nav-item"><span class="icon">◑</span> Token màu</div>
+      <div class="nav-item"><span class="icon">◇</span> Components</div>
+      <div class="nav-item"><span class="icon">△</span> Cài đặt</div>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="user-chip">
+        <div class="avatar">TH</div>
+        <div>
+          <div class="user-name">Tú Hoàng</div>
+          <div class="user-role">Design Lead</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="topbar-title">
+        <h2>Dashboard</h2>
+        <div class="breadcrumb"><span>Workspace</span> › <b>Dashboard</b></div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm">↓ Xuất báo cáo</button>
+        <button class="btn btn-primary btn-sm">+ Thêm mới</button>
+        <div class="avatar" style="width:34px;height:34px;">TH</div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- ── 1. KPI CARDS ── -->
+      <div>
+        <div class="section-hd">
+          <h3>Tổng quan</h3>
+          <span class="sub">Cập nhật lúc 14:30 hôm nay</span>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Doanh thu</div>
+            <div class="kpi-value">₫84.2M</div>
+            <div class="kpi-change kpi-up">▲ 12.4% so với tháng trước</div>
+            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:84%;background:var(--data-1);"></div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Người dùng mới</div>
+            <div class="kpi-value">1,284</div>
+            <div class="kpi-change kpi-up">▲ 8.1% so với tháng trước</div>
+            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:62%;background:var(--data-2);"></div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Tỷ lệ chuyển đổi</div>
+            <div class="kpi-value">3.8%</div>
+            <div class="kpi-change kpi-down">▼ 0.3% so với tháng trước</div>
+            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:38%;background:var(--data-3);"></div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Điểm hài lòng</div>
+            <div class="kpi-value">4.7</div>
+            <div class="kpi-change kpi-flat">— Không đổi</div>
+            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:94%;background:var(--data-4);"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 2. CHARTS ── -->
+      <div class="grid-chart">
+
+        <!-- Bar Chart -->
+        <div class="card p-0">
+          <div class="card-hd">
+            <div>
+              <div class="card-hd-title">Doanh thu theo tháng</div>
+              <div class="card-hd-sub">6 tháng gần nhất — Đơn vị: triệu đồng</div>
+            </div>
+            <div class="flex gap-8">
+              <button class="btn btn-ghost btn-sm">Tuần</button>
+              <button class="btn btn-secondary btn-sm">Tháng</button>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--data-1);"></div> Doanh thu thực</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--data-2);"></div> Mục tiêu</div>
+            </div>
+            <svg class="chart-svg" viewBox="0 0 540 200" xmlns="http://www.w3.org/2000/svg">
+              <!-- Grid lines -->
+              <line x1="48" y1="16" x2="540" y2="16" stroke="#EDE8DE" stroke-width="1"/>
+              <line x1="48" y1="56" x2="540" y2="56" stroke="#EDE8DE" stroke-width="1"/>
+              <line x1="48" y1="96" x2="540" y2="96" stroke="#EDE8DE" stroke-width="1"/>
+              <line x1="48" y1="136" x2="540" y2="136" stroke="#EDE8DE" stroke-width="1"/>
+              <line x1="48" y1="176" x2="540" y2="176" stroke="#DAD4C8" stroke-width="1"/>
+              <!-- Y labels -->
+              <text x="42" y="20" font-family="DM Mono,monospace" font-size="10" fill="#9A9088" text-anchor="end">100</text>
+              <text x="42" y="60" font-family="DM Mono,monospace" font-size="10" fill="#9A9088" text-anchor="end">75</text>
+              <text x="42" y="100" font-family="DM Mono,monospace" font-size="10" fill="#9A9088" text-anchor="end">50</text>
+              <text x="42" y="140" font-family="DM Mono,monospace" font-size="10" fill="#9A9088" text-anchor="end">25</text>
+              <text x="42" y="180" font-family="DM Mono,monospace" font-size="10" fill="#9A9088" text-anchor="end">0</text>
+
+              <!-- Bars (Thực tế) — group by month, width=32, gap=55 -->
+              <!-- Tháng 7: 58M -->
+              <rect x="60"  y="93"  width="22" height="83" rx="3" fill="#C4922A"/>
+              <!-- Tháng 8: 67M -->
+              <rect x="115" y="69"  width="22" height="107" rx="3" fill="#C4922A"/>
+              <!-- Tháng 9: 72M -->
+              <rect x="170" y="48"  width="22" height="128" rx="3" fill="#C4922A"/>
+              <!-- Tháng 10: 63M -->
+              <rect x="225" y="76"  width="22" height="100" rx="3" fill="#C4922A"/>
+              <!-- Tháng 11: 79M -->
+              <rect x="280" y="34"  width="22" height="142" rx="3" fill="#C4922A"/>
+              <!-- Tháng 12: 84M -->
+              <rect x="335" y="10"  width="22" height="166" rx="3" fill="#C4922A" opacity="1"/>
+
+              <!-- Bars (Mục tiêu) -->
+              <rect x="84"  y="76"  width="22" height="100" rx="3" fill="#5E8A6A" opacity="0.55"/>
+              <rect x="139" y="56"  width="22" height="120" rx="3" fill="#5E8A6A" opacity="0.55"/>
+              <rect x="194" y="56"  width="22" height="120" rx="3" fill="#5E8A6A" opacity="0.55"/>
+              <rect x="249" y="56"  width="22" height="120" rx="3" fill="#5E8A6A" opacity="0.55"/>
+              <rect x="304" y="36"  width="22" height="140" rx="3" fill="#5E8A6A" opacity="0.55"/>
+              <rect x="359" y="36"  width="22" height="140" rx="3" fill="#5E8A6A" opacity="0.55"/>
+
+              <!-- X labels -->
+              <text x="82"  y="194" font-family="DM Sans,sans-serif" font-size="11" fill="#9A9088" text-anchor="middle">Th.7</text>
+              <text x="150" y="194" font-family="DM Sans,sans-serif" font-size="11" fill="#9A9088" text-anchor="middle">Th.8</text>
+              <text x="205" y="194" font-family="DM Sans,sans-serif" font-size="11" fill="#9A9088" text-anchor="middle">Th.9</text>
+              <text x="260" y="194" font-family="DM Sans,sans-serif" font-size="11" fill="#9A9088" text-anchor="middle">Th.10</text>
+              <text x="315" y="194" font-family="DM Sans,sans-serif" font-size="11" fill="#9A9088" text-anchor="middle">Th.11</text>
+              <text x="370" y="194" font-family="DM Sans,sans-serif" font-size="11" fill="#9A9088" text-anchor="middle">Th.12</text>
+
+              <!-- Value label on last bar -->
+              <text x="346" y="6"  font-family="DM Mono,monospace" font-size="10" fill="#C4922A" text-anchor="middle" font-weight="500">84M</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Donut Chart -->
+        <div class="card p-0">
+          <div class="card-hd">
+            <div>
+              <div class="card-hd-title">Phân khúc doanh thu</div>
+              <div class="card-hd-sub">Tháng 12 / 2024</div>
+            </div>
+          </div>
+          <div class="donut-wrap">
+            <!-- SVG Donut -->
+            <svg class="donut-svg" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
+              <!-- r=52, circumference≈326.7 -->
+              <!-- Segment 1: 42% → dasharray = 137.2 326.7 -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#C4922A" stroke-width="18"
+                stroke-dasharray="137.2 326.7" stroke-dashoffset="0" stroke-linecap="butt" transform="rotate(-90 70 70)"/>
+              <!-- Segment 2: 28% → 91.5, offset=-137.2 → dashoffset=326.7-137.2=189.5 -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#5E8A6A" stroke-width="18"
+                stroke-dasharray="91.5 326.7" stroke-dashoffset="189.5" stroke-linecap="butt" transform="rotate(-90 70 70)"/>
+              <!-- Segment 3: 18% → 58.8, offset=-(137.2+91.5)=-228.7 → dashoffset=326.7-228.7=98 -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#A0685C" stroke-width="18"
+                stroke-dasharray="58.8 326.7" stroke-dashoffset="98" stroke-linecap="butt" transform="rotate(-90 70 70)"/>
+              <!-- Segment 4: 12% → 39.2, offset=-(137.2+91.5+58.8)=-287.5 → dashoffset=326.7-287.5=39.2 -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#6E8898" stroke-width="18"
+                stroke-dasharray="39.2 326.7" stroke-dashoffset="39.2" stroke-linecap="butt" transform="rotate(-90 70 70)"/>
+              <!-- Inner ring subtle -->
+              <circle cx="70" cy="70" r="42" fill="none" stroke="#EDE8DF" stroke-width="0.5"/>
+              <!-- Center label -->
+              <text x="70" y="65" font-family="Playfair Display,serif" font-size="20" font-weight="700" fill="#2A2318" text-anchor="middle">84M</text>
+              <text x="70" y="80" font-family="DM Sans,sans-serif" font-size="10" fill="#9A9088" text-anchor="middle">Tổng tháng</text>
+            </svg>
+
+            <!-- Legend + mini bars -->
+            <div class="donut-legend">
+              <div class="donut-row">
+                <div class="legend-dot" style="background:var(--data-1);width:10px;height:10px;border-radius:2px;flex-shrink:0;"></div>
+                <span style="font-size:12px;color:var(--text-sec);flex:1;">Online</span>
+                <div class="donut-bar-bg"><div class="donut-bar-fill" style="width:42%;background:var(--data-1);"></div></div>
+                <span class="donut-pct">42%</span>
+              </div>
+              <div class="donut-row">
+                <div class="legend-dot" style="background:var(--data-2);width:10px;height:10px;border-radius:2px;flex-shrink:0;"></div>
+                <span style="font-size:12px;color:var(--text-sec);flex:1;">Cửa hàng</span>
+                <div class="donut-bar-bg"><div class="donut-bar-fill" style="width:28%;background:var(--data-2);"></div></div>
+                <span class="donut-pct">28%</span>
+              </div>
+              <div class="donut-row">
+                <div class="legend-dot" style="background:var(--data-3);width:10px;height:10px;border-radius:2px;flex-shrink:0;"></div>
+                <span style="font-size:12px;color:var(--text-sec);flex:1;">Đại lý</span>
+                <div class="donut-bar-bg"><div class="donut-bar-fill" style="width:18%;background:var(--data-3);"></div></div>
+                <span class="donut-pct">18%</span>
+              </div>
+              <div class="donut-row">
+                <div class="legend-dot" style="background:var(--data-4);width:10px;height:10px;border-radius:2px;flex-shrink:0;"></div>
+                <span style="font-size:12px;color:var(--text-sec);flex:1;">Khác</span>
+                <div class="donut-bar-bg"><div class="donut-bar-fill" style="width:12%;background:var(--data-4);"></div></div>
+                <span class="donut-pct">12%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 3. TABLE ── -->
+      <div class="card p-0">
+        <div class="card-hd">
+          <div>
+            <div class="card-hd-title">Giao dịch gần đây</div>
+            <div class="card-hd-sub">12 giao dịch mới nhất</div>
+          </div>
+          <div class="flex gap-8">
+            <button class="btn btn-ghost btn-sm">Lọc</button>
+            <button class="btn btn-ghost btn-sm">Xuất</button>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Khách hàng</th>
+              <th>Mã đơn</th>
+              <th>Sản phẩm</th>
+              <th>Số tiền</th>
+              <th>Xu hướng</th>
+              <th>Trạng thái</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="user-row">
+                  <div class="avatar" style="background:#F5E8C8;color:#8A6020;">NL</div>
+                  <div>
+                    <div class="td-name">Nguyễn Linh</div>
+                    <div style="font-size:11px;color:var(--text-muted);">nguyenlinh@mail.com</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="td-mono">#IF-2401</span></td>
+              <td><span class="fs-13">Gói Premium</span></td>
+              <td><span class="td-amount" style="color:var(--s-ok-text);">+₫4,200,000</span></td>
+              <td>
+                <svg class="spark" viewBox="0 0 64 28">
+                  <polyline points="2,20 14,14 26,16 38,8 50,6 62,4" fill="none" stroke="#C4922A" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+              </td>
+              <td><span class="badge badge-ok">Hoàn tất</span></td>
+              <td><button class="btn btn-text btn-sm">Chi tiết →</button></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="user-row">
+                  <div class="avatar" style="background:#D4EAD8;color:#3A6040;">TM</div>
+                  <div>
+                    <div class="td-name">Trần Minh</div>
+                    <div style="font-size:11px;color:var(--text-muted);">tranminh@mail.com</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="td-mono">#IF-2400</span></td>
+              <td><span class="fs-13">Gói Basic</span></td>
+              <td><span class="td-amount" style="color:var(--s-ok-text);">+₫980,000</span></td>
+              <td>
+                <svg class="spark" viewBox="0 0 64 28">
+                  <polyline points="2,10 14,16 26,12 38,18 50,14 62,10" fill="none" stroke="#5E8A6A" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+              </td>
+              <td><span class="badge badge-ok">Hoàn tất</span></td>
+              <td><button class="btn btn-text btn-sm">Chi tiết →</button></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="user-row">
+                  <div class="avatar" style="background:#F0DCD8;color:#7A3028;">PH</div>
+                  <div>
+                    <div class="td-name">Phạm Hương</div>
+                    <div style="font-size:11px;color:var(--text-muted);">phamhuong@mail.com</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="td-mono">#IF-2399</span></td>
+              <td><span class="fs-13">Gói Enterprise</span></td>
+              <td><span class="td-amount" style="color:var(--s-err-text);">—₫12,000,000</span></td>
+              <td>
+                <svg class="spark" viewBox="0 0 64 28">
+                  <polyline points="2,4 14,8 26,6 38,14 50,18 62,24" fill="none" stroke="#A0685C" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+              </td>
+              <td><span class="badge badge-err">Hoàn tiền</span></td>
+              <td><button class="btn btn-text btn-sm">Chi tiết →</button></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="user-row">
+                  <div class="avatar" style="background:#D4E4EE;color:#2E4858;">BT</div>
+                  <div>
+                    <div class="td-name">Bùi Thắng</div>
+                    <div style="font-size:11px;color:var(--text-muted);">buithang@mail.com</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="td-mono">#IF-2398</span></td>
+              <td><span class="fs-13">Add-on Analytics</span></td>
+              <td><span class="td-amount" style="color:var(--text-body);">+₫650,000</span></td>
+              <td>
+                <svg class="spark" viewBox="0 0 64 28">
+                  <polyline points="2,18 14,14 26,14 38,12 50,12 62,10" fill="none" stroke="#6E8898" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+              </td>
+              <td><span class="badge badge-warn">Đang xử lý</span></td>
+              <td><button class="btn btn-text btn-sm">Chi tiết →</button></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="user-row">
+                  <div class="avatar" style="background:#E4D8EC;color:#5A3870;">LQ</div>
+                  <div>
+                    <div class="td-name">Lê Quỳnh</div>
+                    <div style="font-size:11px;color:var(--text-muted);">lequynh@mail.com</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="td-mono">#IF-2397</span></td>
+              <td><span class="fs-13">Gói Premium</span></td>
+              <td><span class="td-amount" style="color:var(--s-ok-text);">+₫4,200,000</span></td>
+              <td>
+                <svg class="spark" viewBox="0 0 64 28">
+                  <polyline points="2,22 14,16 26,10 38,8 50,4 62,2" fill="none" stroke="#907898" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+              </td>
+              <td><span class="badge badge-info">Chờ xác nhận</span></td>
+              <td><button class="btn btn-text btn-sm">Chi tiết →</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── 4. COMPONENT SHOWCASE ── -->
+
+      <!-- 4a. Buttons -->
+      <div class="card card-pad">
+        <div class="section-hd"><h3>Buttons</h3><span class="sub">Tất cả biến thể nút</span></div>
+        <div class="flex flex-wrap gap-10 mb-16">
+          <button class="btn btn-primary">Primary</button>
+          <button class="btn btn-secondary">Secondary</button>
+          <button class="btn btn-ghost">Ghost</button>
+          <button class="btn btn-danger">Danger</button>
+          <button class="btn btn-text">Text link →</button>
+        </div>
+        <div class="flex flex-wrap gap-10 mb-16">
+          <button class="btn btn-primary btn-sm">Small</button>
+          <button class="btn btn-primary">Medium</button>
+          <button class="btn btn-primary btn-lg">Large</button>
+        </div>
+        <div class="flex flex-wrap gap-10">
+          <button class="btn btn-primary" disabled style="opacity:0.45;cursor:not-allowed;">Disabled</button>
+          <button class="btn btn-ghost btn-sm">↓ Download</button>
+          <button class="btn btn-secondary btn-sm">⚙ Cài đặt</button>
+          <button class="btn btn-ghost btn-sm">◷ Lịch sử</button>
+        </div>
+      </div>
+
+      <!-- 4b. Badges -->
+      <div class="card card-pad">
+        <div class="section-hd"><h3>Badges & Tags</h3><span class="sub">Trạng thái và nhãn</span></div>
+        <div class="flex flex-wrap gap-10 mb-12">
+          <span class="badge badge-default">Default</span>
+          <span class="badge badge-accent">Accent</span>
+          <span class="badge badge-ok">✓ Hoàn tất</span>
+          <span class="badge badge-warn">⚠ Đang xử lý</span>
+          <span class="badge badge-err">✕ Lỗi</span>
+          <span class="badge badge-info">ℹ Thông tin</span>
+        </div>
+        <div class="flex flex-wrap gap-10">
+          <span class="badge badge-accent" style="font-size:10px;padding:2px 8px;">New</span>
+          <span class="badge badge-ok" style="font-size:10px;padding:2px 8px;">Active</span>
+          <span class="badge badge-warn" style="font-size:10px;padding:2px 8px;">Pending</span>
+          <span class="badge badge-err" style="font-size:10px;padding:2px 8px;">Expired</span>
+          <span class="badge badge-default" style="font-size:10px;padding:2px 8px;">Draft</span>
+          <span class="badge badge-info" style="font-size:10px;padding:2px 8px;">Beta</span>
+        </div>
+      </div>
+
+      <!-- 4c. Forms -->
+      <div class="card card-pad">
+        <div class="section-hd"><h3>Form Elements</h3><span class="sub">Input, select, textarea</span></div>
+        <div class="grid-2" style="gap:20px;">
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="form-group">
+              <label class="form-label">Họ và tên</label>
+              <input class="input" type="text" placeholder="Nhập họ tên đầy đủ">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input class="input input-ok" type="email" value="tuhoang@example.com">
+              <span class="form-hint" style="color:var(--s-ok-text);">✓ Email hợp lệ</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mật khẩu</label>
+              <input class="input input-error" type="password" placeholder="Tối thiểu 8 ký tự">
+              <span class="form-hint" style="color:var(--s-err-text);">Mật khẩu quá ngắn</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tìm kiếm</label>
+              <div class="input-group">
+                <input class="input" type="text" placeholder="Tìm sản phẩm...">
+                <button class="btn btn-primary" style="border-radius:0 var(--r-sm) var(--r-sm) 0;padding:9px 16px;font-size:13px;">Tìm</button>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="form-group">
+              <label class="form-label">Danh mục</label>
+              <select class="select">
+                <option>Chọn danh mục</option>
+                <option>Sản phẩm A</option>
+                <option>Sản phẩm B</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mô tả</label>
+              <textarea class="textarea" rows="4" placeholder="Nhập mô tả sản phẩm..."></textarea>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;">
+              <label class="checkbox-row">
+                <input type="checkbox" checked>
+                <span style="font-size:13px;color:var(--text-body);">Nhận thông báo qua email</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox">
+                <span style="font-size:13px;color:var(--text-body);">Đồng ý điều khoản sử dụng</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4d. Alerts -->
+      <div class="card card-pad">
+        <div class="section-hd"><h3>Alert Messages</h3><span class="sub">4 loại thông báo trạng thái</span></div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div class="alert alert-ok">
+            <span class="alert-icon">✓</span>
+            <div><div class="alert-title">Lưu thành công</div>Thay đổi của bạn đã được cập nhật vào hệ thống.</div>
+          </div>
+          <div class="alert alert-warn">
+            <span class="alert-icon">⚠</span>
+            <div><div class="alert-title">Cần xác minh</div>Tài khoản chưa xác minh email. Vui lòng kiểm tra hộp thư.</div>
+          </div>
+          <div class="alert alert-err">
+            <span class="alert-icon">✕</span>
+            <div><div class="alert-title">Lỗi kết nối</div>Không thể kết nối máy chủ. Vui lòng thử lại sau 5 phút.</div>
+          </div>
+          <div class="alert alert-info">
+            <span class="alert-icon">ℹ</span>
+            <div><div class="alert-title">Cập nhật hệ thống</div>Phiên bản 2.4.1 sẽ được triển khai vào ngày 15/01/2025.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4e. Progress bars -->
+      <div class="card card-pad">
+        <div class="section-hd"><h3>Progress & Lines</h3><span class="sub">Thanh tiến trình và đường kẻ</span></div>
+        <div style="display:flex;flex-direction:column;gap:16px; margin-bottom:28px;">
+          <div>
+            <div class="flex-center gap-12 mb-8">
+              <span style="font-size:12px;color:var(--text-sec);min-width:100px;">Series 1 (Amber)</span>
+              <div class="progress" style="flex:1;"><div class="progress-fill" style="width:84%;background:var(--data-1);"></div></div>
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-muted);">84%</span>
+            </div>
+            <div class="flex-center gap-12 mb-8">
+              <span style="font-size:12px;color:var(--text-sec);min-width:100px;">Series 2 (Sage)</span>
+              <div class="progress" style="flex:1;"><div class="progress-fill" style="width:62%;background:var(--data-2);"></div></div>
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-muted);">62%</span>
+            </div>
+            <div class="flex-center gap-12 mb-8">
+              <span style="font-size:12px;color:var(--text-sec);min-width:100px;">Series 3 (Terra)</span>
+              <div class="progress" style="flex:1;"><div class="progress-fill" style="width:38%;background:var(--data-3);"></div></div>
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-muted);">38%</span>
+            </div>
+            <div class="flex-center gap-12 mb-8">
+              <span style="font-size:12px;color:var(--text-sec);min-width:100px;">Series 4 (Slate)</span>
+              <div class="progress" style="flex:1;"><div class="progress-fill" style="width:55%;background:var(--data-4);"></div></div>
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-muted);">55%</span>
+            </div>
+            <div class="flex-center gap-12">
+              <span style="font-size:12px;color:var(--text-sec);min-width:100px;">Series 5 (Mauve)</span>
+              <div class="progress" style="flex:1;"><div class="progress-fill" style="width:28%;background:var(--data-5);"></div></div>
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-muted);">28%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Line styles -->
+        <div class="section-hd mt-16" style="margin-top:20px;"><h3 style="font-size:14px;">Đường kẻ / Lines</h3></div>
+        <div class="line-demo">
+          <div class="line-item">
+            <span class="line-label">Hairline (#EDE8DE)</span>
+            <div class="line-sample" style="border-top:1px solid #EDE8DE;"></div>
+          </div>
+          <div class="line-item">
+            <span class="line-label">Default (#DAD4C8)</span>
+            <div class="line-sample" style="border-top:1px solid #DAD4C8;"></div>
+          </div>
+          <div class="line-item">
+            <span class="line-label">Mid (#C6BEB0)</span>
+            <div class="line-sample" style="border-top:1px solid #C6BEB0;"></div>
+          </div>
+          <div class="line-item">
+            <span class="line-label">Strong (#A89F8C)</span>
+            <div class="line-sample" style="border-top:1.5px solid #A89F8C;"></div>
+          </div>
+          <div class="line-item">
+            <span class="line-label">Dashed (mid)</span>
+            <div class="line-sample" style="border-top:1px dashed #C6BEB0;"></div>
+          </div>
+          <div class="line-item">
+            <span class="line-label">Accent line</span>
+            <div class="line-sample" style="border-top:2px solid #7A7060;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 5. TYPOGRAPHY ── -->
+      <div class="card card-pad">
+        <div class="section-hd"><h3>Typography Scale</h3><span class="sub">Playfair Display + DM Sans</span></div>
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-name">H1 — Display</div>
+            <div class="type-spec">Playfair / 32px / 700</div>
+          </div>
+          <div class="type-sample-h1">Ivory Fog Design</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-name">H2 — Heading</div>
+            <div class="type-spec">Playfair / 24px / 700</div>
+          </div>
+          <div class="type-sample-h2">Hệ thống màu sắc</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-name">H3 — Subheading</div>
+            <div class="type-spec">Playfair / 18px / 500</div>
+          </div>
+          <div class="type-sample-h3">Thành phần giao diện</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-name">Body — Primary</div>
+            <div class="type-spec">DM Sans / 15px / 400 / #3D3830</div>
+          </div>
+          <div class="type-sample-body">Bộ màu Ivory Fog mang tông kem ấm, xám trung tính và nâu olive — lý tưởng cho các sản phẩm editorial, dashboard lịch sự và ứng dụng cao cấp.</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-name">Body — Secondary</div>
+            <div class="type-spec">DM Sans / 13px / 400 / #6B6158</div>
+          </div>
+          <div class="type-sample-sec">Văn bản phụ, mô tả, label — đủ tương phản trên nền kem nhưng không cạnh tranh với nội dung chính.</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-name">Caption / Label</div>
+            <div class="type-spec">DM Sans / 11px / 600 / uppercase / #9A9088</div>
+          </div>
+          <div class="type-sample-cap">Nhãn biểu đồ · Tiêu đề cột · Metadata</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-name">Code / Monospace</div>
+            <div class="type-spec">DM Mono / 13px / on accent-faint</div>
+          </div>
+          <code class="type-sample-code">--accent: #7A7060</code>
+        </div>
+      </div>
+
+      <!-- ── 6. COLOR TOKEN REFERENCE ── -->
+      <div class="card card-pad">
+        <div class="section-hd"><h3>Token Reference</h3><span class="sub">Toàn bộ bảng biến CSS</span></div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;">60% — Backgrounds</div>
+          <div class="token-grid">
+            <div class="token-chip"><div class="token-swatch" style="background:#FAF8F4;border-bottom:1px solid #EDE8DE;"></div><div class="token-info"><div class="token-var">--bg-page</div><div class="token-hex">#FAF8F4</div><div class="token-role">Page background</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#F5F0E8;"></div><div class="token-info"><div class="token-var">--bg-section</div><div class="token-hex">#F5F0E8</div><div class="token-role">Section fill</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#FFFFFF;border-bottom:1px solid #EDE8DE;"></div><div class="token-info"><div class="token-var">--bg-card</div><div class="token-hex">#FFFFFF</div><div class="token-role">Card surface</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#EDE8DF;"></div><div class="token-info"><div class="token-var">--bg-muted</div><div class="token-hex">#EDE8DF</div><div class="token-role">Muted container</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#E6E0D4;"></div><div class="token-info"><div class="token-var">--bg-subtle</div><div class="token-hex">#E6E0D4</div><div class="token-role">Subtle chip/tag</div></div></div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;">10% — Accent</div>
+          <div class="token-grid">
+            <div class="token-chip"><div class="token-swatch" style="background:#7A7060;"></div><div class="token-info"><div class="token-var">--accent</div><div class="token-hex" style="color:#fff7f0;">#7A7060</div><div class="token-role">Primary action</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#5C5448;"></div><div class="token-info"><div class="token-var">--accent-hover</div><div class="token-hex" style="color:#fff7f0;">#5C5448</div><div class="token-role">Hover/pressed</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#F0EAD8;border-bottom:1px solid #DDD5C4;"></div><div class="token-info"><div class="token-var">--accent-faint</div><div class="token-hex">#F0EAD8</div><div class="token-role">Accent bg light</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#E0D8C4;"></div><div class="token-info"><div class="token-var">--accent-soft</div><div class="token-hex">#E0D8C4</div><div class="token-role">Accent border</div></div></div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;">Data Visualization — 5 series</div>
+          <div class="token-grid">
+            <div class="token-chip"><div class="token-swatch" style="background:#C4922A;"></div><div class="token-info"><div class="token-var">--data-1</div><div class="token-hex" style="color:#fff8e8;">#C4922A</div><div class="token-role">Amber Gold</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#5E8A6A;"></div><div class="token-info"><div class="token-var">--data-2</div><div class="token-hex" style="color:#f0faf2;">#5E8A6A</div><div class="token-role">Sage Green</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#A0685C;"></div><div class="token-info"><div class="token-var">--data-3</div><div class="token-hex" style="color:#fef0ec;">#A0685C</div><div class="token-role">Terracotta</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#6E8898;"></div><div class="token-info"><div class="token-var">--data-4</div><div class="token-hex" style="color:#eef4f8;">#6E8898</div><div class="token-role">Slate Blue</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#907898;"></div><div class="token-info"><div class="token-var">--data-5</div><div class="token-hex" style="color:#f6f0fa;">#907898</div><div class="token-role">Dusty Mauve</div></div></div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;">Status / Semantic</div>
+          <div class="token-grid">
+            <div class="token-chip"><div class="token-swatch" style="background:#EEF5EC;border-bottom:1px solid #B4D4B8;"></div><div class="token-info"><div class="token-var">--s-ok-bg</div><div class="token-hex">#EEF5EC</div><div class="token-role" style="color:#3A6040;">Success</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#FAF0D8;border-bottom:1px solid #DFC870;"></div><div class="token-info"><div class="token-var">--s-warn-bg</div><div class="token-hex">#FAF0D8</div><div class="token-role" style="color:#6A5418;">Warning</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#F8EDEC;border-bottom:1px solid #D4A8A4;"></div><div class="token-info"><div class="token-var">--s-err-bg</div><div class="token-hex">#F8EDEC</div><div class="token-role" style="color:#7A3028;">Error</div></div></div>
+            <div class="token-chip"><div class="token-swatch" style="background:#EBF0F5;border-bottom:1px solid #A8C0D4;"></div><div class="token-info"><div class="token-var">--s-info-bg</div><div class="token-hex">#EBF0F5</div><div class="token-role" style="color:#304858;">Info</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer spacer -->
+      <div style="height:32px;"></div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app-wrap -->
+
+</body>
+</html>
