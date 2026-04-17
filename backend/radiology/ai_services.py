@@ -2,8 +2,18 @@
 Mock AI Services - Thay thế cho Claude/GPT-4 API trong development
 Cấu trúc tương tự như sản phẩm thực
 """
+import os
+import tempfile
 import random
+import logging
+from pathlib import Path
 from typing import Dict, List, Any
+from dotenv import load_dotenv
+from gradio_client import Client, handle_file
+
+load_dotenv(Path(__file__).resolve().parent.parent / '.env')
+
+logger = logging.getLogger(__name__)
 
 
 class MockAIAgent:
@@ -121,12 +131,45 @@ class MockAIAgent:
         return random.choice(hints)
     
     @staticmethod
-    def analyze_image(image_url: str) -> Dict:
+    def analyze_image(image_file) -> Dict:
         """
-        Mock CV Agent - phân tích ảnh X-ray (thực tế sử dụng Claude Vision / GPT-4v)
+        CV Agent - phân tích ảnh X-ray qua MedGemma trên Gradio.
+        Accepts a Django InMemoryUploadedFile or file-like object.
+        Falls back to mock findings if the call fails or HF_TOKEN is not set.
         """
-        # Mock findings - đa dạng hóa random
-        findings = {
+        hf_token = os.getenv('HF_TOKEN')
+
+        if hf_token:
+            suffix = os.path.splitext(getattr(image_file, 'name', '.jpg'))[1] or '.jpg'
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                    for chunk in image_file.chunks():
+                        tmp.write(chunk)
+                    tmp_path = tmp.name
+
+                client = Client("ttnguyen6716/MedGemma-1.5-4B", token=hf_token)
+                result = client.predict(
+                    image=handle_file(tmp_path),
+                    question="What abnormality is visible in this image?",
+                    api_name="/analyze",
+                )
+                return {
+                    'raw_analysis': result,
+                    'regions': [],
+                    'anomalies': [],
+                    'densities_detected': [],
+                    'confidence': None,
+                    'source': 'medgemma',
+                }
+            except Exception as e:
+                logger.warning(f"MedGemma analyze_image failed, using mock: {e}")
+            finally:
+                if tmp_path:
+                    os.unlink(tmp_path)
+
+        # Mock fallback
+        return {
             'regions': [
                 {'region': 'Phổi phải thùy trên', 'findings': []},
                 {'region': 'Phổi phải thùy dưới', 'findings': ['Mờ phím nhẹ']},
@@ -144,9 +187,9 @@ class MockAIAgent:
                 }
             ],
             'densities_detected': ['Normal', 'Opacities'],
-            'confidence': random.uniform(0.75, 0.95)
+            'confidence': random.uniform(0.75, 0.95),
+            'source': 'mock',
         }
-        return findings
 
 
 class MockSocraticAgent:

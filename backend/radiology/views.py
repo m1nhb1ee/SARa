@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
@@ -189,6 +189,16 @@ class SessionViewSet(viewsets.ModelViewSet):
                 for sa in session.step_attempts.all()
             ]
         })
+
+
+@api_view(['POST'])
+def analyze_image_view(request):
+    """Test endpoint for MedGemma image analysis — accepts multipart file upload"""
+    image_file = request.FILES.get('image')
+    if not image_file:
+        return Response({'error': 'image file is required'}, status=status.HTTP_400_BAD_REQUEST)
+    result = MockAIAgent.analyze_image(image_file)
+    return Response(result)
 
 
 class StudentPerformanceViewSet(viewsets.ReadOnlyModelViewSet):
