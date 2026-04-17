@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+﻿import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
-import { CheckCircle2, Clock, PlayCircle, RefreshCw, Layers, Moon, Sun } from "lucide-react";
+import { CheckCircle2, Clock, PlayCircle, RefreshCw, Layers } from "lucide-react";
+import { useCases, useSessions } from "@/api/hooks";
 
 type Status = "Chưa làm" | "Đang làm" | "Hoàn thành";
 type Difficulty = "Cơ bản" | "Trung bình" | "Nặng cao";
@@ -13,92 +14,36 @@ interface CaseCard {
   difficulty: Difficulty;
   hint: string;
   status: Status;
-  imageKey: string; // Key to look up in IMAGE_PATHS
+  imageKey: string;
 }
 
-const cases: CaseCard[] = [
-  {
-    id: "1",
-    title: "Viêm phổi thứ dưới phải",
-    modality: "X-Ray",
-    difficulty: "Cơ bản",
-    hint: "Bệnh nhân nam 45 tuổi, ho kéo dài 2 tuần, sốt nhẹ về chiều.",
-    status: "Hoàn thành",
-    imageKey: "body",
-  },
-  {
-    id: "2",
-    title: "Tràn dịch màng phổi trái",
-    modality: "X-Ray",
-    difficulty: "Trung bình",
-    hint: "Bệnh nhân nữ 60 tuổi, khó thở tăng dần 3 ngày, tiền sử suy tim.",
-    status: "Đang làm",
-    imageKey: "body",
-  },
-  {
-    id: "3",
-    title: "Nhồi máu não bán cầu phải",
-    modality: "CT",
-    difficulty: "Nặng cao",
-    hint: "Bệnh nhân nam 70 tuổi, liệt nửa người trái đột ngột, nói khó.",
-    status: "Chưa làm",
-    imageKey: "ct",
-  },
-  {
-    id: "4",
-    title: "Gãy xương đòn trái",
-    modality: "X-Ray",
-    difficulty: "Cơ bản",
-    hint: "Bệnh nhân nữ 25 tuổi, chấn thương vai trái sau ngã xe đạp.",
-    status: "Chưa làm",
-    imageKey: "hand",
-  },
-  {
-    id: "5",
-    title: "U phổi phải có xâm lấn vào trung thất",
-    modality: "CT",
-    difficulty: "Nặng cao",
-    hint: "Bệnh nhân nam 62 tuổi, hút thuốc 40 năm, sốt cơn không rõ nguyên nhân.",
-    status: "Chưa làm",
-    imageKey: "ct",
-  },
-  {
-    id: "6",
-    title: "Xẹp đốt sống thắt lưng L2",
-    modality: "MRI",
-    difficulty: "Trung bình",
-    hint: "Bệnh nhân nữ 68 tuổi, đau lưng đây đủ sau ngã, loãng xương nền.",
-    status: "Chưa làm",
-    imageKey: "leg",
-  },
-  {
-    id: "7",
-    title: "Lao phổi hang thứu trên phải",
-    modality: "X-Ray",
-    difficulty: "Trung bình",
-    hint: "Bệnh nhân nam 32 tuổi, ho ra máu, ra mồ hôi đêm, sốt 8kg/3 tháng.",
-    status: "Chưa làm",
-    imageKey: "body",
-  },
-  {
-    id: "8",
-    title: "Khối u não vùng thời dương",
-    modality: "MRI",
-    difficulty: "Nặng cao",
-    hint: "Bệnh nhân nữ 45 tuổi, đau đầu mãn tính kèm đứng kinh khởi phát mới.",
-    status: "Chưa làm",
-    imageKey: "head",
-  },
-  {
-    id: "9",
-    title: "Viêm ruột thừa cấp",
-    modality: "CT",
-    difficulty: "Cơ bản",
-    hint: "Bệnh nhân nam 20 tuổi, đau hạ châu phải, sốt 38.5°C, bạch cầu tăng.",
-    status: "Chưa làm",
-    imageKey: "ct",
-  },
-];
+// Mapping functions
+const mapModality = (modality: string): Modality => {
+  const map: Record<string, Modality> = {
+    XRAY: "X-Ray",
+    CT: "CT",
+    MRI: "MRI",
+  };
+  return map[modality] || "X-Ray";
+};
+
+const mapDifficulty = (difficulty: string): Difficulty => {
+  const map: Record<string, Difficulty> = {
+    BASIC: "Cơ bản",
+    INTERMEDIATE: "Trung bình",
+    ADVANCED: "Nặng cao",
+  };
+  return map[difficulty] || "Cơ bản";
+};
+
+const getImageKey = (modality: string): string => {
+  const map: Record<string, string> = {
+    XRAY: "body",
+    CT: "ct",
+    MRI: "head",
+  };
+  return map[modality] || "body";
+};
 
 const difficultyStyle: Record<Difficulty, { bg: string; color: string }> = {
   "Cơ bản": { bg: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" },
@@ -120,79 +65,56 @@ const modalityStyle: Record<Modality, { bg: string; color: string }> = {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const { data: casesData, loading: casesLoading } = useCases();
+  const { data: sessionsData } = useSessions();
+  
   const [activeModality, setActiveModality] = useState<string>("Tất cả");
   const [activeDifficulty, setActiveDifficulty] = useState<string>("Tất cả");
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
   const modalityFilters = ["Tất cả", "X-Ray", "CT", "MRI"];
   const difficultyFilters = ["Tất cả", "Cơ bản", "Trung bình", "Nặng cao"];
 
-  // Update html element data-theme attribute based on isDarkMode
-  useEffect(() => {
-    const htmlElement = document.documentElement;
-    if (isDarkMode) {
-      htmlElement.removeAttribute("data-theme");
-      document.body.classList.remove("light");
-    } else {
-      htmlElement.setAttribute("data-theme", "light");
-      document.body.classList.add("light");
+  // Build status map from sessions
+  const statusMap = useMemo(() => {
+    const map: Record<number, Status> = {};
+    if (sessionsData?.results) {
+      sessionsData.results.forEach((session: any) => {
+        map[session.case] = session.status === "COMPLETED" ? "Hoàn thành" : "Đang làm";
+      });
     }
-  }, [isDarkMode]);
+    return map;
+  }, [sessionsData]);
+
+  // Convert API cases to CaseCard format
+  const cases: CaseCard[] = useMemo(() => {
+    if (!casesData?.results) return [];
+    return casesData.results.map((apiCase: any) => ({
+      id: apiCase.id.toString(),
+      title: apiCase.title,
+      modality: mapModality(apiCase.modality),
+      difficulty: mapDifficulty(apiCase.difficulty),
+      hint: apiCase.clinical_history || apiCase.description,
+      status: statusMap[apiCase.id] || ("Chưa làm" as Status),
+      imageKey: getImageKey(apiCase.modality),
+    }));
+  }, [casesData, statusMap]);
 
   const filtered = cases.filter(
     (c) =>
-        (activeModality === "Tất cả" || c.modality === activeModality) &&
-          (activeDifficulty === "Tất cả" || c.difficulty === activeDifficulty)
+      (activeModality === "Tất cả" || c.modality === activeModality) &&
+      (activeDifficulty === "Tất cả" || c.difficulty === activeDifficulty)
   );
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      {/* Header with Theme Toggle */}
-      <div className="mb-3 md:mb-4 flex items-center justify-between">
-        <div>
-          <h1
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              fontWeight: 700,
-              fontSize: "22px",
-              color: "var(--text-primary)",
-              marginBottom: "6px",
-            }}
-          >
-            Case Study Library
-          </h1>
-          <p style={{ color: "var(--text-sec)", fontSize: "14px" }}>
-            Chọn ca để bắt đầu luyện tập pipeline 6 bước
-          </p>
-        </div>
-        {/* Dark/Light Mode Toggle */}
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          style={{
-            padding: "8px 12px",
-            borderRadius: "6px",
-            border: "1px solid var(--border-dim)",
-            backgroundColor: "var(--bg-surface)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            fontSize: "13px",
-            color: "var(--text-sec)",
-            transition: "all 0.3s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = "color-mix(in srgb, var(--accent) 10%, transparent)";
-            (e.currentTarget as HTMLElement).style.color = "var(--accent)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-surface)";
-            (e.currentTarget as HTMLElement).style.color = "var(--text-sec)";
-          }}
-        >
-          {isDarkMode ? <Moon size={16} /> : <Sun size={16} />}
-          {isDarkMode ? "Dark" : "Light"}
-        </button>
+      {/* Header */}
+      <div className="mb-3 md:mb-4">
+        <h1 style={{ fontFamily: "'Inter', sans-serif", fontWeight: 700, fontSize: "22px", color: "var(--text-primary)", marginBottom: "6px" }}>
+          Case Study Library
+        </h1>
+        <p style={{ color: "var(--text-sec)", fontSize: "14px" }}>
+          Chọn ca để bắt đầu luyện tập pipeline 6 bước
+        </p>
       </div>
 
       {/* Filter Bar */}
@@ -247,185 +169,102 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Case Grid � 1 col mobile, 2 col tablet, 3 col desktop */}
-      <div
-        className="grid gap-3 md:gap-4"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}
-      >
-        {filtered.map((c) => {
-          const StatusIcon = statusStyle[c.status].icon;
-          return (
-            <div
-              key={c.id}
-              style={{
-                backgroundColor: "var(--bg-surface)",
-                border: "1px solid var(--border-dim)",
-                borderRadius: "8px",
-                overflow: "hidden",
-                transition: "border-color 0.2s, transform 0.2s",
-                cursor: "pointer",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "color-mix(in srgb, var(--accent) 27%, transparent)";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--border-dim)";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-              }}
-            >
-              {/* Thumbnail */}
-              <div className="relative" style={{ height: 140, backgroundColor: "var(--bg-base)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div
-                  className={`img-${c.imageKey}`}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    opacity: 0.85,
-                  }}
-                />
-                {/* Modality badge */}
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 10,
-                    right: 10,
-                    padding: "3px 10px",
-                    borderRadius: "4px",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    letterSpacing: "0.05em",
-                    backgroundColor: modalityStyle[c.modality].bg,
-                    color: modalityStyle[c.modality].color,
-                    border: `1px solid ${modalityStyle[c.modality].color}44`,
-                    backdropFilter: "blur(4px)",
-                  }}
-                >
-                  {c.modality.toUpperCase()}
-                </span>
-                {/* Difficulty badge */}
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 10,
-                    left: 10,
-                    padding: "3px 10px",
-                    borderRadius: "4px",
-                    fontSize: "11px",
-                    fontWeight: 500,
-                    backgroundColor: difficultyStyle[c.difficulty].bg,
-                    color: difficultyStyle[c.difficulty].color,
-                    border: `1px solid ${difficultyStyle[c.difficulty].color}44`,
-                    backdropFilter: "blur(4px)",
-                  }}
-                >
-                  {c.difficulty}
-                </span>
-              </div>
+      {/* Case Grid */}
+      <div className="grid gap-3 md:gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+        {casesLoading ? (
+          [1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} style={{ backgroundColor: "var(--bg-surface)", borderRadius: "8px", height: "280px", animation: "pulse 2s infinite" }}></div>
+          ))
+        ) : filtered.length > 0 ? (
+          filtered.map((c) => {
+            const StatusIcon = statusStyle[c.status].icon;
+            return (
+              <div
+                key={c.id}
+                style={{
+                  backgroundColor: "var(--bg-surface)",
+                  border: "1px solid var(--border-dim)",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  transition: "border-color 0.2s, transform 0.2s",
+                  cursor: "pointer",
+                }}
+              >
+                {/* Thumbnail */}
+                <div className="relative" style={{ height: 140, backgroundColor: "var(--bg-base)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div className={`img-${c.imageKey}`} style={{ width: "100%", height: "100%", opacity: 0.85 }} />
+                  {/* Modality badge */}
+                  <span style={{ position: "absolute", top: 10, right: 10, padding: "3px 10px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, backgroundColor: modalityStyle[c.modality].bg, color: modalityStyle[c.modality].color, border: `1px solid ${modalityStyle[c.modality].color}44` }}>
+                    {c.modality.toUpperCase()}
+                  </span>
+                  {/* Difficulty badge */}
+                  <span style={{ position: "absolute", top: 10, left: 10, padding: "3px 10px", borderRadius: "4px", fontSize: "11px", fontWeight: 500, backgroundColor: difficultyStyle[c.difficulty].bg, color: difficultyStyle[c.difficulty].color, border: `1px solid ${difficultyStyle[c.difficulty].color}44` }}>
+                    {c.difficulty}
+                  </span>
+                </div>
 
-              {/* Content */}
-              <div className="p-3">
-                <h3
-                  style={{
-                    fontWeight: 600,
-                    fontSize: "14px",
-                    color: "var(--text-primary)",
-                    marginBottom: "4px",
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {c.title}
-                </h3>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--text-sec)",
-                    marginBottom: "8px",
-                    lineHeight: 1.5,
-                    display: "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical",
-                    overflow: "hidden",
-                  }}
-                >
-                  {c.hint}
-                </p>
+                {/* Content */}
+                <div className="p-3">
+                  <h3 style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px", lineHeight: 1.3 }}>
+                    {c.title}
+                  </h3>
+                  <p style={{ fontSize: "12px", color: "var(--text-sec)", marginBottom: "8px", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {c.hint}
+                  </p>
 
-                {/* Footer */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <StatusIcon size={13} color={statusStyle[c.status].color} />
-                    <span
+                  {/* Footer */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <StatusIcon size={13} color={statusStyle[c.status].color} />
+                      <span style={{ fontSize: "12px", color: statusStyle[c.status].color, fontWeight: 500 }}>
+                        {c.status}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => navigate(`/session/${c.id}`)}
                       style={{
+                        padding: "5px 12px",
+                        borderRadius: "6px",
                         fontSize: "12px",
-                        color: statusStyle[c.status].color,
-                        fontWeight: 500,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.5s",
+                        ...(c.status === "Đang làm"
+                          ? { backgroundColor: "transparent", border: "1px solid var(--warning)", color: "var(--warning)" }
+                          : c.status === "Hoàn thành"
+                          ? { backgroundColor: "transparent", border: "1px solid var(--success)", color: "var(--success)" }
+                          : { backgroundColor: "var(--accent)", border: "1px solid var(--accent)", color: "var(--primary-foreground)" }),
                       }}
                     >
-                      {c.status}
-                    </span>
+                      {c.status === "Đang làm" ? (
+                        <span className="flex items-center gap-1.5">
+                          <RefreshCw size={12} /> Tiếp tục
+                        </span>
+                      ) : c.status === "Hoàn thành" ? (
+                        <span className="flex items-center gap-1.5">
+                          <PlayCircle size={12} /> Làm lại
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          <PlayCircle size={12} /> Bắt đầu
+                        </span>
+                      )}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => navigate(`/session/${c.id}`)}
-                    style={{
-                      padding: "5px 12px",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      transition: "all 0.5s",
-                      ...(c.status === "Đang làm"
-                        ? {
-                            backgroundColor: "transparent",
-                            border: "1px solid var(--warning)",
-                            color: "var(--warning)",
-                          }
-                        : c.status === "Hoàn thành"
-                        ? {
-                            backgroundColor: "transparent",
-                            border: "1px solid var(--success)",
-                            color: "var(--success)",
-                          }
-                        : {
-                            backgroundColor: "var(--accent)",
-                            border: "1px solid var(--accent)",
-                            color: "var(--primary-foreground)",
-                          }),
-                    }}
-                  >
-                    {c.status === "Đang làm" ? (
-                      <span className="flex items-center gap-1.5">
-                        <RefreshCw size={12} /> Tiếp tục
-                      </span>
-                    ) : c.status === "Hoàn thành" ? (
-                      <span className="flex items-center gap-1.5">
-                        <PlayCircle size={12} /> Làm lại
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1.5">
-                        <PlayCircle size={12} /> Bắt đầu
-                      </span>
-                    )}
-                  </button>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20" style={{ color: "var(--text-muted)", gridColumn: "1/-1" }}>
+            <Layers size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
+            <p style={{ fontSize: "16px", fontWeight: 500 }}>Chưa có ca nào</p>
+            <p style={{ fontSize: "13px", marginTop: 6 }}>
+              Thử thay đổi bộ lọc để xem thêm ca học
+            </p>
+          </div>
+        )}
       </div>
-
-      {filtered.length === 0 && (
-        <div
-          className="flex flex-col items-center justify-center py-20"
-          style={{ color: "var(--text-muted)" }}
-        >
-          <Layers size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
-          <p style={{ fontSize: "16px", fontWeight: 500 }}>Chưa có ca nào</p>
-          <p style={{ fontSize: "13px", marginTop: 6 }}>
-            Thử thay đổi bộ lọc để xem thêm ca học
-          </p>
-        </div>
-      )}
     </div>
   );
 }

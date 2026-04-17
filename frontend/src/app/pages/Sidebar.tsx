@@ -1,11 +1,12 @@
-﻿import { NavLink, useLocation } from "react-router";
-import { BookOpen, Image, Stethoscope, BarChart2, Brain, X, Sun, Moon } from "lucide-react";
+﻿import { NavLink, useLocation, useNavigate } from "react-router";
+import { BookOpen, Stethoscope, BarChart2, Brain, X, Sun, Moon, LogOut } from "lucide-react";
 import { motion } from "motion/react";
+import { useAuth } from "@/api/authContext";
+import { Button } from "@/app/components/ui/button";
 
 const navItems = [
-  { icon: BookOpen, label: "Tu on tap", sub: "Browse Library", path: "/library" },
-  { icon: Image, label: "Hoi dap anh", sub: "Image Q&A", path: "/image-qa" },
-  { icon: Stethoscope, label: "Thuc hanh chan doan", sub: "Diagnosis Practice", path: "/" },
+  { icon: BookOpen, label: "Tu on tap", sub: "Browse Library", path: "/cases" },
+  { icon: Stethoscope, label: "Dashboard", sub: "Trang chủ", path: "/" },
   { icon: BarChart2, label: "Ket qua cua toi", sub: "My Performance", path: "/performance" },
 ];
 
@@ -17,6 +18,13 @@ interface SidebarProps {
 
 export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   return (
     <aside
@@ -202,13 +210,24 @@ export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: Sid
               fontWeight: 600,
             }}
           >
-            SV
+            {user?.username?.charAt(0).toUpperCase() || 'U'}
           </div>
-          <div className="flex flex-col min-w-0">
-            <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--foreground)" }}>Sinh vien Y4</span>
-            <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>Truong Y Ha Noi</span>
+          <div className="flex flex-col min-w-0 flex-1">
+            <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--foreground)" }}>{user?.username}</span>
+            <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>
+              {user?.is_staff ? 'Admin' : 'Student'}
+            </span>
           </div>
         </div>
+
+        {/* Logout button */}
+        <Button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 bg-gray-0 hover:bg-red-800 text-red-100"
+        >
+          <LogOut size={16} />
+          <span>Đăng xuất</span>
+        </Button>
       </div>
     </aside>
   );
