@@ -84,7 +84,7 @@ export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: Sid
             flexShrink: 0,
           }}
         >
-          <Brain size={24} color="var(--primary)" />
+          <Brain size={28} color="var(--primary)" />
         </div>
         <span
           style={{
@@ -138,8 +138,22 @@ export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: Sid
                 border: active ? "1px solid color-mix(in srgb, var(--primary) 30%, transparent)" : "1px solid transparent",
               }}
               title={item.label}
+              onMouseEnter={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "color-mix(in srgb, var(--primary) 8%, transparent)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--primary)";
+                  (e.currentTarget as HTMLElement).style.transform = "translateX(4px)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                  (e.currentTarget as HTMLElement).style.color = "var(--secondary-foreground)";
+                  (e.currentTarget as HTMLElement).style.transform = "translateX(0)";
+                }
+              }}
             >
-              <item.icon size={22} strokeWidth={1.5} style={{ flexShrink: 0 }} />
+              <item.icon size={30} strokeWidth={1.5} style={{ flexShrink: 0 }} />
               <div
                 style={{
                   display: "flex",
@@ -185,6 +199,7 @@ export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: Sid
                     backgroundColor: "var(--primary)",
                     flexShrink: 0,
                   }}
+                  
                 />
               )}
             </NavLink>
@@ -209,8 +224,8 @@ export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: Sid
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",  // luôn center
-            gap: isExpanded ? 12 : 0,  // bỏ gap khi collapsed
+            justifyContent: "center",
+            gap: isExpanded ? 12 : 0,
             padding: "10px 10px",
             borderRadius: 10,
             backgroundColor: "var(--muted)",
@@ -224,16 +239,18 @@ export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: Sid
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLElement).style.backgroundColor =
-              "color-mix(in srgb, var(--primary) 12%, var(--muted))";
+              "color-mix(in srgb, var(--primary) 15%, var(--muted))";
             (e.currentTarget as HTMLElement).style.color = "var(--primary)";
+            (e.currentTarget as HTMLElement).style.transform = "scale(1.05)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.backgroundColor = "var(--muted)";
             (e.currentTarget as HTMLElement).style.color = "var(--foreground)";
+            (e.currentTarget as HTMLElement).style.transform = "scale(1)";
           }}
           title={theme === "dark" ? "Light Mode" : "Dark Mode"}
           >
-          {theme === "dark" ? <Sun size={20} strokeWidth={1.5} /> : <Moon size={20} strokeWidth={1.5} />}
+          {theme === "dark" ? <Sun size={24} strokeWidth={1.5} /> : <Moon size={24} strokeWidth={1.5} />}
           <span
             style={{
               opacity: isExpanded ? 1 : 0,
@@ -321,14 +338,16 @@ export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: Sid
               flexShrink: 0,
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(239, 68, 68, 0.12)";
+              (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(239, 68, 68, 0.15)";
+              (e.currentTarget as HTMLElement).style.transform = "scale(1.1) rotate(-5deg)";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+              (e.currentTarget as HTMLElement).style.transform = "scale(1) rotate(0)";
             }}
             title="Logout"
           >
-            <LogOut size={18} strokeWidth={1.5} />
+            <LogOut size={22} strokeWidth={1.5} />
           </button>
         </div>
       </div>

@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('title', models.CharField(max_length=255)),
                 ('description', models.TextField()),
-                ('modality', models.CharField(choices=[('XRAY', 'X-Ray'), ('CT', 'CT Scan'), ('MRI', 'MRI'), ('ULTRASOUND', 'Ultrasound')], max_length=50)),
+                ('modality', models.CharField(choices=[('XRAY', 'X-Ray'), ('CT', 'CT Scan'), ('MRI', 'MRI'), ('DIFF', 'Different')], max_length=50)),
                 ('difficulty', models.CharField(choices=[('BASIC', 'Cơ bản'), ('INTERMEDIATE', 'Trung bình'), ('ADVANCED', 'Nâng cao')], default='INTERMEDIATE', max_length=20)),
                 ('clinical_history', models.TextField(help_text='Lịch sử lâm sàng 2-3 dòng')),
                 ('pipeline_rubric', models.JSONField(default=dict)),

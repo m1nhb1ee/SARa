@@ -359,7 +359,7 @@ class UserUploadedCaseViewSet(viewsets.ModelViewSet):
         Body (multipart/form-data):
             - original_image: file (required)
             - title: string (optional)
-            - modality: XRAY|CT|MRI|ULTRASOUND (optional, default='XRAY')
+            - modality: XRAY|CT|MRI|DIFF (optional, default='XRAY')
         """
         logger.info(f"Received upload request from user {request.user.username}")
         
