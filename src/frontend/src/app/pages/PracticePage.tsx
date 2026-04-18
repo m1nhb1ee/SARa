@@ -349,7 +349,7 @@ export function PracticePage() {
                   Loại Ảnh Y Tế
                 </label>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {[{ val: 'XRAY', label: 'X-Ray' }, { val: 'CT', label: 'CT Scan' }, { val: 'MRI', label: 'MRI' }, { val: 'ULTRASOUND', label: 'Ultrasound' }].map(({ val, label }) => (
+                  {[{ val: 'XRAY', label: 'X-Ray' }, { val: 'CT', label: 'CT Scan' }, { val: 'MRI', label: 'MRI' }, { val: 'DIFF', label: 'Khác' }].map(({ val, label }) => (
                     <button
                       key={val}
                       onClick={() => setUploadModality(val)}

@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
                 ('original_image', models.ImageField(upload_to='user_uploads/%Y/%m/%d/')),
                 ('image_url', models.URLField(blank=True, help_text='URL sau khi upload')),
                 ('title', models.CharField(blank=True, max_length=255)),
-                ('modality', models.CharField(blank=True, choices=[('XRAY', 'X-Ray'), ('CT', 'CT Scan'), ('MRI', 'MRI'), ('ULTRASOUND', 'Ultrasound')], max_length=50)),
+                ('modality', models.CharField(blank=True, choices=[('XRAY', 'X-Ray'), ('CT', 'CT Scan'), ('MRI', 'MRI'), ('DIFF', 'Different')], max_length=50)),
                 ('ai_findings', models.JSONField(default=dict, help_text='Findings từ HF model')),
                 ('processing_status', models.CharField(choices=[('PENDING', 'Chờ xử lý'), ('PROCESSING', 'Đang xử lý'), ('SUCCESS', 'Thành công'), ('FAILED', 'Thất bại')], default='PENDING', max_length=20)),
                 ('error_message', models.TextField(blank=True, help_text='Lỗi nếu có')),

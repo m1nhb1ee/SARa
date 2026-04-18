@@ -290,7 +290,7 @@ Rules:
             "XRAY":       "Lao phổi, ung thư phổi, edema phổi, hemothorax, viêm phổi.",
             "CT":         "U não, máu tụ nội sọ, nhồi máu não, viêm màng não.",
             "MRI":        "Thoát vị đĩa đệm, u tủy, xơ cứng rải rác, viêm.",
-            "ULTRASOUND": "U lành/ác tính, nang, viêm, xơ hóa.",
+            "DIFF":       "U lành/ác tính, nang, viêm, xơ hóa.",
         }.get(modality, "Cần tư vấn chuyên khoa.")
 
     @staticmethod
@@ -299,7 +299,7 @@ Rules:
             "XRAY":       "Cần xét nghiệm máu CBC, cấy đờm, theo dõi lâm sàng 48–72h.",
             "CT":         "Tham khảo thần kinh học. Xem xét MRI bổ sung nếu cần.",
             "MRI":        "Tư vấn chỉnh hình / thần kinh. Theo dõi định kỳ.",
-            "ULTRASOUND": "Theo dõi siêu âm định kỳ. Sinh thiết nếu nghi ngờ ác tính.",
+            "DIFF":       "Theo dõi định kỳ. Sinh thiết nếu nghi ngờ ác tính.",
         }.get(modality, "Cần tư vấn bác sĩ chuyên khoa.")
 
     @classmethod
@@ -329,7 +329,7 @@ Rules:
                 "DDx":        "Thoát vị đĩa đệm, u tủy, xơ cứng rải rác, viêm.",
                 "CONCLUSION": "Tư vấn chỉnh hình / thần kinh. Theo dõi định kỳ.",
             },
-            "ULTRASOUND": {
+            "DIFF": {
                 "OBSERVE":    "Cấu trúc cơ quan bình thường; không thấy khối.",
                 "DESCRIBE":   "Kích thước bình thường, echo đồng nhất.",
                 "INTERPRET":  "Không có bất thường rõ.",

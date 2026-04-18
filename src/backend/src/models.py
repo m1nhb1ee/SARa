@@ -22,7 +22,7 @@ class Case(models.Model):
         ('XRAY', 'X-Ray'),
         ('CT', 'CT Scan'),
         ('MRI', 'MRI'),
-        ('ULTRASOUND', 'Ultrasound'),
+        ('DIFF', 'Different'),
     ]
     
     DIFFICULTY_CHOICES = [
@@ -160,7 +160,7 @@ class UserUploadedCase(models.Model):
         ('XRAY', 'X-Ray'),
         ('CT', 'CT Scan'),
         ('MRI', 'MRI'),
-        ('ULTRASOUND', 'Ultrasound'),
+        ('DIFF', 'Different'),
     ])
     
     # AI-generated findings
