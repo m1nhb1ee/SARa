@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router";
 import { Root } from "./Root";
 import { Dashboard } from "./pages/Dashboard";
 import { CaseListPage } from "./pages/CaseListPage";
+import { PracticePage } from "./pages/PracticePage";
 import { DiagnosisTrainingPage } from "./pages/DiagnosisTrainingPage";
 import { DiagnosisSession } from "./pages/DiagnosisSession";
 import { AnswerKey } from "./pages/AnswerKey";
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: "cases", Component: CaseListPage },
+      { path: "practice", Component: PracticePage },
       { path: "training/:caseId", Component: DiagnosisTrainingPage },
       { path: "session/:caseId", Component: DiagnosisSession },
       { path: "answer-key/:caseId", Component: AnswerKey },

@@ -1,11 +1,12 @@
 ﻿import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { BookOpen, Stethoscope, BarChart2, Brain, Sun, Moon, LogOut } from "lucide-react";
+import { BookOpen, Stethoscope, BarChart2, Brain, Sun, Moon, LogOut, FileUp } from "lucide-react";
 import { useAuth } from "@/api/authContext";
 import { Button } from "@/app/components/ui/button";
 
 const navItems = [
   { icon: BookOpen, label: "Tu on tap", sub: "Browse Library", path: "/cases" },
+  { icon: FileUp, label: "Practice", sub: "Upload & Train", path: "/practice" },
   { icon: Stethoscope, label: "Dashboard", sub: "Trang chủ", path: "/" },
   { icon: BarChart2, label: "Ket qua cua toi", sub: "My Performance", path: "/performance" },
 ];
