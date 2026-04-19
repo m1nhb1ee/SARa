@@ -933,7 +933,7 @@ export function PracticePage() {
                       {/* Reference answer */}
                       <div>
                         <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-sec)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          Đáp Án Tham Khảo
+                          📝 Đáp Án Tham Khảo
                         </p>
                         <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7, backgroundColor: 'var(--bg-base)', padding: '12px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', minHeight: 70 }}>
                           {stepAnswers.answers?.[STEPS[currentAnswerStep]] || '(Chưa có đáp án)'}

@@ -236,9 +236,9 @@ export function DiagnosisSession() {
       {/* Top case bar */}
       <motion.div
         className="flex items-center gap-3 px-4 py-2 shrink-0"
-        style={{ borderBottom: "1px solid var(--border-dim)", backgroundColor: "var(--bg-surface)" }}
+        style={{ borderBottom: "1px solid var(--border-dim)", backgroundColor: "var(--bg-base)" }}
         initial={{ x: -24, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
+        animate={{ x: 100, opacity: 1 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
         <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>{caseData.title}</span>
@@ -246,7 +246,7 @@ export function DiagnosisSession() {
         <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 500, backgroundColor: "color-mix(in srgb, var(--accent) 13%, transparent)", color: "var(--accent)" }}>{caseData.difficulty}</span>
         
         {/* Spacer */}
-        <div style={{ flex: 1 }}></div>
+        <div style={{ flex: 0.93 }}></div>
         
         {/* Exit button */}
         <motion.button
@@ -281,7 +281,7 @@ export function DiagnosisSession() {
         style={{ borderBottom: "1px solid var(--border-dim)", backgroundColor: "var(--bg-surface)", padding: "4px 6px" }}
         initial={{ y: -10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.5, delay: 0.05, ease: [0.22, 1.0, 0.36, 1] }}
       >
         {[{ key: "image", label: "🖼️ Hình ảnh" }, { key: "chat", label: "💬 Trả lời AI" }].map((tab) => (
           <button
@@ -335,7 +335,7 @@ export function DiagnosisSession() {
           transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
         >
           {/* Clinical Note */}
-          <motion.div className="px-4 pt-2 shrink-0" initial={{ x: -18 }} animate={{ x: 0 }} transition={{ duration: 0.5, delay: 0.16 }}>
+          <motion.div className="px-4 pt-2 shrink-0" style={{ paddingLeft: "100px" }} initial={{ x: -18 }} animate={{ x: 0}} transition={{ duration: 0.5, delay: 0.16 }}>
             <div style={{ borderLeft: "3px solid var(--accent)", backgroundColor: "color-mix(in srgb, var(--accent) 5%, transparent)", borderRadius: "0 6px 6px 0", padding: "8px 12px" }}>
               <p style={{ fontSize: "11px", color: "var(--text-sec)", marginBottom: 2, fontWeight: 500, letterSpacing: "0.04em" }}>BỆNH SỬ</p>
               <p style={{ fontSize: "12px", color: "var(--text-primary)", lineHeight: 1.5 }}>
