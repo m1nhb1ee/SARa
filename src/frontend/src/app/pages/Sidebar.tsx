@@ -136,6 +136,7 @@ export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: Sid
                   ? "color-mix(in srgb, var(--primary) 12%, transparent)"
                   : "transparent",
                 border: active ? "1px solid color-mix(in srgb, var(--primary) 30%, transparent)" : "1px solid transparent",
+                position: "relative",
               }}
               title={item.label}
               onMouseEnter={(e) => {
@@ -193,13 +194,17 @@ export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: Sid
               {active && (
                 <div
                   style={{
-                    width: 5,
-                    height: 5,
+                    width: isExpanded ? 6 : 5,
+                    height: isExpanded ? 6  : 5,
                     borderRadius: "50%",
                     backgroundColor: "var(--primary)",
                     flexShrink: 0,
+                    position: "absolute",
+                    top: "50%",
+                    right: isExpanded ? 12 : -3,
+                    transform: "translateY(-50%)",
+                    transition: "right 250ms ease-in-out",
                   }}
-                  
                 />
               )}
             </NavLink>
