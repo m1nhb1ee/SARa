@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, PlayCircle, X, Clock, CheckCircle2, RefreshCw, Lightbulb,
+  BookOpen, AlertCircle, AlertTriangle, ZoomIn, ZoomOut, Maximize2, Send, ChevronRight,
 } from 'lucide-react';
 import { useCaseDetail, useCreateSession, useSessionDetail, useSubmitAnswer } from '@/api/hooks';
 
@@ -15,7 +16,13 @@ import { useCaseDetail, useCreateSession, useSessionDetail, useSubmitAnswer } fr
 
 const STEPS = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION'];
 
+type Modality = 'X-Ray' | 'CT' | 'MRI';
 type ViewMode = 'upload' | 'training';
+
+// ─── Mapping helpers ──────────────────────────────────────────────────────────
+
+const mapModality = (m: string): Modality =>
+  ({ XRAY: 'X-Ray', CT: 'CT', MRI: 'MRI' } as Record<string, Modality>)[m] ?? 'X-Ray';
 
 interface Message {
   id: string;
@@ -71,15 +78,25 @@ export function PracticePage() {
   // ── Uploaded case data ──
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedCaseData, setUploadedCaseData] = useState<any>(null);
+  // sessionId tách riêng để tránh stale closure khi đọc từ uploadedCaseData
+  const [sessionId, setSessionId] = useState<number | null>(null);
+  const sessionIdRef = useRef<number | null>(null);
+
+  // ── Answer preview modals ──
+  const [showAnswerPreview, setShowAnswerPreview] = useState(false);
+  const [showAnswerDetails, setShowAnswerDetails] = useState(false);
+  const [stepAnswers, setStepAnswers] = useState<any>(null);
+  const [loadingAnswers, setLoadingAnswers] = useState(false);
+  const [currentAnswerStep, setCurrentAnswerStep] = useState(0);
 
   // ── API ──
   const { data: caseData, loading: caseLoading } = useCaseDetail(uploadedCaseData?.created_case?.id);
   const { createSession } = useCreateSession();
-  const { data: sessionData, loading: sessionLoading, refetch: refetchSession } = useSessionDetail(uploadedCaseData?.session_id);
+  const { data: sessionData, loading: sessionLoading, refetch: refetchSession } = useSessionDetail(sessionId);
   const { submitAnswer } = useSubmitAnswer();
 
   // ── Derived ──
-  const isSessionLoading = !!uploadedCaseData?.session_id && sessionLoading;
+  const isSessionLoading = !!sessionId && sessionLoading;
   const currentStep = sessionData?.current_step ?? 0;
   const currentStepName = STEPS[currentStep] ?? 'OBSERVE';
   const isSessionComplete = sessionData?.status === 'COMPLETED';
@@ -129,11 +146,13 @@ export function PracticePage() {
         }
         setUploadedCaseData(data);
 
-        // Create session
+        // Create session — lưu vào state riêng + ref để tránh stale closure
         if (data.created_case) {
           try {
             const sessionRes = await createSession(data.created_case.id);
             if (sessionRes) {
+              setSessionId(sessionRes.id);
+              sessionIdRef.current = sessionRes.id;
               setUploadedCaseData((prev: any) => ({ ...prev, session_id: sessionRes.id }));
             } else {
               console.error('Failed to create session - no response');
@@ -154,7 +173,7 @@ export function PracticePage() {
 
         setTimeout(() => {
           setUploadProcessing(false);
-          setViewMode('training');
+          setShowAnswerPreview(true);  // ✅ Hiện popup chọn: Xem đáp án / Thực hành
         }, 500);
       }
     } catch (err) {
@@ -165,8 +184,50 @@ export function PracticePage() {
     }
   };
 
+  const fetchStepAnswers = async (sid: number) => {
+    if (!sid) return;
+    setLoadingAnswers(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/sessions/${sid}/step_answers/`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStepAnswers(data);
+        setShowAnswerDetails(true);
+      } else {
+        console.error('Failed to fetch step answers:', response.statusText);
+      }
+    } catch (err) {
+      console.error('Error fetching step answers:', err);
+    } finally {
+      setLoadingAnswers(false);
+    }
+  };
+
+  const handleShowAnswers = async () => {
+    setShowAnswerPreview(false);
+    setCurrentAnswerStep(0);
+    // Dùng ref để đảm bảo luôn có giá trị mới nhất, tránh stale closure
+    const sid = sessionIdRef.current ?? sessionId ?? uploadedCaseData?.session_id;
+    if (sid) {
+      await fetchStepAnswers(sid);
+    } else {
+      console.error('handleShowAnswers: không tìm thấy session_id');
+    }
+  };
+
+  const handleStartPractice = () => {
+    setShowAnswerPreview(false);
+    setShowAnswerDetails(false);
+    setCurrentAnswerStep(0);
+    setViewMode('training');
+  };
+
   const handleSubmitAnswer = async () => {
-    if (!uploadedCaseData?.session_id || studentAnswer.trim().length < 10) return;
+    const sid = sessionIdRef.current ?? sessionId ?? uploadedCaseData?.session_id;
+    if (!sid || studentAnswer.trim().length < 10) return;
 
     const userMsg: Message = { id: Date.now().toString(), role: 'student', content: studentAnswer };
     setMessages((p) => [...p, userMsg]);
@@ -349,7 +410,7 @@ export function PracticePage() {
                   Loại Ảnh Y Tế
                 </label>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {[{ val: 'XRAY', label: 'X-Ray' }, { val: 'CT', label: 'CT Scan' }, { val: 'MRI', label: 'MRI' }, { val: 'DIFF', label: 'Khác' }].map(({ val, label }) => (
+                  {[{ val: 'XRAY', label: 'X-Ray' }, { val: 'CT', label: 'CT Scan' }, { val: 'MRI', label: 'MRI' }, { val: 'ULTRASOUND', label: 'Khác' }].map(({ val, label }) => (
                     <button
                       key={val}
                       onClick={() => setUploadModality(val)}
@@ -745,6 +806,185 @@ export function PracticePage() {
                   onMouseLeave={(e) => { if (feedback.attempt.score >= 0.6) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--accent)'; }}
                 >
                   {feedback.attempt.score < 0.6 ? 'Hãy thử lại' : 'Tiếp tục →'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* ════════════════════════════════════════════════════════════════════════
+          ANSWER PREVIEW MODAL - Sau upload: chọn Xem đáp án / Thực hành
+      ════════════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {showAnswerPreview && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, backgroundColor: 'color-mix(in srgb, var(--bg-base) 75%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: -20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }}
+              style={{ width: '100%', maxWidth: 500, backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-dim)', borderRadius: 12, overflow: 'hidden' }}
+            >
+              <div style={{ padding: '24px 20px', textAlign: 'center', borderBottom: '1px solid var(--border-dim)' }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                  Tuyệt vời! 🎉
+                </h2>
+                <p style={{ fontSize: 14, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+                  Ảnh đã được tải lên và AI đã tạo xong 6 bước chẩn đoán. Bạn muốn làm gì tiếp theo?
+                </p>
+              </div>
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Xem đáp án */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={handleShowAnswers}
+                  disabled={loadingAnswers}
+                  style={{ padding: '16px', borderRadius: 8, border: '1px solid var(--border-dim)', backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--text-primary)', cursor: loadingAnswers ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: loadingAnswers ? 0.6 : 1, transition: 'all 0.2s' }}
+                  onMouseEnter={(e) => { if (!loadingAnswers) { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--accent) 18%, transparent)'; } }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-dim)'; (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--accent) 10%, transparent)'; }}
+                >
+                  {loadingAnswers ? (
+                    <><motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity }}><RefreshCw size={16} /></motion.div> Đang tải đáp án...</>
+                  ) : (
+                    <><BookOpen size={16} /> Xem Đáp Án Tham Khảo</>
+                  )}
+                </motion.button>
+
+                {/* Thực hành */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={handleStartPractice}
+                  style={{ padding: '16px', borderRadius: 8, border: 'none', backgroundColor: 'var(--accent)', color: 'var(--primary-foreground)', cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'background-color 0.2s' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--accent-hover)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--accent)'; }}
+                >
+                  <PlayCircle size={16} /> Bắt Đầu Thực Hành
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          ANSWER DETAILS MODAL - Carousel 6 bước, ảnh bên trái
+      ════════════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {showAnswerDetails && stepAnswers && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, backgroundColor: 'color-mix(in srgb, var(--bg-base) 75%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: -20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }}
+              style={{ width: '100%', maxWidth: 1000, backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-dim)', borderRadius: 12, overflow: 'hidden', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+            >
+              {/* Header */}
+              <div style={{ padding: '20px', borderBottom: '1px solid var(--border-dim)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+                    Đáp Án Tham Khảo — {stepAnswers.case_title}
+                  </h2>
+                  <p style={{ fontSize: 12, color: 'var(--text-sec)' }}>
+                    Phương thức: <strong>{mapModality(stepAnswers.case_modality)}</strong>
+                  </p>
+                </div>
+                <button onClick={() => setShowAnswerDetails(false)} style={{ background: 'none', border: 'none', color: 'var(--text-sec)', cursor: 'pointer' }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ height: 4, backgroundColor: 'var(--border-dim)' }}>
+                <div style={{ height: '100%', backgroundColor: 'var(--accent)', width: `${((currentAnswerStep + 1) / STEPS.length) * 100}%`, transition: 'width 0.3s ease' }} />
+              </div>
+
+              {/* Body: image left + carousel right */}
+              <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+                {/* Image */}
+                <div style={{ width: 300, backgroundColor: 'var(--bg-base)', borderRight: '1px solid var(--border-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+                  {uploadedImage ? (
+                    <img src={uploadedImage} alt="Case" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 6 }} />
+                  ) : (
+                    <p style={{ color: 'var(--text-sec)', fontSize: 13, textAlign: 'center' }}>📷 Không có ảnh</p>
+                  )}
+                </div>
+
+                {/* Carousel */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '24px 28px', overflowY: 'auto', minHeight: 0 }}>
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentAnswerStep}
+                      initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
+                      transition={{ duration: 0.3 }}
+                      style={{ display: 'flex', flexDirection: 'column', gap: 18 }}
+                    >
+                      {/* Step badge */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: 'var(--accent)', color: 'var(--primary-foreground)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700 }}>
+                          {currentAnswerStep + 1}
+                        </div>
+                        <div>
+                          <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{STEPS[currentAnswerStep]}</p>
+                          <p style={{ fontSize: 11, color: 'var(--text-sec)', margin: '2px 0 0 0' }}>Bước {currentAnswerStep + 1} / {STEPS.length}</p>
+                        </div>
+                      </div>
+
+                      {/* Reference answer */}
+                      <div>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-sec)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Đáp Án Tham Khảo
+                        </p>
+                        <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7, backgroundColor: 'var(--bg-base)', padding: '12px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', minHeight: 70 }}>
+                          {stepAnswers.answers?.[STEPS[currentAnswerStep]] || '(Chưa có đáp án)'}
+                        </div>
+                      </div>
+
+                      {/* Rubric */}
+                      {stepAnswers.step_templates?.[currentAnswerStep] && (
+                        <div>
+                          <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-sec)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            🎯 Tiêu Chí Đánh Giá
+                          </p>
+                          <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7, backgroundColor: 'var(--bg-base)', padding: '12px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--success) 20%, transparent)', minHeight: 50 }}>
+                            {stepAnswers.step_templates[currentAnswerStep]}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              {/* Footer navigation */}
+              <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border-dim)', display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => setCurrentAnswerStep(Math.max(0, currentAnswerStep - 1))}
+                  disabled={currentAnswerStep === 0}
+                  style={{ flex: 1, padding: '11px', borderRadius: 6, border: '1px solid var(--border-dim)', backgroundColor: 'transparent', color: currentAnswerStep === 0 ? 'var(--text-muted)' : 'var(--text-primary)', fontSize: 13, fontWeight: 600, cursor: currentAnswerStep === 0 ? 'not-allowed' : 'pointer', opacity: currentAnswerStep === 0 ? 0.5 : 1, transition: 'all 0.2s' }}
+                >
+                  ← Quay Lại
+                </button>
+                <button
+                  onClick={() => setShowAnswerDetails(false)}
+                  style={{ flex: 1, padding: '11px', borderRadius: 6, border: '1px solid var(--border-dim)', backgroundColor: 'transparent', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                >
+                  Đóng
+                </button>
+                <button
+                  onClick={() => {
+                    if (currentAnswerStep < STEPS.length - 1) {
+                      setCurrentAnswerStep(currentAnswerStep + 1);
+                    } else {
+                      setShowAnswerDetails(false);
+                      handleStartPractice();
+                    }
+                  }}
+                  style={{ flex: 1, padding: '11px', borderRadius: 6, border: 'none', backgroundColor: 'var(--accent)', color: 'var(--primary-foreground)', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'all 0.2s' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--accent-hover)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--accent)'; }}
+                >
+                  {currentAnswerStep < STEPS.length - 1 ? 'Tiếp Theo →' : 'Bắt Đầu Thực Hành →'}
                 </button>
               </div>
             </motion.div>
