@@ -1,7 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import views
-from . import auth_views
+from . import views, auth_views
 
 router = DefaultRouter()
 router.register(r'cases', views.CaseViewSet, basename='case')
@@ -13,6 +12,9 @@ router.register(r'uploaded-cases', views.UserUploadedCaseViewSet, basename='uplo
 urlpatterns = [
     path('', include(router.urls)),
     
+    # Test endpoints
+    path('analyze-image/', views.analyze_image_view, name='analyze_image'),
+
     # Auth endpoints
     path('auth/login/', auth_views.login_view, name='auth_login'),
     path('auth/logout/', auth_views.logout_view, name='auth_logout'),
