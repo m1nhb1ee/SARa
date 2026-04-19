@@ -1,5 +1,6 @@
 # Environment
 .env
+*.temp/
 
 # Python
 __pycache__/
