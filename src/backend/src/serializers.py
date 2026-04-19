@@ -11,20 +11,20 @@ class CaseTagSerializer(serializers.ModelSerializer):
 
 class CaseListSerializer(serializers.ModelSerializer):
     tags = CaseTagSerializer(many=True, read_only=True)
-    
+
     class Meta:
         model = Case
-        fields = ['id', 'title', 'modality', 'difficulty', 'description', 'tags', 'created_at']
+        fields = ['id', 'title', 'modality', 'difficulty', 'description', 'disease_tag', 'status', 'tags', 'image_urls', 'created_at']
 
 
 class CaseDetailSerializer(serializers.ModelSerializer):
     tags = CaseTagSerializer(many=True, read_only=True)
-    
+
     class Meta:
         model = Case
         fields = [
-            'id', 'title', 'description', 'modality', 'difficulty', 
-            'clinical_history', 'image_urls', 'tags', 'created_at', 'updated_at'
+            'id', 'title', 'description', 'modality', 'difficulty',
+            'clinical_history', 'disease_tag', 'status', 'image_urls', 'tags', 'created_at', 'updated_at'
         ]
         # Không expose answer_key và pipeline_rubric cho student (giữ kín)
         read_only_fields = fields

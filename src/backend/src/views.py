@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.filters import OrderingFilter
 import time
 import json
 import os
@@ -12,8 +12,9 @@ import logging
 from django.utils import timezone
 
 from .models import Case, Session, StepAttempt, CaseTag, StudentPerformance, UserUploadedCase
+from .supabase_client import get_supabase
 from .serializers import (
-    CaseListSerializer, CaseDetailSerializer, SessionListSerializer,
+    SessionListSerializer,
     SessionDetailSerializer, SessionCreateSerializer, SessionStepAnswersSerializer,
     StepAnswerSubmitSerializer, StepAttemptSerializer, StudentPerformanceSerializer, CaseTagSerializer,
     UserUploadedCaseListSerializer, UserUploadedCaseDetailSerializer,
@@ -56,20 +57,51 @@ class CaseTagViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = StandardPagination
 
 
-class CaseViewSet(viewsets.ReadOnlyModelViewSet):
-    """API cho Case - chỉ xem, không expose answer key"""
-    queryset = Case.objects.filter(is_active=True)
+class CaseViewSet(viewsets.ViewSet):
+    """API cho Case - fetch từ Supabase, không expose answer key"""
     pagination_class = StandardPagination
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['modality', 'difficulty']
-    search_fields = ['title', 'description', 'clinical_history']
-    ordering_fields = ['created_at', 'difficulty']
-    ordering = ['-created_at']
-    
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return CaseDetailSerializer
-        return CaseListSerializer
+
+    def list(self, request):
+        """GET /api/v1/cases/ — filter by modality, difficulty, disease_tag, status"""
+        sb = get_supabase()
+        modality    = request.query_params.get('modality')
+        difficulty  = request.query_params.get('difficulty')
+        disease_tag = request.query_params.get('disease_tag')
+        status      = request.query_params.get('status')
+
+        query = sb.table('cases').select(
+            'id, title, modality, difficulty, clinical_history, disease_tag, status, image_urls, tags, created_at'
+        )
+
+        if status:
+            query = query.eq('status', status)
+
+        if modality:
+            query = query.eq('modality', modality)
+        if difficulty:
+            query = query.eq('difficulty', difficulty)
+        if disease_tag:
+            query = query.eq('disease_tag', disease_tag)
+
+        result = query.order('created_at', desc=True).execute()
+        return Response({'cases': result.data, 'count': len(result.data)})
+
+    def retrieve(self, _request, pk=None):
+        """GET /api/v1/cases/{id}/"""
+        import uuid
+        try:
+            uuid.UUID(str(pk).strip())
+        except ValueError:
+            return Response({'error': f'Invalid case id: {repr(pk)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sb = get_supabase()
+        try:
+            result = sb.table('cases').select(
+                'id, title, modality, difficulty, clinical_history, disease_tag, status, image_urls, tags, created_at'
+            ).eq('id', pk).single().execute()
+        except Exception:
+            return Response({'error': f'Case {pk} not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(result.data)
 
 
 class SessionViewSet(viewsets.ModelViewSet):

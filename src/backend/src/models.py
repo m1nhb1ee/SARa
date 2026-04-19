@@ -30,25 +30,25 @@ class Case(models.Model):
         ('INTERMEDIATE', 'Trung bình'),
         ('ADVANCED', 'Nâng cao'),
     ]
-    
+
     title = models.CharField(max_length=255)
     description = models.TextField()
     modality = models.CharField(max_length=50, choices=MODALITY_CHOICES)
     difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='INTERMEDIATE')
     clinical_history = models.TextField(help_text="Lịch sử lâm sàng 2-3 dòng")
-    
+
     # Pipeline rubric - JSON định nghĩa tiêu chí đánh giá từng bước
     pipeline_rubric = models.JSONField(default=dict)
-    
+
     # Answer key - JSON chứa đáp án chuẩn theo từng bước
     answer_key = models.JSONField(default=dict)
-    
+
     # Media URLs
     image_urls = models.JSONField(default=list, help_text="List URLs của ảnh y tế")
-    
+
     # Tags
     tags = models.ManyToManyField(CaseTag, blank=True)
-    
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
