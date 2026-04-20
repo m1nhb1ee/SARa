@@ -1,7 +1,7 @@
 create table step_rubrics (
   id               uuid primary key default gen_random_uuid(),
   step_code        text not null unique
-                     check (step_code in ('OBSERVE','DESCRIBE','INTERPRET','DDx','CONCLUSION')),
+                     check (step_code in ('OBSERVE','DESCRIBE','INTERPRET','HYPOTHESIS','DDx','CONCLUSION')),
   criterion_label  text not null,
   scoring_guide    text not null,
   example_good_answer text,
@@ -25,6 +25,10 @@ insert into step_rubrics (step_code, criterion_label, scoring_guide, max_score) 
 ('DDx',
  'Differential diagnosis',
  'Award full marks if student lists at least 3 plausible differentials ranked by likelihood, with brief justification for each based on the imaging findings.',
+ 1.0),
+('HYPOTHESIS',
+ 'Hypothesis formation',
+ 'Award full marks if student proposes a clear working hypothesis linking the key imaging findings to a specific pathological process, with reasoning.',
  1.0),
 ('CONCLUSION',
  'Final diagnosis and management',

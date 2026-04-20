@@ -209,6 +209,14 @@ class SessionViewSet(viewsets.ViewSet):
 
         return Response(session)
 
+    def _get_rubric_id(self, sb, step_code):
+        """Fetch rubric criterion UUID for the given step_code."""
+        try:
+            r = sb.table('step_rubrics').select('id').eq('step_code', step_code).single().execute()
+            return r.data['id']
+        except Exception:
+            return None
+
     @action(detail=True, methods=['post'])
     def submit_answer(self, request, pk=None):
         """POST /api/v1/sessions/{id}/submit_answer/"""
@@ -218,12 +226,20 @@ class SessionViewSet(viewsets.ViewSet):
             return err
 
         if session['status'] != 'IN_PROGRESS':
-            return Response({'error': 'Session đã kết thúc'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Session đã kết thúc'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = StepAnswerSubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         student_answer = serializer.validated_data['student_answer']
         current_step = session['current_step']
+        step_code = self.STEP_CODES[current_step] if current_step < len(self.STEP_CODES) else 'UNKNOWN'
+
+        rubric_id = self._get_rubric_id(sb, step_code)
+        if not rubric_id:
+            return Response(
+                {'error': f'No rubric found for step {step_code}. Run the SQL migration first.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         # Fetch case for AI context
         try:
@@ -247,7 +263,6 @@ class SessionViewSet(viewsets.ViewSet):
         )
         latency_ms = int((time.time() - start_time) * 1000)
 
-        step_code = self.STEP_CODES[current_step] if current_step < len(self.STEP_CODES) else 'UNKNOWN'
         feedback_text = ai_feedback.get('feedback', {})
         if isinstance(feedback_text, dict):
             feedback_text = feedback_text.get('content', str(feedback_text))
@@ -255,6 +270,7 @@ class SessionViewSet(viewsets.ViewSet):
         # Insert step_attempt into Supabase
         attempt_result = sb.table('step_attempts').insert({
             'session_id': pk,
+            'rubric_criterion_id': rubric_id,
             'step_index': current_step,
             'step_code': step_code,
             'student_answer': student_answer,
@@ -276,7 +292,7 @@ class SessionViewSet(viewsets.ViewSet):
         elif passed and current_step == 5:
             all_attempts = sb.table('step_attempts').select('score').eq('session_id', pk).execute()
             scores = [a['score'] for a in all_attempts.data if a['score'] is not None]
-            final_score = sum(scores) / 6 if scores else 0.0
+            final_score = round(sum(scores) / len(self.STEP_CODES), 4) if scores else 0.0
             sb.table('sessions').update({
                 'status': 'COMPLETED',
                 'final_score': final_score,
