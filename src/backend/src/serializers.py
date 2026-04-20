@@ -14,7 +14,7 @@ class CaseListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Case
-        fields = ['id', 'title', 'modality', 'difficulty', 'description', 'disease_tag', 'status', 'tags', 'image_urls', 'created_at']
+        fields = ['id', 'title', 'modality', 'difficulty', 'tags', 'image_urls', 'created_at']
 
 
 class CaseDetailSerializer(serializers.ModelSerializer):
@@ -23,8 +23,8 @@ class CaseDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Case
         fields = [
-            'id', 'title', 'description', 'modality', 'difficulty',
-            'clinical_history', 'disease_tag', 'status', 'image_urls', 'tags', 'created_at', 'updated_at'
+            'id', 'title', 'modality', 'difficulty',
+            'clinical_history', 'image_urls', 'tags', 'created_at', 'updated_at'
         ]
         # Không expose answer_key và pipeline_rubric cho student (giữ kín)
         read_only_fields = fields
