@@ -1,0 +1,39 @@
+{
+  "regions": [
+    {
+      "name": "Left hemithorax",
+      "finding": "Large homogeneous opacification occupying entire left lung field"
+    },
+    {
+      "name": "Left costophrenic angle",
+      "finding": "Completely obliterated with meniscus sign"
+    },
+    {
+      "name": "Mediastinum",
+      "finding": "Shifted to the right due to mass effect from effusion"
+    },
+    {
+      "name": "Right lung",
+      "finding": "Clear, no opacification, no consolidation"
+    },
+    {
+      "name": "Right costophrenic angle",
+      "finding": "Sharp and clear"
+    }
+  ],
+  "anomalies": [
+    {
+      "location": "Left hemithorax — entire",
+      "density": "Homogeneous opacification, non-consolidative",
+      "size": "Large — occupies entire left lung field",
+      "laterality": "Left"
+    },
+    {
+      "location": "Mediastinum",
+      "density": "Soft tissue",
+      "size": "Shifted approximately 2–3 cm to the right",
+      "laterality": "Midline displaced right"
+    }
+  ],
+  "confidence": 0.91
+}

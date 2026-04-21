@@ -1,0 +1,78 @@
+{
+  "OBSERVE": {
+    "question": "Ban thay gi tren phim nay?",
+    "criteria": [
+      {"label": "Quet du cac vung (phoi, tim, xuong, mo mem)", "max_score": 2, "error_code": "incomplete_scan"},
+      {"label": "Phat hien duoc diem bat thuong chinh",         "max_score": 2, "error_code": "missed_main_finding"}
+    ],
+    "total_max": 5,
+    "pass_threshold": 3,
+    "scoring_guide": "Award 2pts if student scans all regions systematically. Award 2pts if student identifies the main abnormality. Award 1pt if student comments on film quality or patient positioning.",
+    "pass_score": 0.6
+  },
+  "DESCRIBE": {
+    "question": "Hay mo ta chi tiet diem bat thuong ban thay.",
+    "criteria": [
+      {"label": "Vi tri dung (thuy nao, ben nao)",  "max_score": 2, "error_code": "missing_location"},
+      {"label": "Mo ta duoc do dam / mo",            "max_score": 2, "error_code": "missing_density"},
+      {"label": "Mo ta duoc bo ro hay khong ro",     "max_score": 2, "error_code": "missing_margin"},
+      {"label": "Uoc luong kich thuoc",              "max_score": 1, "error_code": "missing_size"},
+      {"label": "De cap finding kem theo",           "max_score": 1, "error_code": "missing_associated_findings"}
+    ],
+    "total_max": 8,
+    "pass_threshold": 5,
+    "scoring_guide": "Award pts for each criterion met: correct location 2pts, density description 2pts, margin description 2pts, size estimate 1pt, associated findings 1pt.",
+    "pass_score": 0.6
+  },
+  "INTERPRET": {
+    "question": "Nhung gi ban mo ta co y nghia benh ly gi?",
+    "criteria": [
+      {"label": "Giai thich duoc finding noi len dieu gi ve mat benh ly", "max_score": 3, "error_code": "missing_pathological_interpretation"},
+      {"label": "Ket noi voi co che benh sinh co the",                    "max_score": 2, "error_code": "missing_pathophysiology_link"},
+      {"label": "Chua ket luan chan doan o buoc nay",                     "max_score": 2, "error_code": "premature_diagnosis"}
+    ],
+    "total_max": 7,
+    "pass_threshold": 4,
+    "scoring_guide": "Award 3pts for correct pathological interpretation. Award 2pts for linking to pathophysiology. Award 2pts if student does NOT jump to final diagnosis — deduct 2pts if they do.",
+    "penalty_note": "If student jumps to conclusion at this step, deduct 2pts from criterion 3.",
+    "pass_score": 0.6
+  },
+  "HYPOTHESIS": {
+    "question": "Theo ban, day co the la benh gi?",
+    "criteria": [
+      {"label": "Dua ra duoc 1 chan doan chinh hop ly",         "max_score": 3, "error_code": "missing_primary_diagnosis"},
+      {"label": "Dan chung tu it nhat 2 findings da mo ta",    "max_score": 2, "error_code": "insufficient_evidence_cited"},
+      {"label": "Tich hop thong tin lam sang tu benh su",      "max_score": 2, "error_code": "missing_clinical_integration"}
+    ],
+    "total_max": 7,
+    "pass_threshold": 4,
+    "scoring_guide": "Award 3pts for a reasonable primary diagnosis. Award 2pts if student references at least 2 findings described earlier. Award 2pts if student integrates clinical history.",
+    "pass_score": 0.6
+  },
+  "DDx": {
+    "question": "Ngoai chan doan do, con benh nao khac can loai tru khong?",
+    "criteria": [
+      {"label": "Liet ke toi thieu 2 chan doan phan biet hop ly",  "max_score": 3, "error_code": "insufficient_ddx_count"},
+      {"label": "Lap luan tai sao giu hoac loai tung chan doan",   "max_score": 3, "error_code": "missing_ddx_reasoning"},
+      {"label": "Co it nhat 1 benh nguy hiem can loai tru",        "max_score": 1, "error_code": "missing_dangerous_dx"}
+    ],
+    "total_max": 7,
+    "pass_threshold": 5,
+    "scoring_guide": "Award 3pts for listing 2+ plausible differentials. Award 3pts for reasoning why each is kept or excluded. Award 1pt for including at least one dangerous must-not-miss diagnosis.",
+    "note": "Highest threshold step — students most commonly skip this.",
+    "pass_score": 0.6
+  },
+  "CONCLUSION": {
+    "question": "Vay chan doan cuoi cua ban la gi va tai sao?",
+    "criteria": [
+      {"label": "Dua ra chan doan cuoi ro rang",                          "max_score": 3, "error_code": "missing_final_diagnosis"},
+      {"label": "Giai thich tai sao chon chan doan nay thay vi benh khac","max_score": 2, "error_code": "missing_diagnosis_justification"},
+      {"label": "Muc do tu tin khai bao hop ly",                         "max_score": 1, "error_code": "missing_confidence_statement"},
+      {"label": "Goi y buoc xu tri tiep theo",                           "max_score": 1, "error_code": "missing_management_plan"}
+    ],
+    "total_max": 7,
+    "pass_threshold": 4,
+    "scoring_guide": "Award 3pts for clear final diagnosis. Award 2pts for justification over differentials. Award 1pt for appropriate confidence level. Award 1pt for next management steps.",
+    "pass_score": 0.6
+  }
+}
