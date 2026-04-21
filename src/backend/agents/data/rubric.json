@@ -65,14 +65,13 @@
   "CONCLUSION": {
     "question": "Vay chan doan cuoi cua ban la gi va tai sao?",
     "criteria": [
-      {"label": "Dua ra chan doan cuoi ro rang",                          "max_score": 3, "error_code": "missing_final_diagnosis"},
+      {"label": "Dua ra chan doan cuoi ro rang , hợp lý",                          "max_score": 3, "error_code": "missing_final_diagnosis"},
       {"label": "Giai thich tai sao chon chan doan nay thay vi benh khac","max_score": 2, "error_code": "missing_diagnosis_justification"},
-      {"label": "Muc do tu tin khai bao hop ly",                         "max_score": 1, "error_code": "missing_confidence_statement"},
       {"label": "Goi y buoc xu tri tiep theo",                           "max_score": 1, "error_code": "missing_management_plan"}
     ],
     "total_max": 7,
     "pass_threshold": 4,
-    "scoring_guide": "Award 3pts for clear final diagnosis. Award 2pts for justification over differentials. Award 1pt for appropriate confidence level. Award 1pt for next management steps.",
+    "scoring_guide": "Award 3pts for clear final diagnosis. Award 2pts for justification over differentials. Award 1-2pts (partial) if student lists 1 differential with reasoning. Award 0pts only if no differential mentioned at all Award 1pt for next management steps.",
     "pass_score": 0.6
   }
 }

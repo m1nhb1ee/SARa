@@ -218,11 +218,12 @@ Evaluate and return JSON.""")
     )
 
     passed = raw["score"] >= 0.6   # never trust LLM's passed field — compute from score
+    errors = [] if passed else raw.get("errors", [])   # errors must be empty when passed
     return {
         "score":             raw["score"],
         "passed":            passed,
-        "errors":            raw.get("errors", []),
-        "feedback":          raw.get("feedback", ""),
+        "errors":            errors,
+        "feedback":          "" if passed else raw.get("feedback", ""),
         "positive_feedback": raw.get("positive_feedback", ""),
         "could_add":         raw.get("could_add", ""),
         "next_step_preview": raw.get("next_step_preview", ""),
