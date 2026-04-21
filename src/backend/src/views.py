@@ -340,12 +340,23 @@ class SessionViewSet(viewsets.ViewSet):
             return err
 
         try:
-            case_result = sb.table('cases').select(
-                'id, title, modality, clinical_history, tags'
-            ).eq('id', session['case_id']).single().execute()
+            case_result = sb.table('cases').select('*').eq('id', session['case_id']).single().execute()
             case = case_result.data or {}
         except Exception:
             case = {}
+
+        rubrics_result = sb.table('step_rubrics').select('*').execute()
+        step_templates = {r['step_code']: r for r in (rubrics_result.data or [])}
+
+        answer_keys_result = sb.table('answer_keys').select('*').eq('case_id', session['case_id']).order('step_order').execute()
+        answers = {
+            r['step_code']: {
+                'expected_finding': r.get('expected_finding'),
+                'clinical_explanation': r.get('clinical_explanation'),
+                'key_points': r.get('key_points'),
+            }
+            for r in (answer_keys_result.data or [])
+        }
 
         return Response({
             'session_id': pk,
@@ -354,6 +365,8 @@ class SessionViewSet(viewsets.ViewSet):
             'case_modality': case.get('modality'),
             'current_step': session['current_step'],
             'status': session['status'],
+            'answers': answers,
+            'step_templates': step_templates,
         })
 
     @action(detail=True, methods=['get'])
@@ -378,6 +391,7 @@ class SessionViewSet(viewsets.ViewSet):
         ).eq('session_id', pk).order('step_index').execute()
 
         return Response({
+            'answer_key': case.get('answer_key'),
             'your_score': session.get('final_score'),
             'details': [{'step': a['step_code'], 'score': a['score'], 'feedback': a['feedback']} for a in attempts.data],
         })
@@ -394,9 +408,52 @@ class StudentPerformanceViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=False, methods=['get'])
     def my_stats(self, request):
-        """Lấy thống kê cá nhân"""
-        perf, _ = StudentPerformance.objects.get_or_create(user=request.user)
-        return Response(StudentPerformanceSerializer(perf).data)
+        """Lấy thống kê cá nhân — computed live from Supabase"""
+        import uuid as _uuid
+        user_uuid = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f'sara_user_{request.user.id}'))
+        sb = get_supabase()
+
+        sessions = sb.table('sessions').select(
+            'id, final_score, status, completed_at'
+        ).eq('user_id', user_uuid).eq('status', 'COMPLETED').execute()
+
+        completed = sessions.data or []
+        total_cases_completed = len(completed)
+        average_score = round(
+            sum(s['final_score'] for s in completed if s['final_score'] is not None) / total_cases_completed, 4
+        ) if total_cases_completed else 0.0
+
+        last_activity = max(
+            (s['completed_at'] for s in completed if s['completed_at']), default=None
+        )
+
+        # accuracy_by_step: average score per step_code across all sessions
+        STEP_CODES = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+        accuracy_by_step = {}
+        if completed:
+            session_ids = [s['id'] for s in completed]
+            attempts = sb.table('step_attempts').select(
+                'step_code, score'
+            ).in_('session_id', session_ids).execute()
+
+            step_scores: dict = {code: [] for code in STEP_CODES}
+            for a in (attempts.data or []):
+                if a['step_code'] in step_scores and a['score'] is not None:
+                    step_scores[a['step_code']].append(a['score'])
+
+            accuracy_by_step = {
+                code: round(sum(scores) / len(scores), 4)
+                for code, scores in step_scores.items()
+                if scores
+            }
+
+        return Response({
+            'username': request.user.username,
+            'total_cases_completed': total_cases_completed,
+            'average_score': average_score,
+            'accuracy_by_step': accuracy_by_step,
+            'last_activity': last_activity,
+        })
 
 
 class UserUploadedCaseViewSet(viewsets.ModelViewSet):
@@ -464,9 +521,6 @@ class UserUploadedCaseViewSet(viewsets.ModelViewSet):
             
             logger.info(f"HF Analysis complete. Keys in answer_key: {list(findings.get('answer_key', {}).keys())}")
             
-            # Lưu findings
-            upload.ai_findings = findings
-            
             # Tạo Case từ findings
             case_data = HuggingFaceImageAnalyzer.create_case_from_upload(upload)
             
@@ -488,7 +542,47 @@ class UserUploadedCaseViewSet(viewsets.ModelViewSet):
             
             logger.info(f"Case {case.id} created from upload {upload.id}")
             logger.info(f"Case answer_key has steps: {list(case.answer_key.keys())}")
-            
+
+            # Generate a stable UUID for Supabase (Django Case uses integer PK)
+            import uuid as _uuid
+            supabase_case_id = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f'uploaded_case_{case.id}'))
+
+            # Sync case to Supabase so SessionViewSet can find it
+            difficulty_map = {'BASIC': 'easy', 'INTERMEDIATE': 'medium', 'ADVANCED': 'hard'}
+            sb = get_supabase()
+            sb.table('cases').upsert({
+                'id': supabase_case_id,
+                'title': case.title,
+                'modality': case.modality,
+                'difficulty': difficulty_map.get(case.difficulty, 'medium'),
+                'clinical_history': case.clinical_history,
+                'status': 'published',
+                'image_urls': case.image_urls,
+            }, on_conflict='id').execute()
+            logger.info(f"Case {case.id} synced to Supabase as {supabase_case_id}")
+
+            # Insert answer_keys rows into Supabase
+            STEP_CODES = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+            step_order_map = {code: i for i, code in enumerate(STEP_CODES)}
+            answer_key_rows = [
+                {
+                    'case_id': supabase_case_id,
+                    'step_order': step_order_map.get(step_code, i),
+                    'step_code': step_code,
+                    'expected_finding': str(answer),
+                    'clinical_explanation': case_data.get('description', ''),
+                    'key_points': [],
+                }
+                for i, (step_code, answer) in enumerate(case.answer_key.items())
+                if step_code in step_order_map
+            ]
+            if answer_key_rows:
+                sb.table('answer_keys').insert(answer_key_rows).execute()
+                logger.info(f"Inserted {len(answer_key_rows)} answer_key rows for case {case.id}")
+
+            # Store supabase_case_id in ai_findings for start_practice to use
+            upload.ai_findings = {**findings, 'supabase_case_id': supabase_case_id}
+
             # Link case to upload
             upload.created_case = case
             upload.processing_status = 'SUCCESS'
@@ -540,12 +634,15 @@ class UserUploadedCaseViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        import uuid
-        user_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'sara_user_{request.user.id}'))
+        import uuid as _uuid
+        user_uuid = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f'sara_user_{request.user.id}'))
+        supabase_case_id = upload.ai_findings.get('supabase_case_id') or str(
+            _uuid.uuid5(_uuid.NAMESPACE_DNS, f'uploaded_case_{upload.created_case.id}')
+        )
         sb = get_supabase()
         result = sb.table('sessions').insert({
             'user_id': user_uuid,
-            'case_id': str(upload.created_case.id),
+            'case_id': supabase_case_id,
             'current_step': 0,
             'status': 'IN_PROGRESS',
         }).execute()
