@@ -218,10 +218,17 @@ class OpenAIAgent:
         step_names = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
         step_name = step_names[step_index] if step_index < len(step_names) else 'UNKNOWN'
         
-        # Lấy answer_key từ case
-        answer_key = case.answer_key.get(step_name, "Không có đáp án chuẩn")
-        clinical_history = case.clinical_history
-        case_title = case.title
+        # case is a plain dict from Supabase
+        raw_answer_key = case.get('answer_key', {}) if isinstance(case, dict) else getattr(case, 'answer_key', {})
+        if isinstance(raw_answer_key, str):
+            import json as _json
+            try:
+                raw_answer_key = _json.loads(raw_answer_key)
+            except Exception:
+                raw_answer_key = {}
+        answer_key = raw_answer_key.get(step_name, "Không có đáp án chuẩn")
+        clinical_history = case.get('clinical_history', '') if isinstance(case, dict) else getattr(case, 'clinical_history', '')
+        case_title = case.get('title', '') if isinstance(case, dict) else getattr(case, 'title', '')
         
         # Prompt để OpenAI đánh giá - STRICT: CHỈ ĐÁNH GIÁ, KHÔNG LEAK ĐÁP ÁN
         system_prompt = """Bạn là một giáo viên chẩn đoán hình ảnh y tế chuyên nghiệp.
@@ -352,16 +359,17 @@ Trả lời JSON (không markdown, chỉ pure JSON):"""
         """
         Tạo gợi ý Socratic bằng GPT-4o
         """
+        _case_title = case.get('title', '') if isinstance(case, dict) else getattr(case, 'title', '')
         try:
             client = OpenAIAgent._get_client()
         except (ImportError, ValueError) as e:
             logger.error(f"OpenAI error: {e} - falling back to Mock")
-            return MockSocraticAgent.get_step_question(step_index, case.title)
-        
+            return MockSocraticAgent.get_step_question(step_index, _case_title)
+
         step_names = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
         step_name = step_names[step_index] if step_index < len(step_names) else 'UNKNOWN'
-        
-        prompt = f"""Case: {case.title}
+
+        prompt = f"""Case: {_case_title}
 Bước hiện tại: {step_name}
 Lỗi của sinh viên: {', '.join(errors) if errors else 'không có lỗi cụ thể'}
 
@@ -384,4 +392,4 @@ Câu hỏi phải hướng đến việc khám phá và tự học của sinh vi
             return hint
         except Exception as e:
             logger.error(f"OpenAI hint error: {e}")
-            return MockSocraticAgent.get_step_question(step_index, case.title)
+            return MockSocraticAgent.get_step_question(step_index, _case_title)

@@ -14,7 +14,7 @@ create table step_attempts (
   id                   uuid primary key default gen_random_uuid(),
   session_id           uuid not null references sessions(id) on delete cascade,
   rubric_criterion_id  uuid not null references step_rubrics(id) on delete restrict,
-  step_index           int not null check (step_index between 0 and 4),
+  step_index           int not null check (step_index between 0 and 5),
   step_code            text not null,
   student_answer       text not null,
   score                float not null check (score between 0 and 1),
@@ -28,7 +28,7 @@ create table step_attempts (
 create table pipeline_replays (
   id                   uuid primary key default gen_random_uuid(),
   session_id           uuid not null references sessions(id) on delete cascade,
-  step_order           int not null check (step_order between 0 and 4),
+  step_order           int not null check (step_order between 0 and 5),
   step_code            text not null,
   student_best_answer  text not null,
   step_score           float not null,
