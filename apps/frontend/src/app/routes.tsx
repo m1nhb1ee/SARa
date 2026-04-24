@@ -3,10 +3,11 @@ import { Root } from "./Root";
 import { Dashboard } from "./pages/Dashboard";
 import { CaseListPage } from "./pages/CaseListPage";
 import { PracticePage } from "./pages/PracticePage";
+import { UploadPage } from "./pages/UploadPage";
 import { DiagnosisTrainingPage } from "./pages/DiagnosisTrainingPage";
 import { DiagnosisSession } from "./pages/DiagnosisSession";
 import { AnswerKey } from "./pages/AnswerKey";
-import { Performance } from "./pages/Performance";
+import { ProfilePage } from "./pages/Performance";
 import { ComingSoon } from "./pages/ComingSoon";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -26,11 +27,12 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: "cases", Component: CaseListPage },
+      { path: "upload", Component: UploadPage },
       { path: "practice", Component: PracticePage },
       { path: "training/:caseId", Component: DiagnosisTrainingPage },
       { path: "session/:caseId", Component: DiagnosisSession },
       { path: "answer-key/:caseId", Component: AnswerKey },
-      { path: "performance", Component: Performance },
+      { path: "performance", Component: ProfilePage },
       { path: "*", Component: ComingSoon },
     ],
   },
