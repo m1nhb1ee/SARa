@@ -1,6 +1,6 @@
 import uuid
 from rest_framework import viewsets, status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from app.core.pagination import StandardPagination
@@ -19,11 +19,12 @@ class CaseTagViewSet(viewsets.ViewSet):
 
 
 class CaseViewSet(viewsets.ViewSet):
-    """GET /api/v1/cases/ — danh sách và detail cases (public)"""
-    permission_classes = [AllowAny]
+    """GET /api/v1/cases/ — danh sách và detail cases (requires auth)"""
+    permission_classes = [IsAuthenticated]
 
     def list(self, request):
         cases = list_cases(
+            user_id=request.user['id'],
             modality=request.query_params.get('modality'),
             difficulty=request.query_params.get('difficulty'),
             disease_tag=request.query_params.get('disease_tag'),
@@ -42,4 +43,7 @@ class CaseViewSet(viewsets.ViewSet):
         case = get_case(pk)
         if case is None:
             return Response({'error': f'Case {pk} not found'}, status=status.HTTP_404_NOT_FOUND)
+        # Chỉ cho phép truy cập case của mình hoặc case hệ thống (uploaded_by = null)
+        if case.get('uploaded_by') and case['uploaded_by'] != request.user['id']:
+            return Response({'error': 'Không có quyền truy cập case này'}, status=status.HTTP_403_FORBIDDEN)
         return Response(case)

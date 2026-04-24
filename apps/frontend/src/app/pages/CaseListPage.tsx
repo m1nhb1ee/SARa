@@ -34,11 +34,11 @@ export function CaseListPage() {
   };
 
   const handleStart = async (caseId: string) => {
-    const session = await createSession(Number(caseId));
+    const session = await createSession(caseId);
     if (session) navigate(`/session/${caseId}`);
   };
 
-  const cases: CaseItem[] = (casesData?.results ?? []).map((c: any) => ({
+  const cases: CaseItem[] = (casesData?.cases ?? []).map((c: any) => ({
     id: String(c.id),
     title: c.title,
     modality: mapModality(c.modality),

@@ -45,7 +45,7 @@ export function useCaseDetail(caseId: string | null) {
   const [state, patch] = useQueryState<any>();
 
   useEffect(() => {
-    if (!caseId) return;
+    if (!caseId) { patch({ loading: false }); return; }
     resolveQuery(() => apiClient.getCaseDetail(caseId), patch);
   }, [caseId]);
 
@@ -67,7 +67,7 @@ export function useSessionDetail(sessionId: string | null) {
   const [state, patch] = useQueryState<any>();
 
   const refetch = useCallback(() => {
-    if (!sessionId) return Promise.resolve();
+    if (!sessionId) { patch({ loading: false }); return Promise.resolve(); }
     return resolveQuery(() => apiClient.getSessionDetail(sessionId), patch);
   }, [sessionId]);
 
