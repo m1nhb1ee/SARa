@@ -90,7 +90,7 @@ export function PracticePage() {
   const [currentAnswerStep, setCurrentAnswerStep] = useState(0);
 
   // ── API ──
-  const { data: caseData, loading: caseLoading } = useCaseDetail(uploadedCaseData?.created_case?.id);
+  const { data: caseData, loading: caseLoading } = useCaseDetail(uploadedCaseData?.case?.id);
   const { createSession } = useCreateSession();
   const { data: sessionData, loading: sessionLoading, refetch: refetchSession } = useSessionDetail(sessionId);
   const { submitAnswer } = useSubmitAnswer();
@@ -102,12 +102,12 @@ export function PracticePage() {
   const isSessionComplete = sessionData?.status === 'COMPLETED';
 
   const caseImage = uploadedImage
-    || (uploadedCaseData?.created_case?.image_urls?.[0])
+    || (uploadedCaseData?.case?.image_urls?.[0])
     || (caseData?.image_urls?.[0] ?? '');
-  const caseTitle = uploadedCaseData?.created_case?.title || uploadedCaseData?.title || (caseData?.title || '');
-  const caseModality = uploadedCaseData?.created_case?.modality || uploadedCaseData?.modality || (caseData?.modality || '');
-  const caseDifficulty = uploadedCaseData?.created_case?.difficulty || uploadedCaseData?.difficulty || (caseData?.difficulty || '');
-  const clinicalHistory = (uploadedCaseData?.created_case?.clinical_history || uploadedCaseData?.clinical_history || caseData?.clinical_history) ?? '';
+  const caseTitle = uploadedCaseData?.case?.title || uploadedCaseData?.title || (caseData?.title || '');
+  const caseModality = uploadedCaseData?.case?.modality || uploadedCaseData?.modality || (caseData?.modality || '');
+  const caseDifficulty = uploadedCaseData?.case?.difficulty || uploadedCaseData?.difficulty || (caseData?.difficulty || '');
+  const clinicalHistory = (uploadedCaseData?.case?.clinical_history || uploadedCaseData?.clinical_history || caseData?.clinical_history) ?? '';
 
   // Auto-scroll chat
   useEffect(() => {
@@ -126,7 +126,7 @@ export function PracticePage() {
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append('original_image', uploadFile);
+      formData.append('image', uploadFile);
       formData.append('title', uploadTitle);
       formData.append('modality', uploadModality);
 
@@ -143,16 +143,15 @@ export function PracticePage() {
         setUploading(false);
         setUploadProcessing(true);
 
-        if (data.original_image) {
-          const imgBase = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1').replace('/api/v1', '');
-          setUploadedImage(`${imgBase}${data.original_image}`);
+        if (data.upload_session?.image_url) {
+          setUploadedImage(data.upload_session.image_url);
         }
         setUploadedCaseData(data);
 
         // Create session — lưu vào state riêng + ref để tránh stale closure
-        if (data.created_case) {
+        if (data.case?.id) {
           try {
-            const sessionRes = await createSession(data.created_case.id);
+            const sessionRes = await createSession(data.case.id);
             if (sessionRes) {
               setSessionId(sessionRes.id);
               sessionIdRef.current = sessionRes.id;
@@ -288,7 +287,7 @@ export function PracticePage() {
         { id: Date.now().toString(), role: 'ai', type: 'question', content: prompts[nextStepNum] ?? `Bước ${nextStepNum + 1}` },
       ]);
     } else {
-      const targetCaseId = uploadedCaseData?.created_case?.id ?? uploadedCaseData?.id;
+      const targetCaseId = uploadedCaseData?.case?.id ?? uploadedCaseData?.id;
       navigate(`/answer-key/${targetCaseId}`);
     }
   };
@@ -940,7 +939,7 @@ export function PracticePage() {
                           📝 Đáp Án Tham Khảo
                         </p>
                         <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7, backgroundColor: 'var(--bg-base)', padding: '12px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', minHeight: 70 }}>
-                          {stepAnswers.answers?.[STEPS[currentAnswerStep]] || '(Chưa có đáp án)'}
+                          {typeof stepAnswers.answers?.[STEPS[currentAnswerStep]] === 'string' ? stepAnswers.answers[STEPS[currentAnswerStep]] : JSON.stringify(stepAnswers.answers?.[STEPS[currentAnswerStep]]) || '(Chưa có đáp án)'}
                         </div>
                       </div>
 
