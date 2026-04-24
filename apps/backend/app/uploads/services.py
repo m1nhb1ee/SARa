@@ -65,13 +65,9 @@ def create_case_in_supabase(
     """
     sb = get_supabase()
 
-    try:
-        sb.table('users').select('id').eq('id', user_id).single().execute()
-    except Exception:
-        try:
-            sb.table('users').insert({'id': user_id, 'email': '', 'role': 'student'}).execute()
-        except Exception:
-            pass
+    user_exists = sb.table('users').select('id').eq('id', user_id).execute()
+    if not user_exists.data:
+        sb.table('users').insert({'id': user_id, 'email': f'{user_id}@auto.local', 'role': 'student'}).execute()
 
     case_result = sb.table('cases').insert({
         'uploaded_by': user_id,
@@ -102,7 +98,7 @@ def create_case_in_supabase(
 
     upload_session = sb.table('upload_sessions').insert({
         'user_id': user_id,
-        'id': case['id'],
+        'case_id': case['id'],
         'image_url': image_url,
         'modality': modality,
     }).execute().data[0]

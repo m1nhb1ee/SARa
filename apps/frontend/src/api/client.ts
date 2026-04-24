@@ -66,7 +66,7 @@ class APIClient {
     return this.request<any>(`/cases/${queryString ? '?' + queryString : ''}`);
   }
 
-  async getCaseDetail(caseId: number) {
+  async getCaseDetail(caseId: string) {
     return this.request<any>(`/cases/${caseId}/`);
   }
 
@@ -80,23 +80,23 @@ class APIClient {
     return this.request<any>(`/sessions/${queryString ? '?' + queryString : ''}`);
   }
 
-  async createSession(caseId: number) {
-    return this.request<any>('/sessions/', 'POST', { case: caseId });
+  async createSession(caseId: string) {
+    return this.request<any>('/sessions/', 'POST', { case_id: caseId });
   }
 
-  async getSessionDetail(sessionId: number) {
+  async getSessionDetail(sessionId: string) {
     return this.request<any>(`/sessions/${sessionId}/`);
   }
 
-  async submitAnswer(sessionId: number, studentAnswer: string) {
+  async submitAnswer(sessionId: string, studentAnswer: string) {
     return this.request<any>(`/sessions/${sessionId}/submit_answer/`, 'POST', { student_answer: studentAnswer });
   }
 
-  async getAnswerKey(sessionId: number) {
+  async getAnswerKey(sessionId: string) {
     return this.request<any>(`/sessions/${sessionId}/answer_key/`);
   }
 
-  async exitSession(sessionId: number) {
+  async exitSession(sessionId: string) {
     return this.request<any>(`/sessions/${sessionId}/exit_session/`, 'POST');
   }
 

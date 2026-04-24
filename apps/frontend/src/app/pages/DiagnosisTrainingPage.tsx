@@ -45,13 +45,13 @@ interface FeedbackResult {
 
 export function DiagnosisTrainingPage() {
   const { caseId } = useParams<{ caseId: string }>();
-  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [studentAnswer, setStudentAnswer] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackResult | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
 
-  const { data: caseData, loading: caseLoading } = useCaseDetail(caseId ? parseInt(caseId) : null);
+  const { data: caseData, loading: caseLoading } = useCaseDetail(caseId ?? null);
   const { createSession } = useCreateSession();
   const { data: sessionData, loading: sessionLoading, refetch: refetchSession } = useSessionDetail(sessionId);
   const { submitAnswer } = useSubmitAnswer();
@@ -62,7 +62,7 @@ export function DiagnosisTrainingPage() {
     if (!caseId || sessionId) return;
 
     const create = async () => {
-      const session = await createSession(parseInt(caseId));
+      const session = await createSession(caseId);
       if (session) {
         setSessionId(session.id);
       }

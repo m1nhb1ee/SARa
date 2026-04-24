@@ -1,2 +1,3 @@
 insert into storage.buckets (id, name, public)
-values ('case-images', 'case-images', true);
+values ('case_images', 'case_images', true)
+on conflict (id) do nothing;

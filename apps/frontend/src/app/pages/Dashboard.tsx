@@ -27,8 +27,8 @@ export function Dashboard() {
   }, [sessionsData]);
 
   const cases = useMemo<CaseItem[]>(() => {
-    if (!casesData?.results) return [];
-    return casesData.results.map((c: any) => ({
+    if (!casesData?.cases) return [];
+    return casesData.cases.map((c: any) => ({
       id: String(c.id),
       title: c.title,
       modality: mapModality(c.modality),
