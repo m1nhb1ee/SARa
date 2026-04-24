@@ -1,0 +1,371 @@
+import time
+import logging
+from datetime import timezone as dt_timezone
+from datetime import datetime
+
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from app.core.supabase_client import get_supabase
+from app.ai_services import MockAIAgent, OpenAIAgent
+import os
+
+from .serializers import StepAnswerSubmitSerializer
+from .services import get_session, get_rubric_id
+
+logger = logging.getLogger(__name__)
+
+STEP_CODES = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+
+
+def _now_iso() -> str:
+    return datetime.now(dt_timezone.utc).isoformat()
+
+
+def _get_ai_agent():
+    use_openai = os.getenv('USE_OPENAI', 'true').lower() == 'true'
+    has_api_key = bool(os.getenv('OPENAI_API_KEY', '').strip())
+    if use_openai and has_api_key:
+        logger.info("Using OpenAI Agent for evaluation")
+        return OpenAIAgent
+    reason = "OpenAI disabled" if not use_openai else "OPENAI_API_KEY not set"
+    logger.info(f"Using Mock Agent ({reason})")
+    return MockAIAgent
+
+
+class SessionViewSet(viewsets.ViewSet):
+    """API quản lý Session — Supabase backend"""
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        """GET /api/v1/sessions/"""
+        sb = get_supabase()
+        user_id = request.user['id']
+        status_filter = request.query_params.get('status')
+        case_filter = request.query_params.get('case')
+
+        query = sb.table('sessions').select(
+            'id, case_id, current_step, status, final_score, started_at, completed_at'
+        ).eq('user_id', user_id)
+
+        if status_filter:
+            query = query.eq('status', status_filter)
+        if case_filter:
+            query = query.eq('case_id', case_filter)
+
+        result = query.order('started_at', desc=True).execute()
+        return Response({'count': len(result.data), 'results': result.data})
+
+    def create(self, request):
+        """POST /api/v1/sessions/  Body: { "case_id": "<uuid>" }"""
+        sb = get_supabase()
+        user_id = request.user['id']
+        case_id = request.data.get('case_id') or request.data.get('case')
+
+        if not case_id:
+            return Response({'error': 'case_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        result = sb.table('sessions').insert({
+            'user_id': user_id,
+            'case_id': case_id,
+            'current_step': 0,
+            'status': 'IN_PROGRESS',
+        }).execute()
+
+        session = result.data[0]
+
+        try:
+            case_result = sb.table('cases').select('title').eq('id', case_id).single().execute()
+            session['case_title'] = case_result.data.get('title')
+        except Exception:
+            session['case_title'] = None
+
+        return Response(session, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, pk=None):
+        """GET /api/v1/sessions/{id}/"""
+        sb = get_supabase()
+        session, err = get_session(sb, pk, request.user['id'])
+        if err:
+            return err
+
+        try:
+            case_result = sb.table('cases').select(
+                'id, title, modality, difficulty, clinical_history, image_urls, tags'
+            ).eq('id', session['case_id']).single().execute()
+            session['case'] = case_result.data
+        except Exception:
+            session['case'] = None
+
+        attempts = sb.table('step_attempts').select(
+            'id, step_index, step_code, student_answer, score, errors, feedback, attempt_number, latency_ms, created_at'
+        ).eq('session_id', pk).order('step_index').execute()
+        session['step_attempts'] = attempts.data
+
+        return Response(session)
+
+    @action(detail=True, methods=['post'])
+    def submit_answer(self, request, pk=None):
+        """POST /api/v1/sessions/{id}/submit_answer/"""
+        sb = get_supabase()
+        session, err = get_session(sb, pk, request.user['id'])
+        if err:
+            return err
+
+        if session['status'] != 'IN_PROGRESS':
+            return Response({'error': 'Session đã kết thúc'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = StepAnswerSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        student_answer = serializer.validated_data['student_answer']
+        current_step = session['current_step']
+        step_code = STEP_CODES[current_step] if current_step < len(STEP_CODES) else 'UNKNOWN'
+
+        rubric_id = get_rubric_id(sb, step_code)
+        if not rubric_id:
+            return Response(
+                {'error': f'No rubric found for step {step_code}. Run the SQL migration first.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        try:
+            case_result = sb.table('cases').select('*').eq('id', session['case_id']).single().execute()
+            case = case_result.data
+        except Exception:
+            case = {}
+
+        prev = sb.table('step_attempts').select('id', count='exact').eq('session_id', pk).eq('step_index', current_step).execute()
+        attempt_number = (prev.count or 0) + 1
+
+        start_time = time.time()
+        ai_agent = _get_ai_agent()
+        ai_feedback = ai_agent.evaluate_answer(
+            case=case,
+            step_index=current_step,
+            student_answer=student_answer,
+            cv_findings={},
+        )
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        feedback_text = ai_feedback.get('feedback', {})
+        if isinstance(feedback_text, dict):
+            feedback_text = feedback_text.get('content', str(feedback_text))
+
+        try:
+            attempt_result = sb.table('step_attempts').insert({
+                'session_id': pk,
+                'rubric_criterion_id': rubric_id,
+                'step_index': current_step,
+                'step_code': step_code,
+                'student_answer': student_answer,
+                'score': ai_feedback['score'],
+                'errors': ai_feedback.get('errors', []),
+                'feedback': feedback_text,
+                'attempt_number': attempt_number,
+                'latency_ms': latency_ms,
+            }).execute()
+        except Exception as e:
+            err_msg = str(e)
+            if 'step_index' in err_msg and 'check constraint' in err_msg:
+                return Response(
+                    {
+                        'error': 'DB schema cũ: cần chạy migration fix_step_index_constraint.sql trên Supabase Dashboard.',
+                        'detail': err_msg,
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+            raise
+        attempt = attempt_result.data[0]
+
+        passed = ai_feedback['score'] >= 0.6
+        response_data = {'attempt': attempt, 'passed': passed}
+
+        if passed and current_step < 5:
+            sb.table('sessions').update({'current_step': current_step + 1}).eq('id', pk).execute()
+            response_data['next_step'] = current_step + 1
+            response_data['message'] = 'Đáp án số được! Chuyển sang bước tiếp theo.'
+        elif passed and current_step == 5:
+            all_attempts = sb.table('step_attempts').select(
+                'step_index, score'
+            ).eq('session_id', pk).execute()
+            best_by_step: dict = {}
+            for a in (all_attempts.data or []):
+                if a['score'] is None:
+                    continue
+                idx = a['step_index']
+                if idx not in best_by_step or a['score'] > best_by_step[idx]:
+                    best_by_step[idx] = a['score']
+            final_score = round(
+                sum(best_by_step.values()) / len(STEP_CODES), 4
+            ) if best_by_step else 0.0
+            sb.table('sessions').update({
+                'status': 'COMPLETED',
+                'final_score': final_score,
+                'completed_at': _now_iso(),
+            }).eq('id', pk).execute()
+            response_data['message'] = 'Chúc mừng! Hoàn thành case này.'
+            response_data['session_complete'] = True
+        else:
+            hint = ai_agent.generate_socratic_hint(
+                case=case, step_index=current_step, errors=ai_feedback.get('errors', [])
+            )
+            response_data['hint'] = hint
+            response_data['message'] = 'Chưa đúng. Hãy xem gợi ý và thử lại.'
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def exit_session(self, request, pk=None):
+        """POST /api/v1/sessions/{id}/exit_session/"""
+        sb = get_supabase()
+        session, err = get_session(sb, pk, request.user['id'])
+        if err:
+            return err
+
+        if session['status'] != 'IN_PROGRESS':
+            return Response({'error': 'Không thể thoát khỏi session này'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sb.table('sessions').update({
+            'status': 'ABANDONED',
+            'completed_at': _now_iso(),
+        }).eq('id', pk).execute()
+
+        return Response({
+            'success': True,
+            'message': 'Session đã được lưu và thoát thành công',
+            'session_id': pk,
+            'last_step': session['current_step'],
+            'timestamp': _now_iso(),
+        })
+
+    @action(detail=True, methods=['get'])
+    def step_answers(self, request, pk=None):
+        """GET /api/v1/sessions/{id}/step_answers/"""
+        sb = get_supabase()
+        session, err = get_session(sb, pk, request.user['id'])
+        if err:
+            return err
+
+        try:
+            case_result = sb.table('cases').select('*').eq('id', session['case_id']).single().execute()
+            case = case_result.data or {}
+        except Exception:
+            case = {}
+
+        rubrics_result = sb.table('step_rubrics').select('*').execute()
+        step_templates = {r['step_code']: r for r in (rubrics_result.data or [])}
+
+        answer_keys_result = sb.table('answer_keys').select('*').eq('case_id', session['case_id']).order('step_order').execute()
+        answers = {
+            r['step_code']: {
+                'expected_finding': r.get('expected_finding'),
+                'clinical_explanation': r.get('clinical_explanation'),
+                'key_points': r.get('key_points'),
+            }
+            for r in (answer_keys_result.data or [])
+        }
+
+        return Response({
+            'session_id': pk,
+            'case_id': session['case_id'],
+            'case_title': case.get('title'),
+            'case_modality': case.get('modality'),
+            'current_step': session['current_step'],
+            'status': session['status'],
+            'answers': answers,
+            'step_templates': step_templates,
+        })
+
+    @action(detail=True, methods=['get'])
+    def answer_key(self, request, pk=None):
+        """GET /api/v1/sessions/{id}/answer_key/ — only after COMPLETED"""
+        sb = get_supabase()
+        session, err = get_session(sb, pk, request.user['id'])
+        if err:
+            return err
+
+        if session['status'] != 'COMPLETED':
+            return Response(
+                {'error': 'Chỉ xem được đáp án sau khi hoàn thành.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        answer_keys_result = sb.table('answer_keys').select(
+            'step_code, expected_finding, clinical_explanation, key_points'
+        ).eq('case_id', session['case_id']).order('step_order').execute()
+        answer_key = {
+            r['step_code']: {
+                'expected_finding': r.get('expected_finding'),
+                'clinical_explanation': r.get('clinical_explanation'),
+                'key_points': r.get('key_points', []),
+            }
+            for r in (answer_keys_result.data or [])
+        }
+
+        attempts = sb.table('step_attempts').select(
+            'step_code, score, feedback'
+        ).eq('session_id', pk).order('step_index').execute()
+
+        return Response({
+            'answer_key': answer_key,
+            'your_score': session.get('final_score'),
+            'details': [
+                {'step': a['step_code'], 'score': a['score'], 'feedback': a['feedback']}
+                for a in attempts.data
+            ],
+        })
+
+
+class StudentPerformanceViewSet(viewsets.ViewSet):
+    """GET /api/v1/performance/my_stats/ — thống kê live từ Supabase"""
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=['get'])
+    def my_stats(self, request):
+        user_id = request.user['id']
+        sb = get_supabase()
+
+        sessions = sb.table('sessions').select(
+            'id, final_score, status, completed_at'
+        ).eq('user_id', user_id).eq('status', 'COMPLETED').execute()
+
+        completed = sessions.data or []
+        total_cases_completed = len(completed)
+        average_score = round(
+            sum(s['final_score'] for s in completed if s['final_score'] is not None) / total_cases_completed,
+            4,
+        ) if total_cases_completed else 0.0
+
+        last_activity = max(
+            (s['completed_at'] for s in completed if s['completed_at']),
+            default=None,
+        )
+
+        accuracy_by_step = {}
+        if completed:
+            session_ids = [s['id'] for s in completed]
+            attempts = sb.table('step_attempts').select(
+                'step_code, score'
+            ).in_('session_id', session_ids).execute()
+
+            step_scores: dict = {code: [] for code in STEP_CODES}
+            for a in (attempts.data or []):
+                if a['step_code'] in step_scores and a['score'] is not None:
+                    step_scores[a['step_code']].append(a['score'])
+
+            accuracy_by_step = {
+                code: round(sum(scores) / len(scores), 4)
+                for code, scores in step_scores.items()
+                if scores
+            }
+
+        return Response({
+            'user_id': user_id,
+            'email': request.user.get('email'),
+            'total_cases_completed': total_cases_completed,
+            'average_score': average_score,
+            'accuracy_by_step': accuracy_by_step,
+            'last_activity': last_activity,
+        })
