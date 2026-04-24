@@ -38,18 +38,18 @@ MODALITY_MAP = {
 # ── Supabase Storage ───────────────────────────────────────────────────────────
 
 def upload_image_to_storage(image_bytes: bytes, filename: str) -> str:
-    """Upload ảnh lên Supabase Storage bucket 'case-images', trả về public URL."""
+    """Upload ảnh lên Supabase Storage bucket 'case_images', trả về public URL."""
     sb = get_supabase()
     ext = os.path.splitext(filename)[1].lower() or '.jpg'
     content_type_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png'}
     content_type = content_type_map.get(ext, 'image/jpeg')
     unique_name = f"uploads/{uuid.uuid4()}{ext}"
-    sb.storage.from_('case-images').upload(
+    sb.storage.from_('case_images').upload(
         unique_name,
         image_bytes,
         file_options={'content-type': content_type, 'upsert': 'true'},
     )
-    return sb.storage.from_('case-images').get_public_url(unique_name)
+    return sb.storage.from_('case_images').get_public_url(unique_name)
 
 
 def create_case_in_supabase(
@@ -64,6 +64,14 @@ def create_case_in_supabase(
     Trả về {'upload_session': ..., 'case': ...}.
     """
     sb = get_supabase()
+
+    try:
+        sb.table('users').select('id').eq('id', user_id).single().execute()
+    except Exception:
+        try:
+            sb.table('users').insert({'id': user_id, 'email': '', 'role': 'student'}).execute()
+        except Exception:
+            pass
 
     case_result = sb.table('cases').insert({
         'uploaded_by': user_id,
@@ -94,7 +102,7 @@ def create_case_in_supabase(
 
     upload_session = sb.table('upload_sessions').insert({
         'user_id': user_id,
-        'case_id': case['id'],
+        'id': case['id'],
         'image_url': image_url,
         'modality': modality,
     }).execute().data[0]
