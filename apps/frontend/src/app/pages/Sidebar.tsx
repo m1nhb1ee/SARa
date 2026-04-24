@@ -1,361 +1,327 @@
-﻿import { useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router";
-import { BookOpen, Stethoscope, BarChart2, Brain, Sun, Moon, LogOut, FileUp } from "lucide-react";
-import { useAuth } from "@/api/authContext";
-import { Button } from "@/app/components/ui/button";
+import { useLocation, useNavigate } from 'react-router';
+import {
+  Home, Upload, FolderOpen, TrendingUp, User, Settings, LogOut
+} from 'lucide-react';
+import { useAuth } from '@/api/authContext';
 
-const navItems = [
-  { icon: BookOpen, label: "Tu on tap", sub: "Browse Library", path: "/cases" },
-  { icon: FileUp, label: "Practice", sub: "Upload & Train", path: "/practice" },
-  { icon: Stethoscope, label: "Dashboard", sub: "Trang chủ", path: "/" },
-  { icon: BarChart2, label: "Ket qua cua toi", sub: "My Performance", path: "/performance" },
+const NAV_ITEMS = [
+  { name: 'Home',     path: '/',            tabColor: '#C9882A', icon: Home },
+  { name: 'Upload',   path: '/upload',      tabColor: '#C0392B', icon: Upload },
+  { name: 'My Cases', path: '/cases',       tabColor: '#1B3A5C', icon: FolderOpen },
+  { name: 'Progress', path: '/performance', tabColor: '#7D9B76', icon: TrendingUp },
+  { name: 'Profile',  path: '/profile',     tabColor: '#8B6355', icon: User },
+  { name: 'Settings', path: '/settings',    tabColor: '#4A4A4A', icon: Settings },
 ];
 
-interface SidebarProps {
-  onClose?: () => void;
-  theme?: "light" | "dark";
-  toggleTheme?: () => void;
+function CaduceusStamp() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"
+      style={{ opacity: 0.55 }}>
+      <circle cx="20" cy="20" r="18" stroke="#C9A84C" strokeWidth="1.2" fill="none" />
+      <line x1="20" y1="5" x2="20" y2="34" stroke="#C9A84C" strokeWidth="1.5" />
+      <path d="M20 9 C14 6 9 10 12 15 C15 20 20 18 20 18" stroke="#C9A84C" strokeWidth="1" fill="none" />
+      <path d="M20 9 C26 6 31 10 28 15 C25 20 20 18 20 18" stroke="#C9A84C" strokeWidth="1" fill="none" />
+      <path d="M14 13 C10 16 10 20 14 22 C18 24 22 28 18 32" stroke="#C9A84C" strokeWidth="1" fill="none" />
+      <path d="M26 13 C30 16 30 20 26 22 C22 24 18 28 22 32" stroke="#C9A84C" strokeWidth="1" fill="none" />
+    </svg>
+  );
 }
 
-export function Sidebar({ onClose, theme = "dark", toggleTheme = () => {} }: SidebarProps) {
+export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    logout();
     navigate('/login');
   };
 
-  const isActive = (path: string) => {
-    if (path === "/") {
+  const isActive = (item: typeof NAV_ITEMS[0]) => {
+    if (item.path === '/') {
       return (
-        location.pathname === "/" ||
-        location.pathname.startsWith("/session") ||
-        location.pathname.startsWith("/answer-key")
+        location.pathname === '/' ||
+        location.pathname.startsWith('/session/') ||
+        location.pathname.startsWith('/answer-key/')
       );
     }
-    return location.pathname.startsWith(path);
+    return location.pathname.startsWith(item.path);
   };
 
   return (
-    <aside
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => setIsExpanded(false)}
-      style={{
-        position: "fixed",
-        left: 0,
-        top: 0,
-        height: "100vh",
-        width: isExpanded ? "280px" : "70px",
-        backgroundColor: "var(--card)",
-        borderRight: "1px solid var(--border)",
-        borderRadius: "0 16px 16px 0",
-        zIndex: 50,
-        display: "flex",
-        flexDirection: "column",
-        transition: "width 250ms ease-in-out",
-        overflowY: "auto",
-        overflowX: "hidden",
-      }}
-    >
-      {/* Logo Section */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "20px 12px",
-          borderBottom: "1px solid var(--border)",
-          minHeight: "70px",
-          flexShrink: 0,
-        }}
+    <>
+      {/* ─── DESKTOP SIDEBAR ─── */}
+      <aside
+        className="hidden md:flex flex-col w-[260px] min-h-screen flex-shrink-0 relative"
+        style={{ background: '#3E1F0D', overflow: 'visible', zIndex: 20 }}
       >
+        {/* Leather noise texture overlay */}
         <div
+          className="absolute inset-0 pointer-events-none"
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: 10,
-            backgroundColor: "color-mix(in srgb, var(--primary) 13%, transparent)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E")`,
           }}
-        >
-          <Brain size={28} color="var(--primary)" />
-        </div>
-        <span
+        />
+
+        {/* Left stitching */}
+        <div
+          className="absolute left-[7px] top-0 bottom-0 pointer-events-none"
           style={{
-            fontFamily: "'Inter', sans-serif",
-            fontWeight: 700,
-            fontSize: "20px",
-            color: "var(--primary)",
-            letterSpacing: "-0.02em",
-            whiteSpace: "nowrap",
-            opacity: isExpanded ? 1 : 0,
-            transition: "opacity 250ms ease-in-out 50ms",
+            width: '1px',
+            backgroundImage: 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.13) 0px, rgba(255,255,255,0.13) 4px, transparent 4px, transparent 9px)',
           }}
-        >
-          SARa
-        </span>
-      </div>
+        />
+        {/* Right stitching */}
+        <div
+          className="absolute right-[7px] top-0 bottom-0 pointer-events-none"
+          style={{
+            width: '1px',
+            backgroundImage: 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.10) 0px, rgba(255,255,255,0.10) 4px, transparent 4px, transparent 9px)',
+          }}
+        />
+        {/* Right edge depth vignette */}
+        <div
+          className="absolute right-0 top-0 bottom-0 w-6 pointer-events-none"
+          style={{ background: 'linear-gradient(to right, transparent, rgba(0,0,0,0.22))' }}
+        />
+        {/* Top worn corners */}
+        <div className="absolute top-0 left-0 w-14 h-14 pointer-events-none"
+          style={{ background: 'radial-gradient(circle at top left, rgba(0,0,0,0.18) 0%, transparent 70%)' }} />
+        <div className="absolute top-0 right-0 w-14 h-14 pointer-events-none"
+          style={{ background: 'radial-gradient(circle at top right, rgba(0,0,0,0.15) 0%, transparent 70%)' }} />
 
-      {/* Navigation */}
-      <nav
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          padding: "12px 8px",
-          overflowY: "auto",
-        }}
-      >
-        {navItems.map((item) => {
-          const active = isActive(item.path);
+        {/* ── Logo / App Identity ── */}
+        <div className="relative z-10 flex flex-col items-center pt-7 pb-5 px-5">
+          <CaduceusStamp />
 
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={() => {
-                onClose?.();
-              }}
+          <div className="mt-2 text-center">
+            <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 10px",
-                borderRadius: 10,
-                textDecoration: "none",
-                color: active ? "var(--primary)" : "var(--secondary-foreground)",
-                transition: "all 250ms ease-in-out",
-                backgroundColor: active
-                  ? "color-mix(in srgb, var(--primary) 12%, transparent)"
-                  : "transparent",
-                border: active ? "1px solid color-mix(in srgb, var(--primary) 30%, transparent)" : "1px solid transparent",
-                position: "relative",
-              }}
-              title={item.label}
-              onMouseEnter={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = "color-mix(in srgb, var(--primary) 8%, transparent)";
-                  (e.currentTarget as HTMLElement).style.color = "var(--primary)";
-                  (e.currentTarget as HTMLElement).style.transform = "translateX(4px)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                  (e.currentTarget as HTMLElement).style.color = "var(--secondary-foreground)";
-                  (e.currentTarget as HTMLElement).style.transform = "translateX(0)";
-                }
+                fontFamily: "'Playfair Display', serif",
+                fontSize: '20px',
+                fontWeight: 700,
+                letterSpacing: '0.07em',
+                color: '#C9A84C',
+                textShadow: '0px 1px 0px rgba(255,255,255,0.07), 0px -1px 3px rgba(0,0,0,0.75), 0px 2px 4px rgba(0,0,0,0.5)',
               }}
             >
-              <item.icon size={30} strokeWidth={1.5} style={{ flexShrink: 0 }} />
+              MedLens
+            </div>
+
+            <div className="mt-2 mx-auto" style={{
+              height: '1px',
+              width: '70px',
+              background: 'linear-gradient(to right, transparent, rgba(201,168,76,0.55), transparent)',
+            }} />
+
+            <div
+              className="mt-1.5"
+              style={{
+                fontFamily: "'Special Elite', cursive",
+                fontSize: '8px',
+                letterSpacing: '0.22em',
+                color: 'rgba(237,224,196,0.35)',
+              }}
+            >
+              MEDICAL AI TRAINING
+            </div>
+          </div>
+
+          <div className="mt-4" style={{ color: 'rgba(201,168,76,0.3)', fontSize: '11px', letterSpacing: '2px' }}>
+            — ✦ —
+          </div>
+        </div>
+
+        {/* ── Navigation ── */}
+        <nav className="flex-1 relative z-10 mt-1">
+          {NAV_ITEMS.map((item) => {
+            const active = isActive(item);
+            return (
+              <div key={item.name} className="relative mb-[3px]" style={{ overflow: 'visible' }}>
+                <button
+                  onClick={() => navigate(item.path)}
+                  className="w-full flex items-stretch relative group transition-transform duration-200"
+                  style={{ transform: active ? 'translateX(3px)' : 'none' }}
+                  title={item.name}
+                >
+                  {/* Colored tab strip on left */}
+                  <div
+                    style={{
+                      width: '10px',
+                      flexShrink: 0,
+                      background: item.tabColor,
+                      opacity: active ? 1 : 0.65,
+                      transition: 'opacity 0.15s',
+                    }}
+                  />
+
+                  {/* Tab body */}
+                  <div
+                    className="flex items-center gap-3 flex-1"
+                    style={{
+                      padding: '11px 16px',
+                      background: active ? '#F5EDD6' : 'transparent',
+                      boxShadow: active
+                        ? '4px 0 14px rgba(62,31,13,0.38), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(62,31,13,0.1)'
+                        : 'none',
+                      borderTop: active ? '1px solid rgba(196,168,130,0.5)' : '1px solid transparent',
+                      borderBottom: active ? '1px solid rgba(196,168,130,0.5)' : '1px solid transparent',
+                      transition: 'background 0.15s, box-shadow 0.15s',
+                    }}
+                  >
+                    <item.icon
+                      style={{
+                        width: '17px',
+                        height: '17px',
+                        flexShrink: 0,
+                        color: active ? item.tabColor : '#D4C4A8',
+                        opacity: active ? 1 : 0.8,
+                      }}
+                    />
+
+                    <span
+                      style={{
+                        fontFamily: "'Special Elite', cursive",
+                        fontSize: '12.5px',
+                        letterSpacing: '0.08em',
+                        color: active ? '#2C1810' : '#D4C4A8',
+                        opacity: active ? 1 : 0.85,
+                      }}
+                    >
+                      {item.name}
+                    </span>
+
+                    {active && (
+                      <span
+                        className="ml-auto"
+                        style={{ color: item.tabColor, fontSize: '9px', marginRight: '2px' }}
+                      >
+                        ▶
+                      </span>
+                    )}
+                  </div>
+                </button>
+              </div>
+            );
+          })}
+        </nav>
+
+        {/* Thin gold separator */}
+        <div className="relative z-10 mx-5 my-3">
+          <div style={{
+            height: '1px',
+            background: 'linear-gradient(to right, transparent, rgba(201,168,76,0.28), transparent)',
+          }} />
+        </div>
+
+        {/* ── Bottom User Strip ── */}
+        <div
+          className="relative z-10 mx-3 mb-3 p-3 rounded"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.07)',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+              style={{
+                background: 'radial-gradient(circle, #5C3820 0%, #3E1F0D 100%)',
+                border: '1.5px solid #C9A84C',
+                boxShadow: '0 0 0 2px rgba(62,31,13,0.6)',
+              }}
+            >
+              <User style={{ width: '14px', height: '14px', color: '#D4B896' }} />
+            </div>
+
+            <div className="flex-1 min-w-0">
               <div
+                className="truncate"
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  minWidth: 0,
-                  flex: 1,
-                  opacity: isExpanded ? 1 : 0,
-                  transition: "opacity 250ms ease-in-out 50ms",
-                  visibility: isExpanded ? "visible" : "hidden",
+                  fontFamily: "'Courier Prime', monospace",
+                  fontSize: '11.5px',
+                  color: '#D4B896',
+                  letterSpacing: '0.01em',
                 }}
               >
-                <span
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: active ? 600 : 500,
-                    lineHeight: 1.3,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {item.label}
-                </span>
-                <span
-                  style={{
-                    fontSize: "10px",
-                    color: "var(--muted-foreground)",
-                    lineHeight: 1.2,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {item.sub}
-                </span>
+                {user?.username ?? 'User'}
               </div>
+              <button
+                onClick={handleLogout}
+                className="hover:opacity-80 transition-opacity"
+                style={{
+                  fontFamily: "'Caveat', cursive",
+                  fontSize: '13px',
+                  color: 'rgba(196,168,130,0.55)',
+                  textDecoration: 'underline',
+                  textDecorationStyle: 'dotted',
+                }}
+              >
+                Sign Out
+              </button>
+            </div>
+
+            <button onClick={handleLogout} className="hover:opacity-70 transition-opacity">
+              <LogOut
+                style={{ width: '14px', height: '14px', flexShrink: 0, color: 'rgba(196,168,130,0.3)' }}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom ornament */}
+        <div
+          className="relative z-10 pb-4 text-center"
+          style={{ color: 'rgba(201,168,76,0.2)', fontSize: '16px' }}
+        >
+          ✦
+        </div>
+      </aside>
+
+      {/* ─── MOBILE BOTTOM TAB BAR ─── */}
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around"
+        style={{
+          height: '64px',
+          background: '#3E1F0D',
+          borderTop: '1.5px solid rgba(255,255,255,0.07)',
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.35)',
+        }}
+      >
+        {/* Stitching line at top */}
+        <div
+          className="absolute top-2 left-4 right-4 h-px pointer-events-none"
+          style={{
+            backgroundImage: 'repeating-linear-gradient(to right, rgba(255,255,255,0.1) 0px, rgba(255,255,255,0.1) 5px, transparent 5px, transparent 10px)',
+          }}
+        />
+
+        {NAV_ITEMS.slice(0, 5).map((item) => {
+          const active = isActive(item);
+          return (
+            <button
+              key={item.name}
+              onClick={() => navigate(item.path)}
+              className="flex flex-col items-center gap-1 p-2 relative"
+            >
+              <item.icon
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  color: active ? '#EDE0C4' : '#7A5545',
+                  transition: 'color 0.15s',
+                }}
+              />
               {active && (
                 <div
-                  style={{
-                    width: isExpanded ? 6 : 5,
-                    height: isExpanded ? 6  : 5,
-                    borderRadius: "50%",
-                    backgroundColor: "var(--primary)",
-                    flexShrink: 0,
-                    position: "absolute",
-                    top: "50%",
-                    right: isExpanded ? 12 : -3,
-                    transform: "translateY(-50%)",
-                    transition: "right 250ms ease-in-out",
-                  }}
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ background: item.tabColor }}
                 />
               )}
-            </NavLink>
+            </button>
           );
         })}
       </nav>
-
-      {/* Footer */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          padding: "12px 8px",
-          borderTop: "1px solid var(--border)",
-          flexShrink: 0,
-        }}
-      >
-        {/* Theme Toggle - Always visible */}
-        <button
-          onClick={toggleTheme}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: isExpanded ? 12 : 0,
-            padding: "10px 10px",
-            borderRadius: 10,
-            backgroundColor: "var(--muted)",
-            color: "var(--foreground)",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "12px",
-            fontWeight: 500,
-            transition: "all 250ms ease-in-out",
-            width: "100%",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor =
-              "color-mix(in srgb, var(--primary) 15%, var(--muted))";
-            (e.currentTarget as HTMLElement).style.color = "var(--primary)";
-            (e.currentTarget as HTMLElement).style.transform = "scale(1.05)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--muted)";
-            (e.currentTarget as HTMLElement).style.color = "var(--foreground)";
-            (e.currentTarget as HTMLElement).style.transform = "scale(1)";
-          }}
-          title={theme === "dark" ? "Light Mode" : "Dark Mode"}
-          >
-          {theme === "dark" ? <Sun size={24} strokeWidth={1.5} /> : <Moon size={24} strokeWidth={1.5} />}
-          <span
-            style={{
-              opacity: isExpanded ? 1 : 0,
-              width: isExpanded ? "auto" : 0,       // không chiếm space khi ẩn
-              overflow: "hidden",                    // tránh text bị tràn ra
-              whiteSpace: "nowrap",
-              transition: "opacity 250ms ease-in-out 50ms, width 250ms ease-in-out",
-            }}
-          >
-            {theme === "dark" ? "Light" : "Dark"}
-          </span>
-        </button>
-
-        {/* User Info with Logout inside */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "8px 10px",
-            borderRadius: 10,
-            backgroundColor: "transparent",
-            position: "relative",
-          }}
-        >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              backgroundColor: "color-mix(in srgb, var(--primary) 20%, transparent)",
-              color: "var(--primary)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "12px",
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            {user?.username?.charAt(0).toUpperCase() || "U"}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              minWidth: 0,
-              flex: 1,
-              opacity: isExpanded ? 1 : 0,
-              transition: "opacity 250ms ease-in-out 50ms",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "12px",
-                fontWeight: 500,
-                color: "var(--foreground)",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {user?.username}
-            </span>
-            <span style={{ fontSize: "10px", color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
-              {user?.is_staff ? "Admin" : "Student"}
-            </span>
-          </div>
-          {/* Logout Button inside User section */}
-          <button
-            onClick={handleLogout}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: "transparent",
-              color: "#ef4444",
-              border: "none",
-              cursor: "pointer",
-              transition: "all 250ms ease-in-out",
-              padding: 0,
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(239, 68, 68, 0.15)";
-              (e.currentTarget as HTMLElement).style.transform = "scale(1.1) rotate(-5deg)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-              (e.currentTarget as HTMLElement).style.transform = "scale(1) rotate(0)";
-            }}
-            title="Logout"
-          >
-            <LogOut size={22} strokeWidth={1.5} />
-          </button>
-        </div>
-      </div>
-    </aside>
+    </>
   );
 }
