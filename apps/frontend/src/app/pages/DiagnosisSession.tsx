@@ -86,8 +86,6 @@ export function DiagnosisSession() {
       if (response.ok) {
         const data = await response.json();
         setSessionId(data.id);
-        // Initialize first message - OBSERVE step only, no DESCRIBE mixing
-        const step = steps[0];
         setMessages([{
           id: "1",
           role: "ai",
@@ -298,58 +296,66 @@ export function DiagnosisSession() {
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Clinical Note */}
+          {/* Corner fold effect — matches design template */}
+          <div className={styles.pageCornerFold} />
+
+          {/* Case #xxx stamp */}
           <motion.div
-            className={styles.clinicalNote}
-            initial={{ x: -12 }}
-            animate={{ x: 0 }}
+            className={styles.caseStampRow}
+            initial={{ x: -8, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.16 }}
           >
-            <span className={styles.clinicalNoteLabel}>Bệnh Sử</span>
-            <p className={styles.clinicalNoteText}>
-              {clinicalHistory || "Đang tải lịch sử lâm sàng..."}
-            </p>
+            <span className={styles.caseStampLabel}>
+              Case #{(caseId ?? '').slice(0, 8).toUpperCase()}
+            </span>
           </motion.div>
 
-          {/* Image Area */}
+          {/* Image Area — fills remaining space as a square */}
           <motion.div
             className={styles.imageArea}
             initial={{ x: -8 }}
             animate={{ x: 0 }}
-            transition={{ duration: 0.5, delay: 0.22 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
           >
-            {caseImage ? (
-              <div className={styles.imageMount}>
-                <div className={styles.imageCornerTL} />
-                <div className={styles.imageCornerTR} />
-                <div className={styles.imageCornerBL} />
-                <div className={styles.imageCornerBR} />
-                <img
-                  src={caseImage}
-                  alt="Medical Image"
-                  className={styles.medicalImage}
-                  style={{ transform: `scale(${zoom})`, transition: "transform 0.2s" }}
-                />
-              </div>
-            ) : (
-              <p className={styles.imagePlaceholder}>Đang tải hình ảnh...</p>
-            )}
-
-            {/* Zoom Controls */}
-            {caseImage && (
-              <div className={styles.zoomControls}>
-                {[
-                  { icon: ZoomIn,   action: () => setZoom((z) => Math.min(z + 0.25, 3)) },
-                  { icon: ZoomOut,  action: () => setZoom((z) => Math.max(z - 0.25, 0.5)) },
-                  { icon: Maximize2, action: () => setZoom(1) },
-                ].map(({ icon: Icon, action }, i) => (
-                  <button key={i} onClick={action} className={styles.zoomBtn}>
-                    <Icon size={14} />
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className={styles.imageMount}>
+              <div className={styles.imageCornerTL} />
+              <div className={styles.imageCornerTR} />
+              <div className={styles.imageCornerBL} />
+              <div className={styles.imageCornerBR} />
+              {caseImage ? (
+                <>
+                  <img
+                    src={caseImage}
+                    alt="Medical Image"
+                    className={styles.medicalImage}
+                    style={{ transform: `scale(${zoom})`, transition: "transform 0.2s" }}
+                  />
+                  <div className={styles.zoomControls}>
+                    {[
+                      { icon: ZoomIn,    action: () => setZoom((z) => Math.min(z + 0.25, 3)) },
+                      { icon: ZoomOut,   action: () => setZoom((z) => Math.max(z - 0.25, 0.5)) },
+                      { icon: Maximize2, action: () => setZoom(1) },
+                    ].map(({ icon: Icon, action }, i) => (
+                      <button key={i} onClick={action} className={styles.zoomBtn}>
+                        <Icon size={14} />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className={styles.imagePlaceholder}>[ Loading image... ]</p>
+              )}
+            </div>
           </motion.div>
+
+          {/* Clinical History — fixed at bottom, full width */}
+          <div className={styles.imageCaption}>
+            <div className={styles.imageCaptionLabel}>Clinical History</div>
+            <p className={styles.imageCaptionText}>
+              {clinicalHistory || 'Loading clinical history...'}
+            </p>
+          </div>
         </motion.div>
 
         {/* ── RIGHT PANEL – Chat ── */}
@@ -495,7 +501,7 @@ export function DiagnosisSession() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 placeholder="Ghi chú quan sát của bạn..."
-                rows={2}
+                rows={3}
                 className={styles.textarea}
               />
               <button
@@ -503,7 +509,8 @@ export function DiagnosisSession() {
                 disabled={isTyping || !sessionId}
                 className={styles.sendButton}
               >
-                <Send size={15} />
+                <Send size={14} />
+                Submit Diagnosis
               </button>
             </div>
           </motion.div>
