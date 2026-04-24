@@ -51,10 +51,10 @@ export function DiagnosisSession() {
   const { caseId } = useParams<{ caseId: string }>();
 
   // Fetch case details from API
-  const { data: caseData, loading: caseLoading } = useCaseDetail(caseId ? parseInt(caseId) : null);
+  const { data: caseData, loading: caseLoading } = useCaseDetail(caseId ?? null);
 
   // Session management
-  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const { data: sessionData, refetch: refetchSession } = useSessionDetail(sessionId);
   const { submitAnswer } = useSubmitAnswer();
   const { exitSession } = useExitSession();
@@ -81,7 +81,7 @@ export function DiagnosisSession() {
       const response = await fetch(`${API_BASE}/sessions/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ case: parseInt(caseId) })
+        body: JSON.stringify({ case_id: caseId })
       });
       if (response.ok) {
         const data = await response.json();
@@ -135,12 +135,15 @@ export function DiagnosisSession() {
     if (result) {
       setLastFeedback(result);
 
-      // Add AI feedback message
+      // Add AI feedback message — backend returns feedback as string, not {type,content}
+      const feedbackContent = typeof result.attempt.feedback === 'string'
+        ? result.attempt.feedback
+        : result.attempt.feedback?.content ?? '';
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: "ai",
         type: result.passed ? "correct" : "partial",
-        content: result.attempt.feedback.content
+        content: feedbackContent,
       };
       setMessages((prev) => [...prev, aiMsg]);
 
@@ -565,7 +568,7 @@ export function DiagnosisSession() {
                       {lastFeedback.passed ? "Dr. AI's Notes — Chính xác!" : "Dr. AI's Notes — Cần cải thiện"}
                     </span>
                   </div>
-                  <p className={styles.feedbackNoteText}>{lastFeedback.attempt.feedback.content}</p>
+                  <p className={styles.feedbackNoteText}>{typeof lastFeedback.attempt.feedback === 'string' ? lastFeedback.attempt.feedback : lastFeedback.attempt.feedback?.content}</p>
                 </div>
 
                 {/* Errors */}

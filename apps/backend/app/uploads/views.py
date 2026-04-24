@@ -27,9 +27,14 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         """GET /api/v1/uploaded-cases/ — danh sách upload_sessions của user"""
         sb = get_supabase()
         user_id = request.user['id']
-        result = sb.table('upload_sessions').select(
-            'id, user_id, case_id, image_url, modality, created_at'
-        ).eq('user_id', user_id).order('created_at', desc=True).execute()
+        try:
+            result = sb.table('upload_sessions').select(
+                'id, user_id, case_id, image_url, modality, created_at'
+            ).eq('user_id', user_id).order('created_at', desc=True).execute()
+        except Exception as e:
+            logger.error(f"list upload_sessions error: {e}", exc_info=True)
+            return Response({'error': 'Lỗi truy vấn database', 'message': str(e)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({'count': len(result.data), 'results': result.data})
 
     def create(self, request):
@@ -89,8 +94,11 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
         if upload.get('case_id'):
-            case_result = sb.table('cases').select('id, title').eq('id', upload['case_id']).single().execute()
-            case = case_result.data
+            try:
+                case_result = sb.table('cases').select('id, title').eq('id', upload['case_id']).single().execute()
+                case = case_result.data
+            except Exception:
+                case = None
         else:
             case = find_case_by_image_url(upload['image_url'])
         return Response({**upload, 'case': case})

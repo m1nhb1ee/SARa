@@ -41,7 +41,7 @@ export function useCases(params?: { modality?: string; difficulty?: string; sear
   return { ...state, refetch };
 }
 
-export function useCaseDetail(caseId: number | null) {
+export function useCaseDetail(caseId: string | null) {
   const [state, patch] = useQueryState<any>();
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export function useSessions(params?: { status?: string; page?: number }) {
   return { ...state, refetch };
 }
 
-export function useSessionDetail(sessionId: number | null) {
+export function useSessionDetail(sessionId: string | null) {
   const [state, patch] = useQueryState<any>();
 
   const refetch = useCallback(() => {
@@ -84,7 +84,7 @@ export function useMyStats() {
   return state;
 }
 
-export function useGetAnswerKey(sessionId: number | null) {
+export function useGetAnswerKey(sessionId: string | null) {
   const [state, patch] = useQueryState<any>();
 
   const fetch = useCallback(() => {
@@ -119,18 +119,18 @@ function useMutation<TArgs extends unknown[], TResult>(
 }
 
 export function useCreateSession() {
-  const { mutate, loading, error } = useMutation((caseId: number) => apiClient.createSession(caseId));
+  const { mutate, loading, error } = useMutation((caseId: string) => apiClient.createSession(caseId));
   return { createSession: mutate, loading, error };
 }
 
 export function useSubmitAnswer() {
-  const { mutate, loading, error } = useMutation((sessionId: number, answer: string) =>
+  const { mutate, loading, error } = useMutation((sessionId: string, answer: string) =>
     apiClient.submitAnswer(sessionId, answer)
   );
   return { submitAnswer: mutate, loading, error };
 }
 
 export function useExitSession() {
-  const { mutate, loading, error } = useMutation((sessionId: number) => apiClient.exitSession(sessionId));
+  const { mutate, loading, error } = useMutation((sessionId: string) => apiClient.exitSession(sessionId));
   return { exitSession: mutate, loading, error };
 }

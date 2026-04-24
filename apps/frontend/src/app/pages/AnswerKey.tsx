@@ -23,7 +23,7 @@ export function AnswerKey() {
       setLoading(true);
 
       // Fetch case detail
-      const caseRes = await apiClient.getCaseDetail(caseId as any);
+      const caseRes = await apiClient.getCaseDetail(caseId);
       if (caseRes.error) { setError("Không tìm thấy case."); setLoading(false); return; }
       setCaseData(caseRes.data);
 

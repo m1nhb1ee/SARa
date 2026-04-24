@@ -1,6 +1,7 @@
+import os
+import httpx
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-from .supabase_client import get_supabase
 
 
 class SupabaseUser:
@@ -30,14 +31,23 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         if not token:
             return None
         try:
-            sb = get_supabase()
-            resp = sb.auth.get_user(token)
-            user = resp.user
-            role = (user.app_metadata or {}).get('role', 'student')
+            url = os.environ['SUPABASE_URL']
+            key = os.environ['SUPABASE_SERVICE_KEY']
+            resp = httpx.get(
+                f"{url}/auth/v1/user",
+                headers={'Authorization': f'Bearer {token}', 'apikey': key},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                raise AuthenticationFailed('Invalid or expired Supabase token.')
+            user = resp.json()
+            role = (user.get('app_metadata') or {}).get('role', 'student')
             return (
-                SupabaseUser({'id': str(user.id), 'email': user.email, 'role': role}),
+                SupabaseUser({'id': user['id'], 'email': user.get('email', ''), 'role': role}),
                 token,
             )
+        except AuthenticationFailed:
+            raise
         except Exception:
             raise AuthenticationFailed('Invalid or expired Supabase token.')
 
