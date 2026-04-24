@@ -1,15 +1,14 @@
 import { useLocation, useNavigate } from 'react-router';
 import {
-  Home, Upload, FolderOpen, TrendingUp, User, Settings, LogOut
+  Home, Upload, FolderOpen, User, Settings, LogOut
 } from 'lucide-react';
 import { useAuth } from '@/api/authContext';
 
 const NAV_ITEMS = [
-  { name: 'Home',     path: '/',            tabColor: '#C9882A', icon: Home },
+  { name: 'Home',     path: '/home',        tabColor: '#C9882A', icon: Home },
+  { name: 'My Cases', path: '/',            tabColor: '#1B3A5C', icon: FolderOpen },
   { name: 'Upload',   path: '/upload',      tabColor: '#C0392B', icon: Upload },
-  { name: 'My Cases', path: '/cases',       tabColor: '#1B3A5C', icon: FolderOpen },
-  { name: 'Progress', path: '/performance', tabColor: '#7D9B76', icon: TrendingUp },
-  { name: 'Profile',  path: '/profile',     tabColor: '#8B6355', icon: User },
+  { name: 'Profile',  path: '/performance', tabColor: '#8B6355', icon: User },
   { name: 'Settings', path: '/settings',    tabColor: '#4A4A4A', icon: Settings },
 ];
 
@@ -45,6 +44,9 @@ export function Sidebar() {
         location.pathname.startsWith('/answer-key/')
       );
     }
+    if (item.path === '/home') {
+      return location.pathname === '/home';
+    }
     return location.pathname.startsWith(item.path);
   };
 
@@ -52,7 +54,7 @@ export function Sidebar() {
     <>
       {/* ─── DESKTOP SIDEBAR ─── */}
       <aside
-        className="hidden md:flex flex-col w-[260px] min-h-screen flex-shrink-0 relative"
+        className="hidden md:flex flex-col w-[260px] h-screen flex-shrink-0 relative sticky top-0 overflow-y-auto"
         style={{ background: '#3E1F0D', overflow: 'visible', zIndex: 20 }}
       >
         {/* Leather noise texture overlay */}
