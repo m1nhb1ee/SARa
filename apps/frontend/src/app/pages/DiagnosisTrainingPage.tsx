@@ -207,7 +207,7 @@ export function DiagnosisTrainingPage() {
 
               <div className={`p-4 rounded ${feedback.passed ? 'bg-green-100' : 'bg-amber-100'}`}>
                 <p className={feedback.passed ? 'text-green-900' : 'text-amber-900'}>
-                  {feedback.attempt.feedback.content}
+                  {typeof feedback.attempt.feedback === 'string' ? feedback.attempt.feedback : feedback.attempt.feedback?.content}
                 </p>
               </div>
 
@@ -303,7 +303,7 @@ export function DiagnosisTrainingPage() {
                   </p>
                   {answerKeyData.details[idx]?.feedback && (
                     <p className="text-sm text-green-700">
-                      <strong>Ghi chú:</strong> {answerKeyData.details[idx].feedback.content}
+                      <strong>Ghi chú:</strong> {typeof answerKeyData.details[idx].feedback === 'string' ? answerKeyData.details[idx].feedback : answerKeyData.details[idx].feedback?.content}
                     </p>
                   )}
                 </div>

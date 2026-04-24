@@ -29,11 +29,11 @@ def list_disease_tags() -> list:
     return result.data or []
 
 
-def list_cases(modality=None, difficulty=None, disease_tag=None, status_filter=None) -> list:
+def list_cases(user_id: str, modality=None, difficulty=None, disease_tag=None, status_filter=None) -> list:
     sb = get_supabase()
     query = sb.table('cases').select(
-        'id, title, modality, difficulty, clinical_history, disease_tag, status, image_urls, tags, created_at'
-    )
+        'id, title, modality, difficulty, clinical_history, disease_tag, status, image_urls, tags, created_at, uploaded_by'
+    ).or_(f'uploaded_by.eq.{user_id},uploaded_by.is.null')
     if status_filter:
         query = query.eq('status', status_filter)
     if modality:
@@ -54,7 +54,7 @@ def get_case(case_id: str) -> dict | None:
     sb = get_supabase()
     try:
         result = sb.table('cases').select(
-            'id, title, modality, difficulty, clinical_history, disease_tag, status, image_urls, tags, created_at'
+            'id, title, modality, difficulty, clinical_history, disease_tag, status, image_urls, tags, created_at, uploaded_by'
         ).eq('id', case_id).single().execute()
         return result.data
     except Exception:
