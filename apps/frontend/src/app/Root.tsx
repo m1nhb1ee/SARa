@@ -42,13 +42,13 @@ export function Root() {
 
   return (
     <div
-      className="flex min-h-screen"
-      style={{ backgroundColor: "var(--background)", fontFamily: "'Inter', sans-serif", color: "var(--foreground)" }}
+      className="flex h-screen overflow-hidden"
+      style={{ backgroundColor: '#F5EDD6', fontFamily: "'Inter', sans-serif", color: '#2C1810' }}
     >
       <Sidebar />
 
-      <div className="flex flex-col flex-1 min-w-0">
-        <main className="flex-1 overflow-auto pb-16 md:pb-0">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
           <Outlet context={{ theme, toggleTheme: () => setTheme(t => t === "dark" ? "light" : "dark") }} />
         </main>
       </div>
