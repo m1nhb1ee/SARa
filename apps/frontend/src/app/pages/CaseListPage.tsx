@@ -96,6 +96,7 @@ export function CaseListPage() {
           ]}
         />
 
+        <style>{`@keyframes shimmer{0%,100%{opacity:1}50%{opacity:0.45}}`}</style>
         <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
           {casesLoading ? (
             [1, 2, 3, 4, 5, 6].map((i) => (
@@ -103,15 +104,25 @@ export function CaseListPage() {
                 backgroundColor: '#EDE0C4',
                 border: '1px solid #C4A882',
                 borderRadius: 2,
-                height: 280,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                animation: 'pulse 2s infinite',
+                overflow: 'hidden',
+                animation: 'shimmer 1.8s ease-in-out infinite',
               }}>
-                <span style={{ fontFamily: "'Courier Prime', monospace", fontSize: 11, color: '#C4A882', letterSpacing: '0.1em' }}>
-                  Loading…
-                </span>
+                {/* Thumbnail placeholder */}
+                <div style={{ height: 140, backgroundColor: '#D6C9A8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontFamily: "'Courier Prime', monospace", fontSize: 11, color: '#C4A882', letterSpacing: '0.1em' }}>
+                    Loading…
+                  </span>
+                </div>
+                {/* Content placeholder */}
+                <div style={{ padding: 12 }}>
+                  <div style={{ height: 14, backgroundColor: '#D6C9A8', borderRadius: 2, marginBottom: 8, width: '75%' }} />
+                  <div style={{ height: 11, backgroundColor: '#D6C9A8', borderRadius: 2, marginBottom: 4, width: '90%' }} />
+                  <div style={{ height: 11, backgroundColor: '#D6C9A8', borderRadius: 2, marginBottom: 14, width: '60%' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ height: 12, width: 70, backgroundColor: '#D6C9A8', borderRadius: 2 }} />
+                    <div style={{ height: 28, width: 72, backgroundColor: '#D6C9A8', borderRadius: 2 }} />
+                  </div>
+                </div>
               </div>
             ))
           ) : cases.length > 0 ? (
