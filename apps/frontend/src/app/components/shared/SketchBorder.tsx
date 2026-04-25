@@ -21,7 +21,7 @@ export function SketchBorder({ id, color = '#7A6248', opacity = 1 }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  const m = 3; // px margin beyond the card border
+  const m = 6; // margin beyond card border so jitter can overflow
 
   return (
     <svg
@@ -42,28 +42,50 @@ export function SketchBorder({ id, color = '#7A6248', opacity = 1 }: Props) {
       {size && (
         <>
           <defs>
-            <filter id={fId} x="-5%" y="-5%" width="110%" height="110%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" seed="3" result="noise" />
-              <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+            <filter id={fId} x="-8%" y="-8%" width="116%" height="116%">
+              {/* Strong fractal noise for pronounced jitter */}
+              <feTurbulence
+                type="fractalNoise"
+                baseFrequency="0.025"
+                numOctaves="5"
+                seed="7"
+                result="noise"
+              />
+              <feDisplacementMap
+                in="SourceGraphic"
+                in2="noise"
+                scale="8"
+                xChannelSelector="R"
+                yChannelSelector="G"
+              />
             </filter>
           </defs>
+
           <g filter={`url(#${fId})`}>
-            {/* Outer contour — traces the card's border */}
+            {/* Outer contour — thick, fully opaque */}
             <rect
               x={m} y={m}
               width={size.w} height={size.h}
               rx={2}
-              fill="none" stroke={color} strokeWidth="1.5"
-              strokeLinecap="round" opacity="0.65"
+              fill="none"
+              stroke={color}
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="1"
             />
-            {/* Inner dashed pass — double-line pencil feel */}
+            {/* Second pass — offset, dashed, for double pencil-stroke feel */}
             <rect
               x={m + 4} y={m + 4}
               width={Math.max(size.w - 8, 0)} height={Math.max(size.h - 8, 0)}
               rx={2}
-              fill="none" stroke={color} strokeWidth="0.8"
-              strokeLinecap="round" strokeDasharray="8 4 15 5 10 3"
-              opacity="0.32"
+              fill="none"
+              stroke={color}
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray="12 5 20 6 10 4"
+              opacity="0.55"
             />
           </g>
         </>

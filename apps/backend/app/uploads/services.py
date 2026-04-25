@@ -188,7 +188,7 @@ Rules:
         tmp_path, _ = _to_temp_file(image_file)
         logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}]")
         client = Client(GRADIO_SPACE_ID, token=token)
-        result = client.predict(image=handle_file(tmp_path), question=question, api_name="/analyze")
+        result = client.predict(gallery=[handle_file(tmp_path)], question=question, api_name="/analyze")
         return str(result)
     finally:
         if tmp_path and tmp_path != str(image_file) and os.path.isfile(tmp_path):

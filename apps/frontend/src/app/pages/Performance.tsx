@@ -112,7 +112,7 @@ export function ProfilePage() {
       <div className="p-8 max-w-[1400px] mx-auto">
         {/* ── Personal Dossier ── */}
         <div className="mb-8 p-8 rounded border shadow-lg relative overflow-hidden" style={cardStyle}>
-          <SketchBorder id="prof-dossier" color="#7A6248" opacity={0.5} />
+          <SketchBorder id="prof-dossier" color="#7A6248" opacity={0.7} />
           <div className="absolute top-0 right-0 w-12 h-12"
             style={{ background: 'linear-gradient(135deg, transparent 50%, #C4A882 50%)' }} />
           <div
@@ -191,14 +191,14 @@ export function ProfilePage() {
             </div>
 
             <div className="grid grid-cols-3 gap-4 mb-6">
+              
               {[
                 { label: 'Overall Accuracy',  value: `${avgScore}%`,        trend: 'Based on your sessions', up: true },
                 { label: 'Cases Completed',   value: String(casesCompleted), trend: 'Total cases done',       up: true },
                 { label: 'Weakest Step',      value: weakestStep?.[0] ?? '—', trend: 'Focus area',           up: false },
               ].map((stat, idx) => (
                 <div key={idx} className="p-4 border rounded relative" style={cardStyle}>
-                  <div className="absolute top-0 right-0 w-6 h-6"
-                    style={{ background: 'linear-gradient(135deg, transparent 50%, #C4A882 50%)' }} />
+                  <SketchBorder id="prof-dossier" color="#7A6248" opacity={0.7} />
                   <div className="text-xs mb-2" style={{ fontFamily: "'Special Elite', cursive", color: '#6B4C3B' }}>{stat.label}</div>
                   <div className="text-2xl mb-2" style={{ fontFamily: "'Courier Prime', monospace", color: '#2C1810', fontWeight: 700 }}>{stat.value}</div>
                   <div style={{ fontFamily: "'Caveat', cursive", color: stat.up ? '#7D9B76' : '#C9882A', fontSize: '14px' }}>
@@ -209,7 +209,7 @@ export function ProfilePage() {
             </div>
 
             <div className="p-6 mb-6 border rounded relative" style={cardStyle}>
-              <SketchBorder id="prof-scan-type" color="#7A6248" opacity={0.5} />
+              <SketchBorder id="prof-scan-type" color="#7A6248" opacity={0.7} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>
                 Performance by Scan Type
               </h3>
@@ -227,7 +227,7 @@ export function ProfilePage() {
             </div>
 
             <div className="p-6 border rounded relative" style={cardStyle}>
-              <SketchBorder id="prof-monthly" color="#7A6248" opacity={0.5} />
+              <SketchBorder id="prof-monthly" color="#7A6248" opacity={0.7} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>
                 Monthly Accuracy Trend
               </h3>
@@ -257,7 +257,7 @@ export function ProfilePage() {
 
             {/* Study Streak */}
             <div className="p-6 mb-6 border rounded relative" style={cardStyle}>
-              <SketchBorder id="prof-streak" color="#7A6248" opacity={0.5} />
+              <SketchBorder id="prof-streak" color="#7A6248" opacity={0.7} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>Study Streak</h3>
               <div className="grid grid-cols-7 gap-1 mb-4">
                 {Array.from({ length: 28 }).map((_, i) => (
@@ -281,7 +281,7 @@ export function ProfilePage() {
 
             {/* Residency Rank */}
             <div className="p-6 mb-6 border rounded relative" style={cardStyle}>
-              <SketchBorder id="prof-rank" color="#7A6248" opacity={0.5} />
+              <SketchBorder id="prof-rank" color="#7A6248" opacity={0.7} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>Residency Rank</h3>
               <div className="inline-block px-4 py-2 mb-4 rounded"
                 style={{ background: '#C0392B', color: '#F5EDD6', fontFamily: "'Special Elite', cursive", fontSize: '14px', transform: 'rotate(-1deg)' }}>
@@ -302,7 +302,7 @@ export function ProfilePage() {
 
             {/* Cases by Scan Type */}
             <div className="p-6 border rounded relative" style={cardStyle}>
-              <SketchBorder id="prof-pie" color="#7A6248" opacity={0.5} />
+              <SketchBorder id="prof-pie" color="#7A6248" opacity={0.7} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>Cases by Scan Type</h3>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
@@ -342,7 +342,7 @@ export function ProfilePage() {
             {weakAreas.map((area, idx) => (
               <div key={idx} className="p-6 border rounded relative hover:-translate-y-1 transition-transform cursor-pointer"
                 style={{ background: 'rgba(192,57,43,0.04)', borderColor: '#C4A882', boxShadow: '0 2px 8px rgba(62,31,13,0.12)' }}>
-                <SketchBorder id={`prof-weak-${idx}`} color="#C0392B" opacity={0.35} />
+                <SketchBorder id={`prof-weak-${idx}`} color="#C0392B" opacity={0.85} />
                 <div className="absolute top-0 right-4 w-8 h-10"
                   style={{ background: '#C0392B', clipPath: 'polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%)', opacity: 0.9 }} />
                 <h4 className="mb-3" style={{ fontFamily: "'Special Elite', cursive", fontSize: '13px', color: '#2C1810' }}>
@@ -381,7 +381,7 @@ export function ProfilePage() {
           </div>
 
           <div className="border rounded overflow-hidden relative" style={{ background: '#EDE0C4', borderColor: '#C4A882' }}>
-            <SketchBorder id="prof-history" color="#7A6248" opacity={0.5} />
+            <SketchBorder id="prof-history" color="#5A4030" opacity={0.9} />
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>

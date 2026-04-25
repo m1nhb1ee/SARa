@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Home, ChevronRight, BookOpen, Stethoscope, ArrowRight, BookMarked } from 'lucide-react';
 import { useCreateSession } from '@/api/hooks';
+import { SketchBorder } from '@/app/components/shared/SketchBorder';
 
 const SCAN_TYPE_TO_MODALITY: Record<string, string> = {
   'X-Ray': 'XRAY',
@@ -451,6 +452,7 @@ export function UploadPage() {
           }}
         >
           {/* Corner fold */}
+          <SketchBorder id="prof-dossier" color="#7A6248" opacity={0.5} />
           <div className="absolute top-0 right-0 w-14 h-14"
             style={{ background: 'linear-gradient(135deg, transparent 50%, #C4A882 50%)' }} />
           <div className="absolute top-0 right-0"
