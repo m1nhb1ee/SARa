@@ -89,9 +89,9 @@ export function RegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(''); setInfo('');
-    if (!email.trim() || !password.trim()) { setError('Điền đầy đủ thông tin nhé!'); return; }
-    if (password.length < 6) { setError('Mật khẩu cần ít nhất 6 ký tự'); return; }
-    if (password !== confirmPassword) { setError('Mật khẩu xác nhận chưa khớp rồi :('); return; }
+    if (!email.trim() || !password.trim()) { setError('Please fill in all required fields.'); return; }
+    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (password !== confirmPassword) { setError("Passwords don't match :("); return; }
     setIsLoading(true);
     try {
       const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -169,16 +169,16 @@ export function RegisterPage() {
             <CheckCircle2 size={44} color="#7D9B76" />
             <p style={{ fontFamily: "'Caveat', cursive", fontSize: 17, color: '#4A2E1A', lineHeight: 1.6 }}>{info}</p>
             <Link to="/login" style={{ fontFamily: "'Caveat', cursive", fontSize: 16, color: '#C0392B', textDecoration: 'underline', textDecorationStyle: 'wavy' }}>
-              ← quay lại đăng nhập
+              ← back to sign in
             </Link>
           </div>
         ) : (
           <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {[
-              { name: 'name',    label: 'họ tên (tùy chọn)',  type: 'text',     val: fullName,       set: setFullName,       ph: 'viết vào đây...' },
-              { name: 'email',   label: 'email',               type: 'email',    val: email,          set: setEmail,          ph: 'email của bạn...' },
-              { name: 'pw',      label: 'mật khẩu',            type: 'password', val: password,       set: setPassword,       ph: '••••••' },
-              { name: 'cpw',     label: 'xác nhận mật khẩu',  type: 'password', val: confirmPassword, set: setConfirmPassword, ph: '••••••' },
+              { name: 'name',    label: 'full name (optional)', type: 'text',     val: fullName,       set: setFullName,       ph: 'your name...' },
+              { name: 'email',   label: 'email',               type: 'email',    val: email,          set: setEmail,          ph: 'your email...' },
+              { name: 'pw',      label: 'password',            type: 'password', val: password,       set: setPassword,       ph: '••••••' },
+              { name: 'cpw',     label: 'confirm password',    type: 'password', val: confirmPassword, set: setConfirmPassword, ph: '••••••' },
             ].map(f => (
               <div key={f.name}>
                 <label style={{ display: 'block', fontFamily: "'Caveat', cursive", fontSize: 13, color: '#8B6355', letterSpacing: '0.08em', marginBottom: 3 }}>{f.label}</label>
@@ -205,7 +205,7 @@ export function RegisterPage() {
                 <rect x="2" y="2" width="calc(100% - 4)" height="42" rx="1" fill="none" stroke="#2C1810" strokeWidth="1.8" filter="url(#btn2)" style={{ width: 'calc(100% - 4px)' } as any} opacity="0.7" />
               </svg>
               <button type="submit" disabled={isLoading} style={{ width: '100%', height: 46, background: 'transparent', border: 'none', fontFamily: "'Caveat', cursive", fontSize: 18, fontWeight: 700, color: '#2C1810', letterSpacing: '0.06em', cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.6 : 1, position: 'relative', zIndex: 1 }}>
-                {isLoading ? 'đang tạo hồ sơ...' : 'tạo tài khoản →'}
+                {isLoading ? 'creating account...' : 'create account →'}
               </button>
             </div>
           </form>
@@ -214,8 +214,8 @@ export function RegisterPage() {
         {!info && (
           <div style={{ marginTop: 24, paddingTop: 12, borderTop: '1px dashed rgba(196,168,130,0.5)', textAlign: 'center' }}>
             <span style={{ fontFamily: "'Caveat', cursive", fontSize: 15, color: '#8B6355' }}>
-              đã có tài khoản?{' '}
-              <Link to="/login" style={{ color: '#C0392B', fontWeight: 700, textDecoration: 'underline', textDecorationStyle: 'wavy' }}>đăng nhập</Link>
+              already have an account?{' '}
+              <Link to="/login" style={{ color: '#C0392B', fontWeight: 700, textDecoration: 'underline', textDecorationStyle: 'wavy' }}>sign in</Link>
             </span>
           </div>
         )}
