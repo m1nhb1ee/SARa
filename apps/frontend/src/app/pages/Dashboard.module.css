@@ -267,6 +267,7 @@
   margin:10px;
   border:1px solid rgba(44,24,16,0.3);
   border-radius:1px;
+  align-self:center;
 }
 .cardThumb::before,
 .cardThumb::after {

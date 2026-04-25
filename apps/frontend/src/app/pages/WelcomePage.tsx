@@ -92,7 +92,7 @@ export function WelcomePage() {
             marginBottom: 6,
             textTransform: 'uppercase',
           }}>
-            Medical AI Training System · MedLens
+            SARa · Smart AI Radiology
           </div>
           <h1 style={{
             fontFamily: "'Playfair Display', serif",

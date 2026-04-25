@@ -1,102 +1,412 @@
-/**
- * LoginPage - Đăng nhập
- */
-
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useAuth } from '@/api/authContext';
-import { Button } from '@/app/components/ui/button';
-import { Input } from '@/app/components/ui/input';
-import { Card } from '@/app/components/ui/card';
-import { Brain } from 'lucide-react';
-import { AlertError } from '@/app/components/shared/AlertError';
+
+/* ─── Medical sticky notes scattered on desk ─── */
+const NOTES = [
+  {
+    id: 1, type: 'sticky',
+    style: { top: '6%', left: '2%', width: 178, rotate: -7 },
+    tone: '#FFF9C4', border: '#E6D96A',
+    title: 'Patient #041',
+    lines: ['Male, 25 y/o', 'Chief: headache × 3d', 'Brain MRI → WNL*', '─────────────', '*Within Normal Limits'],
+  },
+  {
+    id: 2, type: 'note',
+    style: { top: '4%', right: '3%', width: 200, rotate: 6 },
+    tone: '#FEFCF3', border: '#C4A882',
+    title: '',
+    lines: ['"SARa is actually', 'pretty good at DDx—', 'better than I expected"', '', '         — Dr. Nguyen T.'],
+  },
+  {
+    id: 3, type: 'sticky',
+    style: { top: '42%', left: '1%', width: 165, rotate: -5 },
+    tone: '#D4EDDA', border: '#88C99A',
+    title: 'Case #107',
+    lines: ['Female, 67 y/o', 'CXR: bilateral patchy', 'infiltrates', '→ DDx: CAP vs CHF?'],
+  },
+  {
+    id: 4, type: 'torn',
+    style: { top: '38%', right: '2%', width: 185, rotate: 9 },
+    tone: '#FEFDF8', border: '#BEB0A0',
+    title: '6-step pipeline',
+    lines: ['① Observe', '② Describe', '③ Interpret', '④ Hypothesis', '⑤ DDx', '⑥ Conclude ✓'],
+  },
+  {
+    id: 5, type: 'sticky',
+    style: { bottom: '8%', left: '3%', width: 190, rotate: -9 },
+    tone: '#FFE4B5', border: '#DEB887',
+    title: 'Pt: Nguyen Van A',
+    lines: ['45M, referred for', 'CT abdomen WEDI', 'Hepatomegaly noted,', 'no focal lesion seen', '→ USG recommended'],
+  },
+  {
+    id: 6, type: 'note',
+    style: { bottom: '6%', right: '2%', width: 175, rotate: 7 },
+    tone: '#FEFCF3', border: '#C4A882',
+    title: '',
+    lines: ['Remember to check', 'lung BASES on every', 'single CXR!!!', '', '  (Dr. Nguyen\'s rule 📌)'],
+  },
+  {
+    id: 7, type: 'sticky',
+    style: { top: '70%', left: '0.5%', width: 148, rotate: -4 },
+    tone: '#E8F4FD', border: '#90BCD8',
+    title: 'Quick score',
+    lines: ['SARa AI: 87%', 'Human avg: 79%', '→ AI wins lol'],
+  },
+  {
+    id: 8, type: 'torn',
+    style: { top: '15%', right: '1%', width: 160, rotate: 11 },
+    tone: '#FEFDF8', border: '#BEB0A0',
+    title: '',
+    lines: ['DICOM → AI analysis', '→ Structured report', '', '← this is the', '   future of radiology'],
+  },
+];
+
+function MedNote({ n }: { n: typeof NOTES[0] }) {
+  const [lifted, setLifted] = useState(false);
+  const isSticky = n.type === 'sticky';
+
+  return (
+    <div
+      onMouseEnter={() => setLifted(true)}
+      onMouseLeave={() => setLifted(false)}
+      style={{
+        position: 'absolute',
+        ...n.style as any,
+        rotate: undefined,
+        backgroundColor: n.tone,
+        border: `1px solid ${n.border}`,
+        borderRadius: isSticky ? 2 : 1,
+        padding: isSticky ? '28px 14px 14px' : '14px 14px',
+        transform: `rotate(${n.style.rotate}deg) translateY(${lifted ? -6 : 0}px)`,
+        transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+        boxShadow: lifted
+          ? '0 12px 28px rgba(44,24,16,0.22), 0 3px 8px rgba(44,24,16,0.12)'
+          : '0 3px 10px rgba(44,24,16,0.13), 0 1px 3px rgba(44,24,16,0.08)',
+        cursor: 'default',
+        zIndex: lifted ? 5 : 1,
+      }}
+    >
+      {/* Sticky tape strip on top for sticky notes */}
+      {isSticky && (
+        <div style={{
+          position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+          width: 40, height: 12,
+          background: 'rgba(255,255,255,0.45)',
+          border: '1px solid rgba(0,0,0,0.08)',
+          borderRadius: '0 0 2px 2px',
+        }} />
+      )}
+
+      {n.title && (
+        <div style={{
+          fontFamily: "'Caveat', cursive",
+          fontSize: 15, fontWeight: 700,
+          color: '#2C1810',
+          marginBottom: 6,
+          borderBottom: `1px solid ${n.border}`,
+          paddingBottom: 4,
+        }}>
+          {n.title}
+        </div>
+      )}
+
+      {n.lines.map((line, i) => (
+        <div key={i} style={{
+          fontFamily: "'Caveat', cursive",
+          fontSize: line.startsWith('─') ? 11 : 13,
+          color: line.startsWith('─') ? n.border : '#3D2810',
+          lineHeight: 1.55,
+          letterSpacing: '0.01em',
+          opacity: line === '' ? 1 : 0.88,
+        }}>
+          {line || ' '}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Sketch / hand-drawn SVG border for the form ─── */
+function SketchRect({ w, h, color = '#7A6248' }: { w: number; h: number; color?: string }) {
+  const o = 4; // offset for double-line sketch feel
+  return (
+    <svg
+      width={w + 20} height={h + 20}
+      style={{ position: 'absolute', top: -10, left: -10, pointerEvents: 'none', overflow: 'visible' }}
+    >
+      <filter id="pencil">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="5" seed="3" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <g filter="url(#pencil)">
+        {/* outer rough stroke */}
+        <rect x={10} y={10} width={w} height={h}
+          fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
+        {/* inner second stroke — sketch double-line effect */}
+        <rect x={10 + o} y={10 + o} width={w - o * 2} height={h - o * 2}
+          fill="none" stroke={color} strokeWidth="0.8" strokeLinecap="round"
+          strokeDasharray="6 3 12 4 8 6" opacity="0.35" />
+      </g>
+    </svg>
+  );
+}
+
+const INPUT_BASE: React.CSSProperties = {
+  width: '100%',
+  padding: '8px 2px',
+  background: 'transparent',
+  border: 'none',
+  borderBottom: '1.5px solid #BEB0A0',
+  fontFamily: "'Caveat', cursive",
+  fontSize: 17,
+  color: '#2C1810',
+  outline: 'none',
+  boxSizing: 'border-box',
+  letterSpacing: '0.02em',
+};
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { login, isLoading } = useAuth();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [focused, setFocused] = useState<string | null>(null);
 
-  const handleLogin = async (e: { preventDefault(): void }) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (!email.trim() || !password.trim()) {
-      setError('Vui lòng nhập email và mật khẩu');
+    if (!username.trim() || !password.trim()) {
+      setError('Điền đầy đủ thông tin nhé!');
       return;
     }
-
-    const success = await login(email, password);
-    if (success) {
-      navigate('/');
-    } else {
-      setError('Tên đăng nhập hoặc mật khẩu không đúng');
-    }
+    const success = await login(username, password);
+    if (success) navigate('/');
+    else setError('Wrong username or password :(');
   };
 
+  const W = 340;
+  const H = 450;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-900 to-neutral-800">
-      <Card className="w-full max-w-md p-8 space-y-6 bg-neutral-900 border-neutral-700">
-        {/* Header */}
-        <div className="flex flex-col items-center space-y-3">
-          <div className="bg-gradient-to-br from-blue-500 to-cyan-500 p-3 rounded-lg">
-            <Brain className="w-6 h-6 text-white" />
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#F5EDD6',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      position: 'relative', overflow: 'hidden',
+      backgroundImage: [
+        'repeating-linear-gradient(transparent, transparent 27px, rgba(196,168,130,0.1) 27px, rgba(196,168,130,0.1) 28px)',
+        'radial-gradient(ellipse at center, transparent 50%, rgba(44,24,16,0.1) 100%)',
+      ].join(', '),
+    }}>
+
+      {/* Scattered medical notes */}
+      {NOTES.map(n => <MedNote key={n.id} n={n} />)}
+
+      {/* ── Login sheet ── */}
+      <div style={{
+        position: 'relative',
+        width: W, minHeight: H,
+        backgroundColor: '#FEFDF5',
+        padding: '44px 40px 36px',
+        zIndex: 10,
+        /* subtle paper shadow */
+        boxShadow: [
+          '0 1px 1px rgba(44,24,16,0.06)',
+          '0 2px 2px rgba(44,24,16,0.06)',
+          '0 4px 4px rgba(44,24,16,0.06)',
+          '0 8px 8px rgba(44,24,16,0.06)',
+          '0 16px 16px rgba(44,24,16,0.06)',
+        ].join(', '),
+        /* ruled lines on the paper */
+        backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, rgba(196,168,130,0.25) 31px, rgba(196,168,130,0.25) 32px)',
+        backgroundSize: '100% 32px',
+      }}>
+
+        {/* Hand-drawn border overlay */}
+        <SketchRect w={W} h={H} color="#7A6248" />
+
+        {/* Red margin line */}
+        <div style={{
+          position: 'absolute', left: 28, top: 0, bottom: 0,
+          width: 1, backgroundColor: 'rgba(192,57,43,0.2)',
+          pointerEvents: 'none',
+        }} />
+
+        {/* ── Header ── */}
+        <div style={{ textAlign: 'center', marginBottom: 30 }}>
+          {/* Pencil-sketch logo mark */}
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none"
+            style={{ marginBottom: 8, opacity: 0.82 }}>
+            <filter id="psketch">
+              <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="4" seed="5" result="n" />
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="1.5" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+            <g filter="url(#psketch)">
+              <circle cx="24" cy="24" r="20" stroke="#4A3020" strokeWidth="1.4" fill="none" />
+              <line x1="24" y1="7" x2="24" y2="40" stroke="#4A3020" strokeWidth="1.6" />
+              <path d="M24 11 C18 9 13 13 15.5 18.5 C18 24 24 22 24 22" stroke="#4A3020" strokeWidth="1.1" fill="none" />
+              <path d="M24 11 C30 9 35 13 32.5 18.5 C30 24 24 22 24 22" stroke="#4A3020" strokeWidth="1.1" fill="none" />
+              <path d="M18 16.5 C13.5 20 13.5 26 18 28.5 C22 31 26 36 22.5 42" stroke="#4A3020" strokeWidth="0.9" fill="none" />
+              <path d="M30 16.5 C34.5 20 34.5 26 30 28.5 C26 31 22 36 25.5 42" stroke="#4A3020" strokeWidth="0.9" fill="none" />
+            </g>
+          </svg>
+
+          <div style={{
+            fontFamily: "'Caveat', cursive",
+            fontSize: 36, fontWeight: 700,
+            color: '#2C1810', lineHeight: 1, letterSpacing: '0.04em',
+          }}>
+            SARa
           </div>
-          <h1 className="text-2xl font-bold text-white">SARa</h1>
-          <p className="text-sm text-neutral-400">Smart AI Radiology</p>
+          <div style={{
+            fontFamily: "'Caveat', cursive",
+            fontSize: 13, color: '#8B6355',
+            letterSpacing: '0.08em', marginTop: 2,
+          }}>
+            Smart AI Radiology
+          </div>
+
+          {/* pencil underline */}
+          <svg width="120" height="6" style={{ marginTop: 8, display: 'block', marginLeft: 'auto', marginRight: 'auto' }}>
+            <filter id="ul-rough">
+              <feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="3" seed="7" result="n" />
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="1.5" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+            <line x1="5" y1="3" x2="115" y2="3" stroke="#C0392B" strokeWidth="1.5" filter="url(#ul-rough)" strokeLinecap="round" opacity="0.7" />
+          </svg>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleLogin} className="space-y-4">
+        {/* ── Form ── */}
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+
+          {/* Username */}
           <div>
-            <label className="block text-sm font-medium text-neutral-200 mb-2">
-              Email
+            <label style={{
+              display: 'block',
+              fontFamily: "'Caveat', cursive",
+              fontSize: 13, color: '#8B6355',
+              letterSpacing: '0.08em', marginBottom: 4,
+            }}>
+              username / email
             </label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Nhập email"
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              onFocus={() => setFocused('u')}
+              onBlur={() => setFocused(null)}
+              placeholder="viết vào đây..."
               disabled={isLoading}
-              className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500"
+              autoComplete="username"
+              style={{
+                ...INPUT_BASE,
+                borderBottomColor: focused === 'u' ? '#C0392B' : '#BEB0A0',
+                borderBottomWidth: focused === 'u' ? '2px' : '1.5px',
+              }}
             />
           </div>
 
+          {/* Password */}
           <div>
-            <label className="block text-sm font-medium text-neutral-200 mb-2">
-              Mật khẩu
+            <label style={{
+              display: 'block',
+              fontFamily: "'Caveat', cursive",
+              fontSize: 13, color: '#8B6355',
+              letterSpacing: '0.08em', marginBottom: 4,
+            }}>
+              mật khẩu
             </label>
-            <Input
+            <input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Nhập mật khẩu"
+              onChange={e => setPassword(e.target.value)}
+              onFocus={() => setFocused('p')}
+              onBlur={() => setFocused(null)}
+              placeholder="••••••••"
               disabled={isLoading}
-              className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500"
+              autoComplete="current-password"
+              style={{
+                ...INPUT_BASE,
+                borderBottomColor: focused === 'p' ? '#C0392B' : '#BEB0A0',
+                borderBottomWidth: focused === 'p' ? '2px' : '1.5px',
+              }}
             />
           </div>
 
-          {error && <AlertError message={error} />}
+          {/* Error */}
+          {error && (
+            <div style={{
+              fontFamily: "'Caveat', cursive",
+              fontSize: 15, color: '#C0392B',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <span style={{ fontSize: 18 }}>✗</span> {error}
+            </div>
+          )}
 
-          <Button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white"
-          >
-            {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
-          </Button>
+          {/* Submit button — sketch rectangle style */}
+          <div style={{ position: 'relative', marginTop: 6 }}>
+            <svg width="100%" height="46" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
+              <filter id="btn-rough">
+                <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="4" seed="9" result="n" />
+                <feDisplacementMap in="SourceGraphic" in2="n" scale="2" xChannelSelector="R" yChannelSelector="G" />
+              </filter>
+              <rect x="2" y="2" width="calc(100% - 4)" height="42" rx="1"
+                fill="none" stroke="#2C1810" strokeWidth="1.8" filter="url(#btn-rough)"
+                style={{ width: 'calc(100% - 4px)' } as any} opacity="0.7" />
+            </svg>
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                width: '100%', height: 46,
+                background: 'transparent',
+                border: 'none',
+                fontFamily: "'Caveat', cursive",
+                fontSize: 18, fontWeight: 700,
+                color: '#2C1810',
+                letterSpacing: '0.06em',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.6 : 1,
+                position: 'relative', zIndex: 1,
+                transition: 'opacity 0.15s',
+              }}
+            >
+              {isLoading ? 'signing in...' : 'sign in →'}
+            </button>
+          </div>
         </form>
 
-        <div className="pt-4 border-t border-neutral-700 text-center">
-          <p className="text-sm text-neutral-400">
-            Chưa có tài khoản?{' '}
-            <Link to="/register" className="text-blue-400 hover:underline font-medium">
-              Đăng ký
+        {/* Footer */}
+        <div style={{
+          marginTop: 28,
+          paddingTop: 14,
+          borderTop: '1px dashed rgba(196,168,130,0.5)',
+          textAlign: 'center',
+        }}>
+          <span style={{ fontFamily: "'Caveat', cursive", fontSize: 15, color: '#8B6355' }}>
+            don't have an account?{' '}
+            <Link to="/register" style={{
+              color: '#C0392B', fontWeight: 700,
+              textDecoration: 'underline',
+              textDecorationStyle: 'wavy',
+            }}>
+              register
             </Link>
-          </p>
+          </span>
         </div>
-      </Card>
+
+        {/* Corner page number */}
+        <div style={{
+          position: 'absolute', bottom: 10, right: 14,
+          fontFamily: "'Caveat', cursive",
+          fontSize: 12, color: 'rgba(139,99,85,0.4)',
+        }}>
+          p. 001
+        </div>
+      </div>
     </div>
   );
 }
