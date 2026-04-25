@@ -3,6 +3,7 @@ import {
   Home, Upload, FolderOpen, User, Settings, LogOut
 } from 'lucide-react';
 import { useAuth } from '@/api/authContext';
+import { BrainLogo } from '@/app/components/shared/BrainLogo';
 
 const NAV_ITEMS = [
   { name: 'Home',     path: '/home',        tabColor: '#C9882A', icon: Home },
@@ -12,19 +13,6 @@ const NAV_ITEMS = [
   { name: 'Settings', path: '/settings',    tabColor: '#4A4A4A', icon: Settings },
 ];
 
-function CaduceusStamp() {
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"
-      style={{ opacity: 0.55 }}>
-      <circle cx="20" cy="20" r="18" stroke="#C9A84C" strokeWidth="1.2" fill="none" />
-      <line x1="20" y1="5" x2="20" y2="34" stroke="#C9A84C" strokeWidth="1.5" />
-      <path d="M20 9 C14 6 9 10 12 15 C15 20 20 18 20 18" stroke="#C9A84C" strokeWidth="1" fill="none" />
-      <path d="M20 9 C26 6 31 10 28 15 C25 20 20 18 20 18" stroke="#C9A84C" strokeWidth="1" fill="none" />
-      <path d="M14 13 C10 16 10 20 14 22 C18 24 22 28 18 32" stroke="#C9A84C" strokeWidth="1" fill="none" />
-      <path d="M26 13 C30 16 30 20 26 22 C22 24 18 28 22 32" stroke="#C9A84C" strokeWidth="1" fill="none" />
-    </svg>
-  );
-}
 
 export function Sidebar() {
   const location = useLocation();
@@ -94,7 +82,7 @@ export function Sidebar() {
 
         {/* ── Logo / App Identity ── */}
         <div className="relative z-10 flex flex-col items-center pt-7 pb-5 px-5">
-          <CaduceusStamp />
+          <BrainLogo size={40} color="#C9A84C" filterId="sidebar" opacity={0.55} />
 
           <div className="mt-2 text-center">
             <div
