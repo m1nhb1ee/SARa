@@ -100,6 +100,15 @@ class APIClient {
     return this.request<any>(`/sessions/${sessionId}/exit_session/`, 'POST');
   }
 
+  // Uploaded cases
+  async getUploadedCases() {
+    return this.request<any>('/uploaded-cases/');
+  }
+
+  async deleteUploadedCase(uploadSessionId: string) {
+    return this.request<any>(`/uploaded-cases/${uploadSessionId}/`, 'DELETE');
+  }
+
   // Performance
   async getMyStats() {
     return this.request<any>('/performance/my_stats/');

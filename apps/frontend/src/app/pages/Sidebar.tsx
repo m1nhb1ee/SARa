@@ -215,11 +215,6 @@ export function Sidebar() {
           <div className="flex items-center gap-3">
             <div
               className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
-              style={{
-                background: 'radial-gradient(circle, #5C3820 0%, #3E1F0D 100%)',
-                border: '1.5px solid #C9A84C',
-                boxShadow: '0 0 0 2px rgba(62,31,13,0.6)',
-              }}
             >
               <User style={{ width: '14px', height: '14px', color: '#D4B896' }} />
             </div>
@@ -253,7 +248,7 @@ export function Sidebar() {
 
             <button onClick={handleLogout} className="hover:opacity-70 transition-opacity">
               <LogOut
-                style={{ width: '14px', height: '14px', flexShrink: 0, color: 'rgba(196,168,130,0.3)' }}
+                style={{ width: '16px', height: '16px', flexShrink: 0, color: 'rgb(255, 72, 72)' }}
               />
             </button>
           </div>
