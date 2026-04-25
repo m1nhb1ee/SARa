@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { useCases, useSessions } from '@/api/hooks';
+import { useCases, useSessions, useUploadedCases, useDeleteUploadedCase } from '@/api/hooks';
 import { mapModality, mapDifficulty, getImageKey } from '@/utils/mappers';
 import type { CaseItem, SessionStatus, Modality, Difficulty } from '@/types';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
@@ -117,11 +117,35 @@ function Clock() {
 /* ─── Main Dashboard component ────────────────────────── */
 export function Dashboard() {
   const navigate = useNavigate();
-  const { data: casesData, loading: casesLoading } = useCases();
+  const { data: casesData, loading: casesLoading, refetch: refetchCases } = useCases();
   const { data: sessionsData } = useSessions();
+  const { data: uploadsData, refetch: refetchUploads } = useUploadedCases();
+  const { deleteCase, loading: deleting } = useDeleteUploadedCase();
 
   const [activeModality, setActiveModality] = useState('Tất cả');
   const [activeDifficulty, setActiveDifficulty] = useState('Tất cả');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // case_id → upload_session_id (only for user-uploaded cases)
+  const uploadSessionMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const u of (uploadsData?.results ?? [])) {
+      if (u.case_id) map[String(u.case_id)] = String(u.id);
+    }
+    return map;
+  }, [uploadsData]);
+
+  const handleDelete = async (e: React.MouseEvent, caseId: string) => {
+    e.stopPropagation();
+    const uploadSessionId = uploadSessionMap[caseId];
+    if (!uploadSessionId) return;
+    const result = await deleteCase(uploadSessionId);
+    if (result) {
+      setConfirmDeleteId(null);
+      refetchCases();
+      refetchUploads();
+    }
+  };
 
   const statusMap = useMemo<Record<string, SessionStatus>>(() => {
     const map: Record<string, SessionStatus> = {};
@@ -294,15 +318,83 @@ export function Dashboard() {
                   </>
                 );
 
+              const isOwned = !!uploadSessionMap[c.id];
+              const isConfirming = confirmDeleteId === c.id;
+
               return (
                 <div
                   key={c.id}
                   className={styles.caseCard}
-                  onClick={() => navigate(`/session/${c.id}`)}
+                  onClick={() => { if (!isConfirming) navigate(`/session/${c.id}`); }}
                 >
                   <SketchBorder id={`card-${c.id}`} color="#7A6248" opacity={0.5} />
                   {/* left accent strip */}
                   <div className={`${styles.cardAccent} ${accentClass[c.modality]}`} />
+
+                  {/* delete button — only for user-uploaded cases */}
+                  {isOwned && !isConfirming && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
+                      title="Xóa case này"
+                      style={{
+                        position: 'absolute', top: 8, right: 8, zIndex: 2,
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        padding: '4px', opacity: 0.45, lineHeight: 1,
+                        transition: 'opacity 0.15s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.45')}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#C0392B" strokeWidth="1.6" strokeLinecap="round">
+                        <polyline points="1,3 13,3" />
+                        <path d="M4,3V2a1,1 0 0,1 1-1h4a1,1 0 0,1 1,1v1" />
+                        <rect x="2" y="3" width="10" height="9" rx="1" />
+                        <line x1="5" y1="6" x2="5" y2="10" />
+                        <line x1="9" y1="6" x2="9" y2="10" />
+                      </svg>
+                    </button>
+                  )}
+
+                  {/* inline delete confirm overlay */}
+                  {isConfirming && (
+                    <div
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        position: 'absolute', inset: 0, zIndex: 3,
+                        background: 'rgba(250,243,227,0.96)',
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center', gap: 10,
+                      }}
+                    >
+                      <div style={{ fontFamily: "'Special Elite', cursive", fontSize: 12, color: '#2C1810', letterSpacing: '0.05em' }}>
+                        Xóa case này?
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={e => handleDelete(e, c.id)}
+                          disabled={deleting}
+                          style={{
+                            fontFamily: "'Special Elite', cursive", fontSize: 11,
+                            background: '#C0392B', color: '#F5EDD6',
+                            border: 'none', padding: '5px 14px', cursor: deleting ? 'not-allowed' : 'pointer',
+                            opacity: deleting ? 0.6 : 1,
+                          }}
+                        >
+                          {deleting ? '…' : 'Xóa'}
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                          style={{
+                            fontFamily: "'Special Elite', cursive", fontSize: 11,
+                            background: 'transparent', color: '#6B4C3B',
+                            border: '1px solid #C4A882', padding: '5px 14px', cursor: 'pointer',
+                          }}
+                        >
+                          Hủy
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* thumbnail */}
                   <div className={styles.cardThumb}>

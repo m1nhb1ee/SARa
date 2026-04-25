@@ -11,6 +11,7 @@ from .serializers import UploadInputSerializer
 from .services import (
     analyze_medical_image,
     create_case_in_supabase,
+    delete_uploaded_case,
     find_case_by_image_url,
     upload_image_to_storage,
 )
@@ -102,6 +103,23 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         else:
             case = find_case_by_image_url(upload['image_url'])
         return Response({**upload, 'case': case})
+
+    def destroy(self, request, pk=None):
+        """DELETE /api/v1/uploaded-cases/{id}/ — xóa case do user upload"""
+        user_id = request.user['id']
+        try:
+            result = delete_uploaded_case(pk, user_id)
+            return Response(result, status=status.HTTP_200_OK)
+        except ValueError:
+            return Response({'error': 'Upload not found'}, status=status.HTTP_404_NOT_FOUND)
+        except PermissionError:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            logger.error(f"Delete upload error: {e}", exc_info=True)
+            return Response(
+                {'error': 'Lỗi xóa case', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=True, methods=['post'])
     def start_practice(self, request, pk=None):

@@ -1,4 +1,4 @@
-# Smart AI Radiology Backend - API Endpoints
+# Smart AI Radiology Backend — API Endpoints
 
 ## Base URL
 ```
@@ -6,680 +6,595 @@ http://localhost:8000/api/v1/
 ```
 
 ## Authentication
-- Session-based authentication
-- No authentication required for case listing (public)
-- Authentication required for sessions, submissions
 
-## Endpoints
+All protected endpoints require a Supabase JWT passed as a Bearer token:
 
-### Authentication
-
-#### Login
 ```
-POST /auth/login/
-Content-Type: application/json
+Authorization: Bearer <access_token>
 ```
 
-**Request Body:**
+Tokens are obtained from `/auth/login/` or `/auth/register/`. All IDs are UUIDs (strings).
+
+---
+
+## Auth Endpoints
+
+### Register
+```
+POST /auth/register/
+```
+
+**Request:**
 ```json
 {
-  "username": "student1",
+  "email": "user@example.com",
+  "password": "password123",
+  "full_name": "Nguyễn Văn A"
+}
+```
+
+**Response 201 — email confirmation disabled (immediate login):**
+```json
+{
+  "user": { "id": "<uuid>", "email": "user@example.com", "role": "student" },
+  "access_token": "<jwt>",
+  "refresh_token": "<token>",
+  "expires_at": 1713178800
+}
+```
+
+**Response 201 — email confirmation required:**
+```json
+{
+  "message": "Đăng ký thành công! Vui lòng kiểm tra email để xác nhận tài khoản.",
+  "requires_confirmation": true
+}
+```
+
+**Errors:** `400` missing fields / password too short, `409` email already registered
+
+---
+
+### Login
+```
+POST /auth/login/
+```
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
   "password": "password123"
 }
 ```
 
-**Response (200 OK):**
+**Response 200:**
 ```json
 {
-  "success": true,
-  "user": {
-    "id": 1,
-    "username": "student1",
-    "email": "student@test.com",
-    "is_staff": false
-  }
+  "user": { "id": "<uuid>", "email": "user@example.com", "role": "student" },
+  "access_token": "<jwt>",
+  "refresh_token": "<token>",
+  "expires_at": 1713178800
 }
 ```
 
-**Error Response (401 Unauthorized):**
+**Error 401:** `{ "error": "Email hoặc mật khẩu không đúng" }`
+
+---
+
+### Get Current User
+```
+GET /auth/me/
+Authorization: Bearer <token>
+```
+
+**Response 200:**
 ```json
 {
-  "error": "Tên đăng nhập hoặc mật khẩu không đúng"
+  "user": { "id": "<uuid>", "email": "user@example.com", "role": "student" }
 }
 ```
 
-#### Logout
+---
+
+### Logout
 ```
 POST /auth/logout/
 ```
 
-**Headers:**
-- Session cookie required (set after login)
-
-**Response (200 OK):**
-```json
-{
-  "success": true,
-  "message": "Đã đăng xuất thành công"
-}
-```
-
-#### Get Current User Info
-```
-GET /auth/me/
-```
-
-**Headers:**
-- Session cookie required
-
-**Response (200 OK):**
-```json
-{
-  "id": 1,
-  "username": "student1",
-  "email": "student@test.com",
-  "first_name": "Nguyễn",
-  "last_name": "Văn A",
-  "date_joined": "2024-04-15T10:00:00Z"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "error": "Authentication required"
-}
-```
+Client-side only — clears local token. Response: `{ "success": true }`
 
 ---
 
-### Cases
+## Cases
 
-#### List Cases
+### List Cases
 ```
 GET /cases/
+Authorization: Bearer <token>
 ```
 
-**Query Parameters:**
-- `modality` (string): Filter by modality (XRAY, CT, MRI, ULTRASOUND)
-- `difficulty` (string): Filter by difficulty (BASIC, INTERMEDIATE, ADVANCED)
-- `search` (string): Search in title, description, clinical_history
-- `page` (integer): Page number for pagination (default: 1)
-- `page_size` (integer): Items per page (default: 20, max: 100)
+**Query parameters:**
+- `modality` — `XRAY` | `CT` | `MRI`
+- `difficulty` — `easy` | `medium` | `hard`
+- `disease_tag` — filter by disease profile name
+- `status` — session status filter
 
-**Example:**
-```bash
-GET /cases/?modality=XRAY&difficulty=BASIC&page=1
-```
-
-**Response (200 OK):**
+**Response 200:**
 ```json
 {
-  "count": 4,
-  "next": null,
-  "previous": null,
-  "results": [
+  "cases": [
     {
-      "id": 1,
+      "id": "<uuid>",
       "title": "Viêm phổi điển hình",
-      "modality": "XRAY",
-      "difficulty": "BASIC",
-      "description": "X-ray ngực cho thấy infiltrate phổi...",
-      "tags": [
-        {
-          "id": 1,
-          "name": "Chest",
-          "description": "Phim ngực"
-        }
-      ],
-      "created_at": "2024-04-15T10:00:00Z"
+      "modality": "X-ray",
+      "difficulty": "medium",
+      "clinical_history": "Bệnh nhân 45 tuổi, ho sốt 3 ngày",
+      "image_urls": ["https://<project>.supabase.co/storage/v1/object/public/case_images/..."],
+      "uploaded_by": null,
+      "created_at": "2024-04-15T10:00:00+00:00"
     }
-  ]
+  ],
+  "count": 1
 }
 ```
 
-#### Get Case Detail
-```
-GET /cases/{id}/
-```
-
-**Response (200 OK):**
-```json
-{
-  "id": 1,
-  "title": "Viêm phổi điển hình",
-  "description": "X-ray ngực cho thấy infiltrate phổi...",
-  "modality": "XRAY",
-  "difficulty": "BASIC",
-  "clinical_history": "Bệnh nhân 45 tuổi, nam, ho sốt 3 ngày",
-  "image_urls": [
-    "https://via.placeholder.com/400x400?text=Chest+XRay+1"
-  ],
-  "tags": [
-    {
-      "id": 1,
-      "name": "Chest",
-      "description": "Phim ngực"
-    }
-  ],
-  "created_at": "2024-04-15T10:00:00Z",
-  "updated_at": "2024-04-15T10:00:00Z"
-}
-```
-
-**Note**: `answer_key` and `pipeline_rubric` are NOT exposed to prevent cheating.
+Note: `uploaded_by` is `null` for system cases and a user UUID for user-uploaded cases. Cases with `uploaded_by` set are only visible to their owner.
 
 ---
 
-### Sessions (Authenticated)
+### Get Case Detail
+```
+GET /cases/{uuid}/
+Authorization: Bearer <token>
+```
 
-#### List Sessions
+**Response 200:** Same shape as list item, with full fields.
+
+**Errors:** `400` invalid UUID, `403` not your uploaded case, `404` not found
+
+---
+
+## Sessions
+
+### List Sessions
 ```
 GET /sessions/
+Authorization: Bearer <token>
 ```
 
-**Query Parameters:**
-- `status` (string): IN_PROGRESS, COMPLETED, ABANDONED
-- `case` (integer): Filter by case ID
-- `page` (integer): Page number
-- `page_size` (integer): Items per page
+**Query parameters:** `status` (`IN_PROGRESS` | `COMPLETED` | `ABANDONED`), `case` (UUID)
 
-**Example:**
-```bash
-curl -H "Authorization: Session <session-id>" GET /sessions/?status=IN_PROGRESS
-```
-
-**Response (200 OK):**
+**Response 200:**
 ```json
 {
   "count": 2,
   "results": [
     {
-      "id": 1,
-      "case": 1,
-      "case_title": "Viêm phổi điển hình",
+      "id": "<uuid>",
+      "case_id": "<uuid>",
       "current_step": 2,
       "status": "IN_PROGRESS",
-      "total_score": 0.75,
-      "started_at": "2024-04-15T10:30:00Z",
+      "final_score": null,
+      "started_at": "2024-04-15T10:30:00+00:00",
       "completed_at": null
     }
   ]
 }
 ```
 
-#### Create Session
+---
+
+### Create Session
 ```
 POST /sessions/
+Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
-**Request Body:**
+**Request:**
 ```json
-{
-  "case": 1
-}
+{ "case_id": "<uuid>" }
 ```
 
-**Response (201 Created):**
+**Response 201:**
 ```json
 {
-  "id": 1,
-  "case": 1,
+  "id": "<uuid>",
+  "case_id": "<uuid>",
   "case_title": "Viêm phổi điển hình",
   "current_step": 0,
   "status": "IN_PROGRESS",
-  "total_score": 0.0,
-  "started_at": "2024-04-15T10:30:00Z",
+  "final_score": null,
+  "started_at": "2024-04-15T10:30:00+00:00",
   "completed_at": null
 }
 ```
 
-#### Get Session Detail
+---
+
+### Get Session Detail
 ```
-GET /sessions/{id}/
+GET /sessions/{uuid}/
+Authorization: Bearer <token>
 ```
 
-**Response (200 OK):**
+**Response 200:**
 ```json
 {
-  "id": 1,
-  "case": {
-    "id": 1,
-    "title": "Viêm phổi điển hình",
-    "description": "...",
-    "modality": "XRAY",
-    "difficulty": "BASIC",
-    "clinical_history": "Bệnh nhân 45 tuổi, nam, ho sốt 3 ngày",
-    "image_urls": ["https://..."],
-    "tags": [{"id": 1, "name": "Chest"}]
-  },
+  "id": "<uuid>",
+  "case_id": "<uuid>",
   "current_step": 2,
   "status": "IN_PROGRESS",
-  "step_history": [
-    {"step": 0, "attempts": 1, "score": 0.85},
-    {"step": 1, "attempts": 2, "score": 0.65}
-  ],
-  "total_score": 0.75,
-  "started_at": "2024-04-15T10:30:00Z",
+  "final_score": null,
+  "started_at": "2024-04-15T10:30:00+00:00",
   "completed_at": null,
+  "case": {
+    "id": "<uuid>",
+    "title": "Viêm phổi điển hình",
+    "modality": "X-ray",
+    "difficulty": "medium",
+    "clinical_history": "...",
+    "image_urls": ["https://..."],
+    "tags": null
+  },
   "step_attempts": [
     {
-      "id": 1,
+      "id": "<uuid>",
       "step_index": 0,
-      "step_name": "OBSERVE",
+      "step_code": "OBSERVE",
       "student_answer": "Thấy mờ phím ở phổi phải",
       "score": 0.85,
       "errors": [],
-      "feedback": {
-        "type": "correct",
-        "content": "Bước OBSERVE: Tuyệt vời!"
-      },
+      "feedback": "Bước OBSERVE: Tuyệt vời!",
+      "attempt_number": 1,
       "latency_ms": 1500,
-      "created_at": "2024-04-15T10:32:00Z"
+      "created_at": "2024-04-15T10:32:00+00:00"
     }
   ]
 }
 ```
 
-#### Submit Answer
+---
+
+### Submit Answer
 ```
-POST /sessions/{id}/submit_answer/
+POST /sessions/{uuid}/submit_answer/
+Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
-**Request Body:**
+**Request:**
 ```json
-{
-  "student_answer": "Tôi thấy một tổn thương mờ phím ở vùng phần dốc phổi phải, kích thước khoảng 4-5cm"
-}
+{ "student_answer": "Tôi thấy một tổn thương mờ phím ở thùy dưới phổi phải..." }
 ```
 
-**Response (200 OK):**
+**Response 200 — answer fails (score < 0.6):**
 ```json
 {
-  "attempt": {
-    "id": 2,
-    "step_index": 1,
-    "step_name": "DESCRIBE",
-    "student_answer": "Tôi thấy một tổn thương...",
-    "score": 0.78,
-    "errors": [
-      "Cần xác định rõ vị trí",
-      "Hãy mô tả bờ của tổn thương"
-    ],
-    "feedback": {
-      "type": "hint",
-      "content": "Bước DESCRIBE: Hãy xem gợi ý - các tổn thương này cần loại trừ. Hãy xem xét kỹ hơn."
-    },
-    "latency_ms": 2100,
-    "created_at": "2024-04-15T10:35:00Z"
-  },
+  "attempt": { "id": "<uuid>", "step_code": "OBSERVE", "score": 0.45, "feedback": "...", ... },
   "passed": false,
-  "hint": "Bước DESCRIBE: Hãy chú ý đến các tổn thương. Hãy xem xét kỹ hơn.",
+  "hint": "Hãy chú ý đến vùng...",
   "message": "Chưa đúng. Hãy xem gợi ý và thử lại."
 }
 ```
 
-**Response when answer passes (score >= 0.6):**
+**Response 200 — answer passes, session continues:**
 ```json
 {
-  "attempt": {...},
+  "attempt": { ... },
   "passed": true,
-  "next_step": 2,
+  "next_step": 1,
   "message": "Đáp án số được! Chuyển sang bước tiếp theo."
 }
 ```
 
-**Response when session completed:**
+**Response 200 — final step completed:**
 ```json
 {
-  "attempt": {...},
+  "attempt": { ... },
   "passed": true,
   "session_complete": true,
   "message": "Chúc mừng! Hoàn thành case này."
 }
 ```
 
-**Error Responses:**
-```
-400 Bad Request: {
-  "error": "Vui lòng cung cấp câu trả lời chi tiết hơn"
-}
+Step codes in order: `OBSERVE` → `DESCRIBE` → `INTERPRET` → `HYPOTHESIS` → `DDx` → `CONCLUSION`
 
-403 Forbidden: {
-  "error": "Session đã kết thúc"
-}
-```
+---
 
-#### View Answer Key (Requires COMPLETED session)
+### Get Step Answers (Answer Key Preview)
 ```
-GET /sessions/{id}/answer_key/
+GET /sessions/{uuid}/step_answers/
+Authorization: Bearer <token>
 ```
 
-**Only accessible if session status = COMPLETED**
+Available at any session status. Returns expected answers per step.
 
-**Response (200 OK):**
+**Response 200:**
 ```json
 {
-  "answer_key": {
-    "OBSERVE": "Thấy infiltrate phổi dưới phải",
-    "DESCRIBE": "Infiltrate mờ phím, kích thước ~5cm, vị trí phần đốc phổi phải",
-    "INTERPRET": "Mật độ cao có thể do phổi bị tổn thương do viêm",
-    "HYPOTHESIS": "Viêm phổi",
-    "DDx": ["Lao", "Ung thư phổi", "Edema phổi"],
-    "CONCLUSION": "Viêm phổi phải",
-    "explanation": "Dựa vào triệu trứng lâm sàng và hình ảnh X-ray..."
-  },
-  "your_score": 0.78,
-  "details": [
-    {
-      "step": "OBSERVE",
-      "score": 0.85,
-      "feedback": {
-        "type": "correct",
-        "content": "Bước OBSERVE: Tuyệt vời!"
-      }
-    },
-    {
-      "step": "DESCRIBE",
-      "score": 0.78,
-      "feedback": {
-        "type": "hint",
-        "content": "Bước DESCRIBE: ..."
-      }
-    }
-  ]
-}
-```
-
-**Error Response:**
-```
-403 Forbidden: {
-  "error": "Chỉ xem được đáp án sau khi hoàn thành."
-}
-```
-
-#### Get Step Answers (NEW)
-```
-GET /sessions/{id}/step_answers/
-```
-
-**Access:** Anytime during session (IN_PROGRESS, COMPLETED, etc.)
-
-**Response (200 OK):**
-```json
-{
-  "session_id": 95,
-  "case_id": 47,
-  "case_title": "Test Case - CT Scan",
-  "case_modality": "CT",
-  "current_step": 0,
+  "session_id": "<uuid>",
+  "case_id": "<uuid>",
+  "case_title": "Viêm phổi điển hình",
+  "case_modality": "X-ray",
+  "current_step": 2,
   "status": "IN_PROGRESS",
   "answers": {
-    "OBSERVE": "[CT] Brain scan - ventricles enlarged, no hemorrhage",
-    "DESCRIBE": "Bilateral ventricle dilation, 4-5mm wider than normal range",
-    "INTERPRET": "Suggests increased intracranial pressure or hydrocephalus",
-    "HYPOTHESIS": "Obstructive hydrocephalus",
-    "DDx": "Communicating hydrocephalus, ventricular enlargement from atrophy, tumor obstruction",
-    "CONCLUSION": "MRI recommended to determine etiology and assess urgency for intervention"
+    "OBSERVE": {
+      "expected_finding": "Phổi phải có mờ phím nhẹ ở thùy dưới",
+      "clinical_explanation": "Infiltrate gợi ý viêm phổi",
+      "key_points": []
+    }
   },
-  "step_templates": {
-    "OBSERVE": "Quan sát kỹ lưỡng các vùng của ảnh. Xác định vùng bất thường.",
-    "DESCRIBE": "Mô tả chi tiết các đặc điểm: kích thước, hình dạng, vị trí, mật độ.",
-    "INTERPRET": "Diễn giải ý nghĩa lâm sàn của các phát hiện.",
-    "HYPOTHESIS": "Đề xuất chẩn đoán dự phòng chính dựa trên hình ảnh.",
-    "DDx": "Liệt kê chẩn đoán phân biệt cần loại trừ.",
-    "CONCLUSION": "Kết luận chẩn đoán cuối cùng và khuyến cáo tiếp theo."
-  }
-}
-```
-
-**Error Responses:**
-```
-403 Forbidden: {
-  "error": "Unauthorized access to this session"
-}
-
-404 Not Found: {
-  "error": "Session not found"
-}
-```
-
-#### Exit Session
-```
-POST /sessions/{id}/exit_session/
-```
-
-**Purpose:** Save progress and exit current session without completing it
-
-**Response (200 OK):**
-```json
-{
-  "success": true,
-  "message": "Session đã được lưu và thoát thành công",
-  "session_id": 95,
-  "last_step": 2,
-  "timestamp": "2024-04-15T15:30:00Z"
-}
-```
-
-**Error Responses:**
-```
-400 Bad Request: {
-  "error": "Không thể thoát khỏi session này"
-}
-
-403 Forbidden: {
-  "error": "Unauthorized"
+  "step_templates": { "OBSERVE": { ... } }
 }
 ```
 
 ---
 
-### Uploaded Cases (User Upload Feature)
+### View Answer Key (COMPLETED sessions only)
+```
+GET /sessions/{uuid}/answer_key/
+Authorization: Bearer <token>
+```
 
-#### List Uploaded Cases
+**Response 200:**
+```json
+{
+  "answer_key": {
+    "OBSERVE": {
+      "expected_finding": "...",
+      "clinical_explanation": "...",
+      "key_points": []
+    }
+  },
+  "your_score": 0.78,
+  "details": [
+    { "step": "OBSERVE", "score": 0.85, "feedback": "Tuyệt vời!" }
+  ]
+}
+```
+
+**Error 403:** `{ "error": "Chỉ xem được đáp án sau khi hoàn thành." }`
+
+---
+
+### Exit Session
+```
+POST /sessions/{uuid}/exit_session/
+Authorization: Bearer <token>
+```
+
+Marks session as `ABANDONED`. Only works on `IN_PROGRESS` sessions.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Session đã được lưu và thoát thành công",
+  "session_id": "<uuid>",
+  "last_step": 2,
+  "timestamp": "2024-04-15T15:30:00+00:00"
+}
+```
+
+---
+
+## Uploaded Cases
+
+User-uploaded medical images processed by AI (MedGemma via HuggingFace Gradio). Each upload creates an `upload_session` record and a corresponding `case` with AI-generated `answer_keys`.
+
+### List My Uploads
 ```
 GET /uploaded-cases/
+Authorization: Bearer <token>
 ```
 
-**Query Parameters:**
-- `page` (integer): Page number
-- `page_size` (integer): Items per page
-
-**Response (200 OK):**
+**Response 200:**
 ```json
 {
   "count": 2,
   "results": [
     {
-      "id": 1,
-      "title": "My CT Scan",
+      "id": "<uuid>",
+      "user_id": "<uuid>",
+      "case_id": "<uuid>",
+      "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid>.jpg",
       "modality": "CT",
-      "processing_status": "SUCCESS",
-      "processing_status_display": "Thành công",
-      "created_case_id": 47,
-      "error_message": "",
-      "created_at": "2024-04-15T14:00:00Z",
-      "image_url": "http://localhost:8000/media/user_uploads/2024/04/15/scan_abc.jpg",
-      "original_image": "/media/user_uploads/2024/04/15/scan_abc.jpg"
+      "created_at": "2024-04-15T14:00:00+00:00"
     }
   ]
 }
 ```
 
-#### Upload New Case
+---
+
+### Upload New Case
 ```
 POST /uploaded-cases/
+Authorization: Bearer <token>
 Content-Type: multipart/form-data
 ```
 
-**Request Body:**
-- `original_image` (file, required): Medical image file (JPG, PNG)
-- `title` (string, optional): Case title
-- `modality` (string, optional): XRAY | CT | MRI | ULTRASOUND (default: XRAY)
+**Form fields:**
+- `image` (file, required) — JPG or PNG medical image
+- `title` (string, optional) — case title; AI generates one if omitted or "Untitled Case"
+- `modality` (string, required) — `XRAY` | `CT` | `MRI` | `DIFF`
 
-**Example with cURL:**
+**Example:**
 ```bash
 curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
-  -F "original_image=@/path/to/image.jpg" \
+  -H "Authorization: Bearer <token>" \
+  -F "image=@/path/to/scan.jpg" \
   -F "title=My CT Brain Scan" \
-  -F "modality=CT" \
-  -b cookies.txt
+  -F "modality=CT"
 ```
 
-**Response (201 Created):**
+**Response 201:**
 ```json
 {
-  "id": 1,
-  "title": "My CT Brain Scan",
-  "modality": "CT",
-  "ai_findings": {
-    "title": "CT Case – MedGemma",
-    "description": "[CT] Brain scan analysis...",
-    "raw_findings": "AI analysis results...",
-    "confidence": 0.82
-  },
-  "processing_status": "SUCCESS",
-  "processing_status_display": "Thành công",
-  "error_message": "",
-  "created_case_id": 47,
-  "created_case": {
-    "id": 47,
-    "title": "CT Case – MedGemma",
-    "description": "...",
+  "upload_session": {
+    "id": "<uuid>",
+    "user_id": "<uuid>",
+    "case_id": "<uuid>",
+    "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid>.jpg",
     "modality": "CT",
-    "difficulty": "INTERMEDIATE",
-    "clinical_history": "...",
-    "image_urls": ["http://localhost:8000/media/user_uploads/2024/04/15/scan_abc.jpg"],
-    "tags": []
+    "created_at": "2024-04-15T14:00:00+00:00"
   },
-  "created_at": "2024-04-15T14:00:00Z",
-  "image_url": "http://localhost:8000/media/user_uploads/2024/04/15/scan_abc.jpg",
-  "original_image": "/media/user_uploads/2024/04/15/scan_abc.jpg"
+  "case": {
+    "id": "<uuid>",
+    "title": "CT Case – MedGemma",
+    "modality": "CT",
+    "difficulty": "medium",
+    "clinical_history": "AI (MedGemma) analyzed CT: ...",
+    "image_urls": ["https://..."],
+    "uploaded_by": "<uuid>",
+    "created_at": "2024-04-15T14:00:00+00:00"
+  }
 }
 ```
 
-**Processing Workflow:**
-1. Image uploaded → Status: PENDING
-2. AI analysis starts → Status: PROCESSING
-3. Case created from AI findings → Status: SUCCESS
-4. Or error occurs → Status: FAILED
+**Error 400:** `{ "error": "Lỗi xử lý ảnh", "message": "..." }`
 
-**Error Response (400 Bad Request):**
+---
+
+### Get Upload Detail
+```
+GET /uploaded-cases/{uuid}/
+Authorization: Bearer <token>
+```
+
+**Response 200:**
 ```json
 {
-  "error": "Lỗi xử lý ảnh",
-  "message": "Detail error message",
-  "upload_id": 1
-}
-```
-
-#### Get Uploaded Case Detail
-```
-GET /uploaded-cases/{id}/
-```
-
-**Response (200 OK):**
-```json
-{
-  "id": 1,
-  "title": "My CT Brain Scan",
+  "id": "<uuid>",
+  "user_id": "<uuid>",
+  "case_id": "<uuid>",
+  "image_url": "https://...",
   "modality": "CT",
-  "ai_findings": {
-    "title": "CT Case – MedGemma",
-    "description": "[CT] Brain scan - ventricles enlarged...",
-    "raw_findings": "Detailed AI findings...",
-    "confidence": 0.82,
-    "answer_key": {
-      "OBSERVE": "[CT] Brain scan - ventricles enlarged",
-      "DESCRIBE": "Bilateral ventricle dilation, 4-5mm wider than normal",
-      "INTERPRET": "Suggests increased intracranial pressure",
-      "HYPOTHESIS": "Hydrocephalus",
-      "DDx": "Communicating hydrocephalus, tumor obstruction, aqueductal stenosis",
-      "CONCLUSION": "MRI recommended to determine etiology"
-    },
-    "pipeline_rubric": {
-      "OBSERVE": "Quan sát kỹ lưỡng...",
-      "DESCRIBE": "Mô tả chi tiết...",
-      "INTERPRET": "Diễn giải ý nghĩa...",
-      "HYPOTHESIS": "Đề xuất chẩn đoán...",
-      "DDx": "Liệt kê chẩn đoán...",
-      "CONCLUSION": "Kết luận chẩn đoán..."
-    }
-  },
-  "processing_status": "SUCCESS",
-  "processing_status_display": "Thành công",
-  "error_message": "",
-  "created_case_id": 47,
-  "created_case": {
-    "id": 47,
-    "title": "CT Case – MedGemma",
-    "description": "...",
-    "modality": "CT",
-    "difficulty": "INTERMEDIATE",
-    "clinical_history": "AI analyzed CT scan...",
-    "image_urls": ["http://localhost:8000/media/user_uploads/2024/04/15/scan_abc.jpg"],
-    "tags": []
-  },
-  "created_at": "2024-04-15T14:00:00Z",
-  "image_url": "http://localhost:8000/media/user_uploads/2024/04/15/scan_abc.jpg",
-  "original_image": "/media/user_uploads/2024/04/15/scan_abc.jpg"
+  "created_at": "2024-04-15T14:00:00+00:00",
+  "case": { "id": "<uuid>", "title": "CT Case – MedGemma" }
 }
 ```
 
 ---
 
-### Performance (Authenticated)
-
-#### Get Personal Stats
+### Delete Uploaded Case
 ```
-GET /performance/my_stats/
+DELETE /uploaded-cases/{uuid}/
+Authorization: Bearer <token>
 ```
 
-**Response (200 OK):**
+Cascade deletes: `sessions` → `answer_keys` → `upload_session` → `case` → Storage image (best-effort). Only the owner can delete.
+
+**Response 200:**
 ```json
 {
-  "username": "student1",
+  "deleted": true,
+  "upload_session_id": "<uuid>",
+  "case_id": "<uuid>"
+}
+```
+
+**Errors:** `403` not owner, `404` upload not found, `500` internal error
+
+---
+
+### Get Case Findings
+```
+GET /uploaded-cases/{uuid}/findings/
+Authorization: Bearer <token>
+```
+
+**Response 200:**
+```json
+{
+  "upload_session_id": "<uuid>",
+  "image_url": "https://...",
+  "modality": "CT",
+  "case_id": "<uuid>",
+  "case_title": "CT Case – MedGemma",
+  "answer_key_steps": ["OBSERVE", "DESCRIBE", "INTERPRET", "HYPOTHESIS", "DDx", "CONCLUSION"],
+  "answer_keys": [
+    {
+      "step_code": "OBSERVE",
+      "expected_finding": "Não bình thường, không thấy máu tụ...",
+      "clinical_explanation": "...",
+      "key_points": []
+    }
+  ]
+}
+```
+
+---
+
+### Start Practice Session from Upload
+```
+POST /uploaded-cases/{uuid}/start_practice/
+Authorization: Bearer <token>
+```
+
+Creates a new `IN_PROGRESS` session for the case associated with this upload.
+
+**Response 201:**
+```json
+{
+  "id": "<uuid>",
+  "user_id": "<uuid>",
+  "case_id": "<uuid>",
+  "current_step": 0,
+  "status": "IN_PROGRESS",
+  "started_at": "2024-04-15T14:05:00+00:00"
+}
+```
+
+---
+
+## Performance
+
+### Get My Stats
+```
+GET /performance/my_stats/
+Authorization: Bearer <token>
+```
+
+**Response 200:**
+```json
+{
+  "user_id": "<uuid>",
+  "email": "user@example.com",
   "total_cases_completed": 3,
   "average_score": 0.76,
   "accuracy_by_step": {
-    "0": 0.82,
-    "1": 0.75,
-    "2": 0.71,
-    "3": 0.78,
-    "4": 0.76,
-    "5": 0.73
+    "OBSERVE":    0.82,
+    "DESCRIBE":   0.75,
+    "INTERPRET":  0.71,
+    "HYPOTHESIS": 0.78,
+    "DDx":        0.76,
+    "CONCLUSION": 0.73
   },
-  "last_activity": "2024-04-15T15:00:00Z"
+  "last_activity": "2024-04-15T15:00:00+00:00"
 }
 ```
 
 ---
 
-### Tags
+## Tags
 
-#### List Tags
+### List Disease Tags
 ```
 GET /tags/
 ```
 
-**Response (200 OK):**
+Public — no auth required.
+
+**Response 200:**
 ```json
 {
-  "count": 4,
-  "results": [
-    {
-      "id": 1,
-      "name": "Chest",
-      "description": "Phim ngực"
-    },
-    {
-      "id": 2,
-      "name": "Neuro",
-      "description": "Phim não"
-    }
-  ]
+  "tags": [
+    { "id": "<uuid>", "name": "Pneumonia", "description": "Viêm phổi" }
+  ],
+  "count": 1
 }
 ```

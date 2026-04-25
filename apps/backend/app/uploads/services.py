@@ -116,6 +116,83 @@ def find_case_by_image_url(image_url: str) -> dict | None:
         return None
 
 
+def _extract_storage_path(image_url: str) -> Optional[str]:
+    """Trích xuất file path trong bucket từ Supabase Storage public URL."""
+    marker = '/case_images/'
+    idx = image_url.find(marker)
+    if idx == -1:
+        return None
+    return image_url[idx + len(marker):]
+
+
+def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
+    """
+    Xóa toàn bộ dữ liệu của một upload do user tạo.
+    Cascade: sessions → answer_keys → upload_session → case → Storage image.
+    Chỉ cho phép nếu upload_session.user_id == user_id.
+    """
+    sb = get_supabase()
+
+    # 1. Lấy upload_session và kiểm tra quyền sở hữu
+    try:
+        result = sb.table('upload_sessions').select(
+            'id, user_id, case_id, image_url'
+        ).eq('id', upload_session_id).single().execute()
+    except Exception:
+        raise ValueError('Upload session not found')
+
+    upload: dict = result.data  # type: ignore[assignment]
+    if upload['user_id'] != user_id:
+        raise PermissionError('Bạn không có quyền xóa upload này')
+
+    case_id: Optional[str] = upload.get('case_id')
+    image_url: str = upload.get('image_url') or ''
+
+    # 2. Xóa các practice sessions liên quan đến case
+    if case_id:
+        try:
+            sb.table('sessions').delete().eq('case_id', case_id).execute()
+            logger.info(f"Deleted sessions for case {case_id}")
+        except Exception as e:
+            logger.warning(f"Could not delete sessions for case {case_id}: {e}")
+
+    # 3. Xóa answer_keys
+    if case_id:
+        try:
+            sb.table('answer_keys').delete().eq('case_id', case_id).execute()
+            logger.info(f"Deleted answer_keys for case {case_id}")
+        except Exception as e:
+            logger.warning(f"Could not delete answer_keys for case {case_id}: {e}")
+
+    # 4. Xóa upload_session (trước khi xóa case để tránh FK violation nếu có)
+    sb.table('upload_sessions').delete().eq('id', upload_session_id).execute()
+    logger.info(f"Deleted upload_session {upload_session_id}")
+
+    # 5. Xóa case
+    if case_id:
+        try:
+            sb.table('cases').delete().eq('id', case_id).execute()
+            logger.info(f"Deleted case {case_id}")
+        except Exception as e:
+            logger.warning(f"Could not delete case {case_id}: {e}")
+
+    # 6. Xóa ảnh khỏi Supabase Storage (best-effort, không fail nếu lỗi)
+    if image_url:
+        try:
+            path = _extract_storage_path(image_url)
+            if path:
+                sb.storage.from_('case_images').remove([path])
+                logger.info(f"Deleted storage file: {path}")
+        except Exception as e:
+            logger.warning(f"Could not delete storage image {image_url}: {e}")
+
+    return {
+        'deleted': True,
+        'upload_session_id': upload_session_id,
+        'case_id': case_id,
+    }
+
+
 # ── HuggingFace / Gradio ───────────────────────────────────────────────────────
 
 def _get_hf_token() -> Optional[str]:

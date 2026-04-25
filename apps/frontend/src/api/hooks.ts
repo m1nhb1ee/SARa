@@ -134,3 +134,20 @@ export function useExitSession() {
   const { mutate, loading, error } = useMutation((sessionId: string) => apiClient.exitSession(sessionId));
   return { exitSession: mutate, loading, error };
 }
+
+export function useUploadedCases() {
+  const [state, patch] = useQueryState<any>();
+
+  const refetch = useCallback(() => resolveQuery(() => apiClient.getUploadedCases(), patch), []);
+
+  useEffect(() => { refetch(); }, []);
+
+  return { ...state, refetch };
+}
+
+export function useDeleteUploadedCase() {
+  const { mutate, loading, error } = useMutation((uploadSessionId: string) =>
+    apiClient.deleteUploadedCase(uploadSessionId)
+  );
+  return { deleteCase: mutate, loading, error };
+}
