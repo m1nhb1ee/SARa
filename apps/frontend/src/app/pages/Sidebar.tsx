@@ -107,7 +107,7 @@ export function Sidebar() {
                 textShadow: '0px 1px 0px rgba(255,255,255,0.07), 0px -1px 3px rgba(0,0,0,0.75), 0px 2px 4px rgba(0,0,0,0.5)',
               }}
             >
-              MedLens
+              SARa
             </div>
 
             <div className="mt-2 mx-auto" style={{
@@ -125,7 +125,7 @@ export function Sidebar() {
                 color: 'rgba(237,224,196,0.35)',
               }}
             >
-              MEDICAL AI TRAINING
+              SMART AI RADIOLOGY
             </div>
           </div>
 
