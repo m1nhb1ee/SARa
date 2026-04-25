@@ -1,20 +1,7 @@
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/api/authContext';
 import { BookOpen, Upload, TrendingUp, User } from 'lucide-react';
-
-function CaduceusLarge() {
-  return (
-    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg"
-      style={{ opacity: 0.7 }}>
-      <circle cx="36" cy="36" r="32" stroke="#C9A84C" strokeWidth="1.5" fill="none" />
-      <line x1="36" y1="8" x2="36" y2="62" stroke="#C9A84C" strokeWidth="2" />
-      <path d="M36 16 C26 12 18 18 22 26 C26 34 36 32 36 32" stroke="#C9A84C" strokeWidth="1.5" fill="none" />
-      <path d="M36 16 C46 12 54 18 50 26 C46 34 36 32 36 32" stroke="#C9A84C" strokeWidth="1.5" fill="none" />
-      <path d="M26 23 C19 28 19 36 25 39 C31 42 37 50 32 58" stroke="#C9A84C" strokeWidth="1.2" fill="none" />
-      <path d="M46 23 C53 28 53 36 47 39 C41 42 35 50 40 58" stroke="#C9A84C" strokeWidth="1.2" fill="none" />
-    </svg>
-  );
-}
+import { BrainLogo } from '@/app/components/shared/BrainLogo';
 
 function OrnamentalRule() {
   return (
@@ -82,7 +69,7 @@ export function WelcomePage() {
     <div style={{ backgroundColor: '#F5EDD6', minHeight: '100%', padding: '32px 40px' }}>
       {/* Header stamp */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 32 }}>
-        <CaduceusLarge />
+        <BrainLogo size={72} color="#C9A84C" filterId="welcome" opacity={0.7} />
         <div style={{ flex: 1 }}>
           <div style={{
             fontFamily: "'Special Elite', cursive",

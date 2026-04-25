@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useAuth } from '@/api/authContext';
+import { BrainLogo } from '@/app/components/shared/BrainLogo';
 
 /* ─── Medical sticky notes scattered on desk ─── */
 const NOTES = [
@@ -236,22 +237,9 @@ export function LoginPage() {
 
         {/* ── Header ── */}
         <div style={{ textAlign: 'center', marginBottom: 30 }}>
-          {/* Pencil-sketch logo mark */}
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none"
-            style={{ marginBottom: 8, opacity: 0.82 }}>
-            <filter id="psketch">
-              <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="4" seed="5" result="n" />
-              <feDisplacementMap in="SourceGraphic" in2="n" scale="1.5" xChannelSelector="R" yChannelSelector="G" />
-            </filter>
-            <g filter="url(#psketch)">
-              <circle cx="24" cy="24" r="20" stroke="#4A3020" strokeWidth="1.4" fill="none" />
-              <line x1="24" y1="7" x2="24" y2="40" stroke="#4A3020" strokeWidth="1.6" />
-              <path d="M24 11 C18 9 13 13 15.5 18.5 C18 24 24 22 24 22" stroke="#4A3020" strokeWidth="1.1" fill="none" />
-              <path d="M24 11 C30 9 35 13 32.5 18.5 C30 24 24 22 24 22" stroke="#4A3020" strokeWidth="1.1" fill="none" />
-              <path d="M18 16.5 C13.5 20 13.5 26 18 28.5 C22 31 26 36 22.5 42" stroke="#4A3020" strokeWidth="0.9" fill="none" />
-              <path d="M30 16.5 C34.5 20 34.5 26 30 28.5 C26 31 22 36 25.5 42" stroke="#4A3020" strokeWidth="0.9" fill="none" />
-            </g>
-          </svg>
+          <div style={{ marginBottom: 8 }}>
+            <BrainLogo size={52} color="#4A3020" filterId="login" opacity={0.82} />
+          </div>
 
           <div style={{
             fontFamily: "'Caveat', cursive",

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { CheckCircle2 } from 'lucide-react';
+import { BrainLogo } from '@/app/components/shared/BrainLogo';
 
 const NOTES = [
   { id: 1, style: { top: '6%', left: '2%', width: 178, rotate: -7 }, tone: '#FFF9C4', border: '#E6D96A',
@@ -145,17 +146,9 @@ export function RegisterPage() {
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <svg width="40" height="40" viewBox="0 0 48 48" fill="none" style={{ marginBottom: 6, opacity: 0.82 }}>
-            <filter id="psk2"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="4" seed="5" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="1.5" xChannelSelector="R" yChannelSelector="G" /></filter>
-            <g filter="url(#psk2)">
-              <circle cx="24" cy="24" r="20" stroke="#4A3020" strokeWidth="1.4" fill="none" />
-              <line x1="24" y1="7" x2="24" y2="40" stroke="#4A3020" strokeWidth="1.6" />
-              <path d="M24 11 C18 9 13 13 15.5 18.5 C18 24 24 22 24 22" stroke="#4A3020" strokeWidth="1.1" fill="none" />
-              <path d="M24 11 C30 9 35 13 32.5 18.5 C30 24 24 22 24 22" stroke="#4A3020" strokeWidth="1.1" fill="none" />
-              <path d="M18 16.5 C13.5 20 13.5 26 18 28.5 C22 31 26 36 22.5 42" stroke="#4A3020" strokeWidth="0.9" fill="none" />
-              <path d="M30 16.5 C34.5 20 34.5 26 30 28.5 C26 31 22 36 25.5 42" stroke="#4A3020" strokeWidth="0.9" fill="none" />
-            </g>
-          </svg>
+          <div style={{ marginBottom: 6 }}>
+            <BrainLogo size={44} color="#4A3020" filterId="register" opacity={0.82} />
+          </div>
           <div style={{ fontFamily: "'Caveat', cursive", fontSize: 32, fontWeight: 700, color: '#2C1810', lineHeight: 1 }}>SARa</div>
           <div style={{ fontFamily: "'Caveat', cursive", fontSize: 12, color: '#8B6355', letterSpacing: '0.08em', marginTop: 2 }}>Smart AI Radiology</div>
           <svg width="100" height="6" style={{ marginTop: 6, display: 'block', margin: '6px auto 0' }}>
