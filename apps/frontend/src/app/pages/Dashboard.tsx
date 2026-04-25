@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useCases, useSessions } from '@/api/hooks';
 import { mapModality, mapDifficulty, getImageKey } from '@/utils/mappers';
 import type { CaseItem, SessionStatus, Modality, Difficulty } from '@/types';
+import { SketchBorder } from '@/app/components/shared/SketchBorder';
 import styles from './Dashboard.module.css';
 
 const MODALITY_OPTIONS = ['Tất cả', 'X-Ray', 'CT', 'MRI'];
@@ -295,6 +296,7 @@ export function Dashboard() {
                   className={styles.caseCard}
                   onClick={() => navigate(`/session/${c.id}`)}
                 >
+                  <SketchBorder id={`card-${c.id}`} color="#7A6248" opacity={0.55} />
                   {/* left accent strip */}
                   <div className={`${styles.cardAccent} ${accentClass[c.modality]}`} />
 

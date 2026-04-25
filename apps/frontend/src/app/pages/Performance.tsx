@@ -4,6 +4,7 @@ import {
   User, Pencil, Home as HomeIcon, ChevronRight,
   Flame, CheckCircle2, XCircle, Clock
 } from 'lucide-react';
+import { SketchBorder } from '@/app/components/shared/SketchBorder';
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -84,7 +85,12 @@ export function ProfilePage() {
   };
 
   return (
-    <div>
+    <div style={{
+      minHeight: '100%',
+      backgroundColor: '#F5EDD6',
+      backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, rgba(196,168,130,0.18) 31px, rgba(196,168,130,0.18) 32px)',
+      backgroundSize: '100% 32px',
+    }}>
       {/* Header Strip */}
       <div
         className="px-8 py-4 flex justify-between items-center border-b sticky top-0 z-10"
@@ -106,6 +112,7 @@ export function ProfilePage() {
       <div className="p-8 max-w-[1400px] mx-auto">
         {/* ── Personal Dossier ── */}
         <div className="mb-8 p-8 rounded border shadow-lg relative overflow-hidden" style={cardStyle}>
+          <SketchBorder id="prof-dossier" color="#7A6248" opacity={0.5} />
           <div className="absolute top-0 right-0 w-12 h-12"
             style={{ background: 'linear-gradient(135deg, transparent 50%, #C4A882 50%)' }} />
           <div
@@ -201,7 +208,8 @@ export function ProfilePage() {
               ))}
             </div>
 
-            <div className="p-6 mb-6 border rounded" style={cardStyle}>
+            <div className="p-6 mb-6 border rounded relative" style={cardStyle}>
+              <SketchBorder id="prof-scan-type" color="#7A6248" opacity={0.5} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>
                 Performance by Scan Type
               </h3>
@@ -218,7 +226,8 @@ export function ProfilePage() {
               </ResponsiveContainer>
             </div>
 
-            <div className="p-6 border rounded" style={cardStyle}>
+            <div className="p-6 border rounded relative" style={cardStyle}>
+              <SketchBorder id="prof-monthly" color="#7A6248" opacity={0.5} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>
                 Monthly Accuracy Trend
               </h3>
@@ -247,7 +256,8 @@ export function ProfilePage() {
             </div>
 
             {/* Study Streak */}
-            <div className="p-6 mb-6 border rounded" style={cardStyle}>
+            <div className="p-6 mb-6 border rounded relative" style={cardStyle}>
+              <SketchBorder id="prof-streak" color="#7A6248" opacity={0.5} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>Study Streak</h3>
               <div className="grid grid-cols-7 gap-1 mb-4">
                 {Array.from({ length: 28 }).map((_, i) => (
@@ -270,7 +280,8 @@ export function ProfilePage() {
             </div>
 
             {/* Residency Rank */}
-            <div className="p-6 mb-6 border rounded" style={cardStyle}>
+            <div className="p-6 mb-6 border rounded relative" style={cardStyle}>
+              <SketchBorder id="prof-rank" color="#7A6248" opacity={0.5} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>Residency Rank</h3>
               <div className="inline-block px-4 py-2 mb-4 rounded"
                 style={{ background: '#C0392B', color: '#F5EDD6', fontFamily: "'Special Elite', cursive", fontSize: '14px', transform: 'rotate(-1deg)' }}>
@@ -290,7 +301,8 @@ export function ProfilePage() {
             </div>
 
             {/* Cases by Scan Type */}
-            <div className="p-6 border rounded" style={cardStyle}>
+            <div className="p-6 border rounded relative" style={cardStyle}>
+              <SketchBorder id="prof-pie" color="#7A6248" opacity={0.5} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>Cases by Scan Type</h3>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
@@ -330,6 +342,7 @@ export function ProfilePage() {
             {weakAreas.map((area, idx) => (
               <div key={idx} className="p-6 border rounded relative hover:-translate-y-1 transition-transform cursor-pointer"
                 style={{ background: 'rgba(192,57,43,0.04)', borderColor: '#C4A882', boxShadow: '0 2px 8px rgba(62,31,13,0.12)' }}>
+                <SketchBorder id={`prof-weak-${idx}`} color="#C0392B" opacity={0.35} />
                 <div className="absolute top-0 right-4 w-8 h-10"
                   style={{ background: '#C0392B', clipPath: 'polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%)', opacity: 0.9 }} />
                 <h4 className="mb-3" style={{ fontFamily: "'Special Elite', cursive", fontSize: '13px', color: '#2C1810' }}>
@@ -367,7 +380,8 @@ export function ProfilePage() {
             </div>
           </div>
 
-          <div className="border rounded overflow-hidden" style={{ background: '#EDE0C4', borderColor: '#C4A882' }}>
+          <div className="border rounded overflow-hidden relative" style={{ background: '#EDE0C4', borderColor: '#C4A882' }}>
+            <SketchBorder id="prof-history" color="#7A6248" opacity={0.5} />
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
