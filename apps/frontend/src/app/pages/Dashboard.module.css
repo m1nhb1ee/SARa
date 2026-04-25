@@ -191,7 +191,7 @@
 }
 .filterCount {
   margin-left:auto;
-  font-family:'Caveat',cursive; font-size:15px; color:var(--ink-faded);
+  font-family:'Caveat',cursive; font-size:40px; color:var(--ink-faded);
 }
 
 /* Washi tape */
