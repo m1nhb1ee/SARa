@@ -437,6 +437,89 @@
   50%     { opacity:0.75; }
 }
 
+/* ── CARD SLIDE-IN ANIMATIONS ── */
+@keyframes slideFromLeft {
+  from { opacity:0; transform:translateX(-32px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+@keyframes slideFromRight {
+  from { opacity:0; transform:translateX(32px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+.cardSlideLeft {
+  animation: slideFromLeft 1.38s cubic-bezier(0.22,0.61,0.36,1) both;
+}
+.cardSlideRight {
+  animation: slideFromRight 1.38s cubic-bezier(0.22,0.61,0.36,1) both;
+}
+
+/* ── ERASE EFFECT ── */
+@keyframes eraseSweep {
+  from { clip-path: inset(0 100% 0 0 round 1px); }
+  to   { clip-path: inset(0 0%   0 0 round 1px); }
+}
+@keyframes cardCollapse {
+  0%   { max-height:130px; opacity:0.35; margin-bottom:12px; }
+  100% { max-height:0;     opacity:0;   margin-bottom:0; padding:0; }
+}
+.eraseOverlay {
+  position:absolute; inset:0; z-index:10;
+  border-radius:2px;
+  background: repeating-linear-gradient(
+    -12deg,
+    #EDE0C4 0px, #EDE0C4 3px,
+    #F0E8D0 3px, #F0E8D0 5px,
+    #EBD9BC 5px, #EBD9BC 6px,
+    #EDE0C4 6px, #EDE0C4 9px
+  );
+  animation: eraseSweep 2s cubic-bezier(0.4,0,0.2,1) forwards;
+  pointer-events:none;
+}
+.cardCollapsing {
+  overflow:hidden;
+  pointer-events:none;
+  animation: cardCollapse 1.32s ease 1.55s both;
+}
+
+/* ── PAGINATION ── */
+.paginationRow {
+  display:flex; align-items:center; justify-content:center;
+  gap:28px; margin:28px 0 12px;
+  position:relative;
+}
+.paginationRow::before {
+  content:'';
+  position:absolute; top:50%; left:0; right:0;
+  height:1px;
+  background:repeating-linear-gradient(
+    90deg, var(--sepia) 0px, var(--sepia) 4px,
+    transparent 4px, transparent 10px
+  );
+  opacity:0.35;
+  z-index:0;
+}
+.pageBtn {
+  background:var(--parchment);
+  border:none; cursor:pointer;
+  font-family:'Lora', Georgia, serif;
+  font-style:italic; font-size:14px;
+  color:var(--ink-faded);
+  padding:4px 14px;
+  position:relative; z-index:1;
+  transition:color 0.15s, opacity 0.15s;
+  letter-spacing:0.02em;
+}
+.pageBtn:hover { color:var(--ink); }
+.pageBtn:disabled { opacity:0.28; cursor:default; }
+.pageMid {
+  font-family:'Courier Prime', monospace;
+  font-size:11px; color:var(--ink-faded);
+  letter-spacing:1.5px; text-transform:uppercase;
+  background:var(--parchment);
+  padding:2px 12px; position:relative; z-index:1;
+  white-space:nowrap;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .content { padding:20px 16px; }

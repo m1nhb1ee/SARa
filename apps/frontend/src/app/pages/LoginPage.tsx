@@ -138,14 +138,14 @@ function SketchRect({ w, h, color = '#7A6248' }: { w: number; h: number; color?:
     >
       <filter id="pencil">
         <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="5" seed="3" result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" xChannelSelector="R" yChannelSelector="G" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="10" xChannelSelector="R" yChannelSelector="G" />
       </filter>
       <g filter="url(#pencil)">
         {/* outer rough stroke */}
-        <rect x={10} y={10} width={w} height={h}
+        <rect x={10} y={10} width={w} height={h+87}
           fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
         {/* inner second stroke — sketch double-line effect */}
-        <rect x={10 + o} y={10 + o} width={w - o * 2} height={h - o * 2}
+        <rect x={10 + o} y={10 + o} width={w - o * 2} height={h +87 - o * 2}
           fill="none" stroke={color} strokeWidth="0.8" strokeLinecap="round"
           strokeDasharray="6 3 12 4 8 6" opacity="0.35" />
       </g>

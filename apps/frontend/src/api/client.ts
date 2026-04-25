@@ -109,6 +109,10 @@ class APIClient {
     return this.request<any>(`/uploaded-cases/${uploadSessionId}/`, 'DELETE');
   }
 
+  async getUploadedCaseFindings(uploadSessionId: string) {
+    return this.request<any>(`/uploaded-cases/${uploadSessionId}/findings/`);
+  }
+
   // Performance
   async getMyStats() {
     return this.request<any>('/performance/my_stats/');

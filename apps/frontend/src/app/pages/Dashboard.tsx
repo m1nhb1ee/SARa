@@ -8,6 +8,7 @@ import styles from './Dashboard.module.css';
 
 const MODALITY_OPTIONS = ['Tất cả', 'X-Ray', 'CT', 'MRI'];
 const DIFFICULTY_OPTIONS = ['Tất cả', 'Cơ bản', 'Trung bình', 'Nặng cao'];
+const CARDS_PER_PAGE = 7;
 
 // Map modality → accent strip class
 const accentClass: Record<Modality, string> = {
@@ -77,7 +78,6 @@ function ThumbSvg({ keyName }: { keyName: string }) {
       </svg>
     );
   }
-  // default: chest / body X-ray
   return (
     <svg className={styles.thumbSvg} viewBox="0 0 48 48" fill="none" stroke={strokeColor} strokeWidth="1">
       <ellipse cx="24" cy="20" rx="10" ry="13" />
@@ -95,7 +95,7 @@ function thumbLabel(keyName: string) {
   return 'X-RAY';
 }
 
-/* ─── Animated clock hands (matches HTML) ─────────────── */
+/* ─── Animated clock hands ─────────────────────────── */
 function Clock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -117,14 +117,23 @@ function Clock() {
 /* ─── Main Dashboard component ────────────────────────── */
 export function Dashboard() {
   const navigate = useNavigate();
-  const { data: casesData, loading: casesLoading, refetch: refetchCases } = useCases();
+  const { data: casesData, loading: casesLoading } = useCases();
   const { data: sessionsData } = useSessions();
-  const { data: uploadsData, refetch: refetchUploads } = useUploadedCases();
-  const { deleteCase, loading: deleting } = useDeleteUploadedCase();
+  const { data: uploadsData } = useUploadedCases();
+  const { deleteCase } = useDeleteUploadedCase();
 
   const [activeModality, setActiveModality] = useState('Tất cả');
   const [activeDifficulty, setActiveDifficulty] = useState('Tất cả');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [erasingId, setErasingId] = useState<string | null>(null);
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [slideDir, setSlideDir] = useState<'left' | 'right'>('left');
+
+  // Reset to page 1 on filter change
+  useEffect(() => { setCurrentPage(1); setSlideDir('left'); }, [activeModality, activeDifficulty]);
 
   // case_id → upload_session_id (only for user-uploaded cases)
   const uploadSessionMap = useMemo<Record<string, string>>(() => {
@@ -135,16 +144,17 @@ export function Dashboard() {
     return map;
   }, [uploadsData]);
 
-  const handleDelete = async (e: React.MouseEvent, caseId: string) => {
+  const handleDelete = (e: React.MouseEvent, caseId: string) => {
     e.stopPropagation();
     const uploadSessionId = uploadSessionMap[caseId];
     if (!uploadSessionId) return;
-    const result = await deleteCase(uploadSessionId);
-    if (result) {
-      setConfirmDeleteId(null);
-      refetchCases();
-      refetchUploads();
-    }
+    setConfirmDeleteId(null);
+    setErasingId(caseId);
+    deleteCase(uploadSessionId);
+    setTimeout(() => {
+      setErasingId(null);
+      setDeletedIds(prev => new Set([...prev, caseId]));
+    }, 900);
   };
 
   const statusMap = useMemo<Record<string, SessionStatus>>(() => {
@@ -170,9 +180,29 @@ export function Dashboard() {
 
   const filtered = cases.filter(
     (c) =>
+      !deletedIds.has(c.id) &&
       (activeModality === 'Tất cả' || c.modality === activeModality) &&
       (activeDifficulty === 'Tất cả' || c.difficulty === activeDifficulty)
   );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CARDS_PER_PAGE));
+  const paginated = filtered.slice((currentPage - 1) * CARDS_PER_PAGE, currentPage * CARDS_PER_PAGE);
+
+  // Global index offset for case number labels
+  const pageOffset = (currentPage - 1) * CARDS_PER_PAGE;
+
+  const goNext = () => {
+    if (currentPage < totalPages) {
+      setSlideDir('right');
+      setCurrentPage(p => p + 1);
+    }
+  };
+  const goPrev = () => {
+    if (currentPage > 1) {
+      setSlideDir('left');
+      setCurrentPage(p => p - 1);
+    }
+  };
 
   const stats = useMemo(() => ({
     total:      cases.length,
@@ -183,13 +213,15 @@ export function Dashboard() {
 
   const completionPct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
 
+  // animation class for current page direction
+  const cardAnimClass = slideDir === 'right' ? styles.cardSlideRight : styles.cardSlideLeft;
+
   return (
     <div className={styles.page}>
 
-      {/* ── Header (breadcrumb + clock + search) ── */}
+      {/* ── Header ── */}
       <header className={styles.header}>
         <div className={styles.breadcrumb}>
-          📖&nbsp;
           <strong>My Cases</strong>
           <span className={styles.crumbSep}>›</span>
           <span style={{ opacity: 0.6 }}>
@@ -233,21 +265,21 @@ export function Dashboard() {
             <div className={styles.statSub}>Tổng số ca học</div>
           </div>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier" color="#5e795d" opacity={0.7} />
+            <SketchBorder id="prof-dossier2" color="#5e795d" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.done }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.done}</div>
             <div className={styles.statLbl}>Completed</div>
             <div className={styles.statSub}>{completionPct}% completion</div>
           </div>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier" color="#7A6248" opacity={0.7} />
+            <SketchBorder id="prof-dossier3" color="#7A6248" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.inProgress }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.inProgress}</div>
             <div className={styles.statLbl}>In Progress</div>
             <div className={styles.statSub}>Đang làm dở</div>
           </div>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier" color="#965656" opacity={0.7} />
+            <SketchBorder id="prof-dossier4" color="#965656" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.notStarted }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.notStarted}</div>
             <div className={styles.statLbl}>New Cases</div>
@@ -284,24 +316,31 @@ export function Dashboard() {
 
         <div className={styles.ornament}>— ✦ —</div>
 
-        {/* ── Case list (one per row) ── */}
-        <div className={styles.casesGrid}>
+        {/* ── Case list ── */}
+        {/* key on grid so re-mount triggers slide-in animation on page change */}
+        <div
+          key={`${currentPage}-${activeModality}-${activeDifficulty}`}
+          className={styles.casesGrid}
+        >
           {casesLoading ? (
             [1, 2, 3, 4, 5].map((i) => <div key={i} className={styles.skeleton} />)
-          ) : filtered.length > 0 ? (
-            filtered.map((c, idx) => {
+          ) : paginated.length > 0 ? (
+            paginated.map((c, idx) => {
+              const globalIdx = pageOffset + idx;
               const stamp = statusStamp[c.status];
               const badge = diffBadge[c.difficulty];
               const washi = modalityWashi[c.modality];
               const pct   = progressPct[c.status];
-              const caseNum = `Case #${String(idx + 1).padStart(3, '0')}`;
+              const caseNum = `Case #${String(globalIdx + 1).padStart(3, '0')}`;
+              const isOwned = !!uploadSessionMap[c.id];
+              const isConfirming = confirmDeleteId === c.id;
+              const isErasing = erasingId === c.id;
 
-              // Score / state in right column
               const rightScore =
                 c.status === 'Hoàn thành' ? (
                   <>
                     <div className={styles.cardScore}>
-                      {Math.floor(70 + (idx * 7) % 25)}
+                      {Math.floor(70 + (globalIdx * 7) % 25)}
                       <span style={{ fontSize: 12, color: 'var(--ink-faded)' }}>/100</span>
                     </div>
                     <div className={styles.cardScoreLbl}>Your Score</div>
@@ -318,32 +357,38 @@ export function Dashboard() {
                   </>
                 );
 
-              const isOwned = !!uploadSessionMap[c.id];
-              const isConfirming = confirmDeleteId === c.id;
-
               return (
                 <div
                   key={c.id}
-                  className={styles.caseCard}
-                  onClick={() => { if (!isConfirming) navigate(`/session/${c.id}`); }}
+                  className={[
+                    styles.caseCard,
+                    cardAnimClass,
+                    isErasing ? styles.cardCollapsing : '',
+                  ].join(' ')}
+                  style={{ animationDelay: `${idx * 55}ms` }}
+                  onClick={() => { if (!isConfirming && !isErasing) navigate(`/session/${c.id}`); }}
                 >
+                  {/* erase overlay — sweeps across when deleting */}
+                  {isErasing && <div className={styles.eraseOverlay} />}
+
                   <SketchBorder id={`card-${c.id}`} color="#7A6248" opacity={0.5} />
+
                   {/* left accent strip */}
                   <div className={`${styles.cardAccent} ${accentClass[c.modality]}`} />
 
-                  {/* delete button — only for user-uploaded cases */}
-                  {isOwned && !isConfirming && (
+                  {/* trash button — only for user-uploaded cases */}
+                  {isOwned && !isConfirming && !isErasing && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
                       title="Xóa case này"
                       style={{
                         position: 'absolute', top: 8, right: 8, zIndex: 2,
                         background: 'transparent', border: 'none', cursor: 'pointer',
-                        padding: '4px', opacity: 0.45, lineHeight: 1,
+                        padding: '4px', opacity: 0.4, lineHeight: 1,
                         transition: 'opacity 0.15s',
                       }}
                       onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
-                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.45')}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#C0392B" strokeWidth="1.6" strokeLinecap="round">
                         <polyline points="1,3 13,3" />
@@ -355,39 +400,38 @@ export function Dashboard() {
                     </button>
                   )}
 
-                  {/* inline delete confirm overlay */}
+                  {/* inline delete confirm */}
                   {isConfirming && (
                     <div
                       onClick={e => e.stopPropagation()}
                       style={{
                         position: 'absolute', inset: 0, zIndex: 3,
-                        background: 'rgba(250,243,227,0.96)',
+                        background: 'rgba(250,243,227,0.7)',
                         display: 'flex', flexDirection: 'column',
                         alignItems: 'center', justifyContent: 'center', gap: 10,
                       }}
                     >
-                      <div style={{ fontFamily: "'Special Elite', cursive", fontSize: 12, color: '#2C1810', letterSpacing: '0.05em' }}>
+                      <div style={{ fontFamily: "'Special Elite', cursive", fontSize: 12, color: '#2C1810', letterSpacing: '0.06em' }}>
                         Xóa case này?
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button
                           onClick={e => handleDelete(e, c.id)}
-                          disabled={deleting}
                           style={{
                             fontFamily: "'Special Elite', cursive", fontSize: 11,
                             background: '#C0392B', color: '#F5EDD6',
-                            border: 'none', padding: '5px 14px', cursor: deleting ? 'not-allowed' : 'pointer',
-                            opacity: deleting ? 0.6 : 1,
+                            border: 'none', padding: '5px 16px', cursor: 'pointer',
+                            letterSpacing: '0.05em',
                           }}
                         >
-                          {deleting ? '…' : 'Xóa'}
+                          Xóa
                         </button>
                         <button
                           onClick={e => { e.stopPropagation(); setConfirmDeleteId(null); }}
                           style={{
                             fontFamily: "'Special Elite', cursive", fontSize: 11,
                             background: 'transparent', color: '#6B4C3B',
-                            border: '1px solid #C4A882', padding: '5px 14px', cursor: 'pointer',
+                            border: '1px solid #C4A882', padding: '5px 16px', cursor: 'pointer',
                           }}
                         >
                           Hủy
@@ -446,6 +490,29 @@ export function Dashboard() {
             </div>
           )}
         </div>
+
+        {/* ── Pagination ── */}
+        {!casesLoading && totalPages > 1 && (
+          <div className={styles.paginationRow}>
+            <button
+              className={styles.pageBtn}
+              onClick={goPrev}
+              disabled={currentPage === 1}
+            >
+              ← previous
+            </button>
+            <span className={styles.pageMid}>
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              className={styles.pageBtn}
+              onClick={goNext}
+              disabled={currentPage === totalPages}
+            >
+              next →
+            </button>
+          </div>
+        )}
 
         {/* sticky note */}
         {!casesLoading && filtered.length > 0 && (
