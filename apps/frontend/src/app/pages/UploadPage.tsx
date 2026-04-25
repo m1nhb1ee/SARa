@@ -400,7 +400,12 @@ export function UploadPage() {
   const canSubmit = dragState === 'attached' && !!selectedFile && caseName.trim().length > 0;
 
   return (
-    <div>
+    <div style={{
+      minHeight: '100%',
+      backgroundColor: '#F5EDD6',
+      backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, rgba(196,168,130,0.18) 31px, rgba(196,168,130,0.18) 32px)',
+      backgroundSize: '100% 32px',
+    }}>
       {showModal && (
         <UploadModal
           caseNum={caseNum}
