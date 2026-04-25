@@ -243,29 +243,32 @@ def _call_gradio(image_file, modality: str, token: str) -> str:
     from gradio_client import Client, handle_file
 
     question = f"""IMPORTANT: Return ONLY valid JSON, nothing else. No markdown, no explanations before or after.
-
-Analyze this {modality} medical image and return response in this EXACT JSON structure:
-{{
-  "OBSERVE": "...",
-  "DESCRIBE": "...",
-  "INTERPRET": "...",
-  "HYPOTHESIS": "...",
-  "DDx": "...",
-  "CONCLUSION": "..."
-}}
-
-Rules:
-- ONLY output JSON, no other text
-- Each field must have detailed, clinically relevant content
-- Use both Vietnamese and English for clarity
-- Be concise but comprehensive"""
+        Analyze this {modality} medical image and return response in this EXACT JSON structure:
+        {{
+        "OBSERVE": "...",
+        "DESCRIBE": "...",
+        "INTERPRET": "...",
+        "HYPOTHESIS": "...",
+        "DDx": "...",
+        "CONCLUSION": "..."
+        }}
+        Rules:
+        - ONLY output JSON, no other text
+        - Each field must have detailed, clinically relevant content
+        - Use both Vietnamese and English for clarity
+        - Be concise but comprehensive
+        """
 
     tmp_path = None
     try:
         tmp_path, _ = _to_temp_file(image_file)
         logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}]")
         client = Client(GRADIO_SPACE_ID, token=token)
-        result = client.predict(gallery=[handle_file(tmp_path)], question=question, api_name="/analyze")
+        result = client.predict(
+            gallery=[{"image": handle_file(tmp_path), "caption": None}],
+            question=question,
+            api_name="/analyze"
+        )
         return str(result)
     finally:
         if tmp_path and tmp_path != str(image_file) and os.path.isfile(tmp_path):
@@ -416,6 +419,7 @@ def analyze_medical_image(image_file, modality: str = "XRAY") -> Dict[str, Any]:
         return _mock_analyze(modality)
     try:
         raw = _call_gradio(image_file, modality, token)
+        logger.info(f"Phân tích hoàn tất — modality={modality}")
         return _parse_findings(raw, modality)
     except ImportError:
         logger.error("gradio_client chưa được cài. Chạy: pip install gradio-client")
