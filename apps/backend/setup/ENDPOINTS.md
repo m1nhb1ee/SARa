@@ -130,7 +130,10 @@ Authorization: Bearer <token>
       "modality": "X-ray",
       "difficulty": "medium",
       "clinical_history": "Bệnh nhân 45 tuổi, ho sốt 3 ngày",
-      "image_urls": ["https://<project>.supabase.co/storage/v1/object/public/case_images/..."],
+      "images": [
+        { "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid>.jpg", "slice_index": 0 }
+      ],
+      "tags": [],
       "uploaded_by": null,
       "created_at": "2024-04-15T10:00:00+00:00"
     }
@@ -139,7 +142,7 @@ Authorization: Bearer <token>
 }
 ```
 
-Note: `uploaded_by` is `null` for system cases and a user UUID for user-uploaded cases. Cases with `uploaded_by` set are only visible to their owner.
+Note: `images` contains all per-image objects with `image_url` and `slice_index`, sourced from the `case_images` table. `uploaded_by` is `null` for system cases and a user UUID for user-uploaded cases. Cases with `uploaded_by` set are only visible to their owner.
 
 ---
 
@@ -235,8 +238,8 @@ Authorization: Bearer <token>
     "modality": "X-ray",
     "difficulty": "medium",
     "clinical_history": "...",
-    "image_urls": ["https://..."],
-    "tags": null
+    "images": [{ "image_url": "https://...", "slice_index": 0 }],
+    "tags": []
   },
   "step_attempts": [
     {
@@ -400,9 +403,12 @@ Authorization: Bearer <token>
       "id": "<uuid>",
       "user_id": "<uuid>",
       "case_id": "<uuid>",
-      "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid>.jpg",
       "modality": "CT",
-      "created_at": "2024-04-15T14:00:00+00:00"
+      "created_at": "2024-04-15T14:00:00+00:00",
+      "images": [
+        { "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid>.jpg", "slice_index": 0 },
+        { "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid2>.jpg", "slice_index": 1 }
+      ]
     }
   ]
 }
@@ -418,16 +424,34 @@ Content-Type: multipart/form-data
 ```
 
 **Form fields:**
-- `image` (file, required) — JPG or PNG medical image
-- `title` (string, optional) — case title; AI generates one if omitted or "Untitled Case"
-- `modality` (string, required) — `XRAY` | `CT` | `MRI` | `DIFF`
+- `images` (file, required, repeatable) — one or more JPG/PNG medical images; send the field multiple times for multiple files
+- `slice_indexes` (integer, optional, repeatable) — one `slice_index` per image in the same order; omit for images without a slice position
+- `title` (string, optional) — case title; AI generates one if omitted or `"Untitled Case"`
+- `modality` (string, optional, default `XRAY`) — `XRAY` | `CT` | `MRI` | `DIFF`
 
-**Example:**
+AI analysis (MedGemma via HuggingFace Gradio) runs on the **first** image only.
+
+**Example — single image:**
 ```bash
 curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
   -H "Authorization: Bearer <token>" \
-  -F "image=@/path/to/scan.jpg" \
+  -F "images=@/path/to/scan.jpg" \
+  -F "slice_indexes=0" \
   -F "title=My CT Brain Scan" \
+  -F "modality=CT"
+```
+
+**Example — multiple images:**
+```bash
+curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
+  -H "Authorization: Bearer <token>" \
+  -F "images=@/path/to/axial1.jpg" \
+  -F "images=@/path/to/axial2.jpg" \
+  -F "images=@/path/to/axial3.jpg" \
+  -F "slice_indexes=0" \
+  -F "slice_indexes=1" \
+  -F "slice_indexes=2" \
+  -F "title=CT Brain Series" \
   -F "modality=CT"
 ```
 
@@ -438,7 +462,6 @@ curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
     "id": "<uuid>",
     "user_id": "<uuid>",
     "case_id": "<uuid>",
-    "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid>.jpg",
     "modality": "CT",
     "created_at": "2024-04-15T14:00:00+00:00"
   },
@@ -448,14 +471,18 @@ curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
     "modality": "CT",
     "difficulty": "medium",
     "clinical_history": "AI (MedGemma) analyzed CT: ...",
-    "image_urls": ["https://..."],
     "uploaded_by": "<uuid>",
     "created_at": "2024-04-15T14:00:00+00:00"
   }
 }
 ```
 
-**Error 400:** `{ "error": "Lỗi xử lý ảnh", "message": "..." }`
+All images (with their `slice_index`) are stored in `case_images` and returned when fetching the case via `/cases/{uuid}/`.
+
+**Errors:**
+- `400 { "error": "Cần ít nhất một ảnh (field: images)" }` — no files sent
+- `400 { "error": "Định dạng ... không được hỗ trợ" }` — unsupported file type
+- `400 { "error": "Lỗi xử lý ảnh", "message": "..." }` — storage or AI error
 
 ---
 
@@ -471,7 +498,6 @@ Authorization: Bearer <token>
   "id": "<uuid>",
   "user_id": "<uuid>",
   "case_id": "<uuid>",
-  "image_url": "https://...",
   "modality": "CT",
   "created_at": "2024-04-15T14:00:00+00:00",
   "case": { "id": "<uuid>", "title": "CT Case – MedGemma" }
@@ -511,7 +537,6 @@ Authorization: Bearer <token>
 ```json
 {
   "upload_session_id": "<uuid>",
-  "image_url": "https://...",
   "modality": "CT",
   "case_id": "<uuid>",
   "case_title": "CT Case – MedGemma",
