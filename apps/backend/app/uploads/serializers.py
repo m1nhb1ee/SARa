@@ -11,6 +11,7 @@ class UploadInputSerializer(serializers.Serializer):
         default='XRAY',
         required=False,
     )
+    region = serializers.CharField(required=False, default='unspecified')
 
 
 class UploadSessionSerializer(serializers.Serializer):

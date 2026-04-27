@@ -10,6 +10,7 @@ import logging
 from typing import Dict, Any, Optional
 
 from app.core.supabase_client import get_supabase
+from app.prompt.medgemma_prompt import build_analysis_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -255,30 +256,15 @@ def _to_temp_file(image_file) -> tuple:
     raise ValueError(f"Không đọc được ảnh từ kiểu: {type(image_file)}")
 
 
-def _call_gradio(image_file, modality: str, token: str) -> str:
+def _call_gradio(image_file, modality: str, region: str, token: str) -> str:
     from gradio_client import Client, handle_file
 
-    question = f"""IMPORTANT: Return ONLY valid JSON, nothing else. No markdown, no explanations before or after.
-        Analyze this {modality} medical image and return response in this EXACT JSON structure:
-        {{
-        "OBSERVE": "...",
-        "DESCRIBE": "...",
-        "INTERPRET": "...",
-        "HYPOTHESIS": "...",
-        "DDx": "...",
-        "CONCLUSION": "..."
-        }}
-        Rules:
-        - ONLY output JSON, no other text
-        - Each field must have detailed, clinically relevant content
-        - Use both Vietnamese and English for clarity
-        - Be concise but comprehensive
-        """
+    question = build_analysis_prompt(modality, region)
 
     tmp_path = None
     try:
         tmp_path, _ = _to_temp_file(image_file)
-        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}]")
+        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — modality={modality}, region={region}")
         client = Client(GRADIO_SPACE_ID, token=token)
         result = client.predict(
             gallery=[{"image": handle_file(tmp_path), "caption": None}],
@@ -427,15 +413,15 @@ def _mock_analyze(modality: str) -> Dict[str, Any]:
     }
 
 
-def analyze_medical_image(image_file, modality: str = "XRAY") -> Dict[str, Any]:
+def analyze_medical_image(image_file, modality: str = "XRAY", region: str = "unspecified") -> Dict[str, Any]:
     """Entry point: phân tích ảnh y tế, trả về findings dict."""
-    logger.info(f"Bắt đầu phân tích — modality={modality}")
+    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}")
     token = _get_hf_token()
     if not token:
         return _mock_analyze(modality)
     try:
-        raw = _call_gradio(image_file, modality, token)
-        logger.info(f"Phân tích hoàn tất — modality={modality}")
+        raw = _call_gradio(image_file, modality, region, token)
+        logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         return _parse_findings(raw, modality)
     except ImportError:
         logger.error("gradio_client chưa được cài. Chạy: pip install gradio-client")

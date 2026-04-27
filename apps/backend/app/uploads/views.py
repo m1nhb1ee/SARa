@@ -55,6 +55,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
 
         modality = serializer.validated_data['modality']
         title = serializer.validated_data['title']
+        region = serializer.validated_data['region']
         user_id = request.user['id']
 
         image_files = request.FILES.getlist('images')
@@ -88,7 +89,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
                 image_entries.append({'image_url': image_url, 'slice_index': idx})
                 logger.info(f"Stored image: {image_url}")
 
-            findings = analyze_medical_image(image_data[0][1], modality)
+            findings = analyze_medical_image(image_data[0][1], modality, region)
             logger.info(f"HF analysis complete. Steps: {list(findings.get('answer_key', {}).keys())}")
 
             if not title or title == 'Untitled Case':

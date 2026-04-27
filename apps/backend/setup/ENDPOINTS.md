@@ -428,8 +428,9 @@ Content-Type: multipart/form-data
 - `slice_indexes` (integer, optional, repeatable) — one `slice_index` per image in the same order; omit for images without a slice position
 - `title` (string, optional) — case title; AI generates one if omitted or `"Untitled Case"`
 - `modality` (string, optional, default `XRAY`) — `XRAY` | `CT` | `MRI` | `DIFF`
+- `region` (string, optional, default `unspecified`) — anatomical region passed to the AI prompt, e.g. `chest`, `brain`, `spine`, `abdomen`
 
-AI analysis (MedGemma via HuggingFace Gradio) runs on the **first** image only.
+AI analysis (MedGemma via HuggingFace Gradio) runs on the **first** image only, using `modality` and `region` to build the prompt.
 
 **Example — single image:**
 ```bash
@@ -438,7 +439,8 @@ curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
   -F "images=@/path/to/scan.jpg" \
   -F "slice_indexes=0" \
   -F "title=My CT Brain Scan" \
-  -F "modality=CT"
+  -F "modality=CT" \
+  -F "region=brain"
 ```
 
 **Example — multiple images:**
@@ -452,7 +454,8 @@ curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
   -F "slice_indexes=1" \
   -F "slice_indexes=2" \
   -F "title=CT Brain Series" \
-  -F "modality=CT"
+  -F "modality=CT" \
+  -F "region=brain"
 ```
 
 **Response 201:**
