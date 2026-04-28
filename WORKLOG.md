@@ -147,7 +147,7 @@ Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 | Task | Người làm | Deadline | Trạng thái |
 |---|---|---|---|
 | Implement pipeline state machine (6 bước, score gate ≥ 0.6) | Khôi + Minh | 21/04 | ✅ Xong |
-| Implement `POST /api/v1/sessions/` + `POST /api/v1/sessions/{id}/submit_answer/` | Tiến | 21/04 | ✅ Xong |
+| Implement `POST /api/v1/sessions/` + `POST /api/v1/sessions/{id}/submit_answer/` | Tiến | 22/04 | ✅ Xong |
 | Implement Answer-Check Agent (GPT-4o scoring + rubric JSON) | Minh | 22/04 | ✅ Xong |
 | Populate Supabase với 5 ca mẫu + rubric + answer key | Tiến | 22/04 | 🔄 Đang làm |
 | Refactor `uploaded-cases` route — multi-image upload + `case_images` table | Minh | 23/04 | ✅ Xong |
