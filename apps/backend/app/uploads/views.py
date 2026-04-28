@@ -89,7 +89,9 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
                 image_entries.append({'image_url': image_url, 'slice_index': idx})
                 logger.info(f"Stored image: {image_url}")
 
-            findings = analyze_medical_image(image_data[0][1], modality, region)
+            findings = analyze_medical_image(
+                [img_bytes for _, img_bytes in image_data], modality, region,
+            )
             logger.info(f"HF analysis complete. Steps: {list(findings.get('answer_key', {}).keys())}")
 
             if not title or title == 'Untitled Case':
