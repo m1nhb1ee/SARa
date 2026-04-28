@@ -256,28 +256,36 @@ def _to_temp_file(image_file) -> tuple:
     raise ValueError(f"Không đọc được ảnh từ kiểu: {type(image_file)}")
 
 
-def _call_gradio(image_file, modality: str, region: str, token: str) -> str:
+def _call_gradio(
+    image_files: list, modality: str, region: str, token: str,
+    total_slices: int | None = None,
+) -> str:
     from gradio_client import Client, handle_file
 
-    question = build_analysis_prompt(modality, region)
+    question = build_analysis_prompt(modality, region, total_slices)
 
-    tmp_path = None
+    tmp_paths = []
     try:
-        tmp_path, _ = _to_temp_file(image_file)
-        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — modality={modality}, region={region}")
+        for image_file in image_files:
+            tmp_path, _ = _to_temp_file(image_file)
+            tmp_paths.append(tmp_path)
+
+        gallery = [{"image": handle_file(p), "caption": None} for p in tmp_paths]
+        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — modality={modality}, region={region}, images={len(gallery)}")
         client = Client(GRADIO_SPACE_ID, token=token)
         result = client.predict(
-            gallery=[{"image": handle_file(tmp_path), "caption": None}],
+            gallery=gallery,
             question=question,
             api_name="/analyze"
         )
         return str(result)
     finally:
-        if tmp_path and tmp_path != str(image_file) and os.path.isfile(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        for tmp_path in tmp_paths:
+            if tmp_path and os.path.isfile(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
 
 def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
@@ -294,6 +302,7 @@ def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
     }
 
     text = (description or '').strip()
+    logger.debug(f"[_parse_findings] raw VLM output:\n{text}")
 
     try:
         j_start = text.find('{')
@@ -310,26 +319,28 @@ def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
 
     try:
         patterns = {
-            "OBSERVE":    r"(?:1\.|OBSERVE|Observation)[:\s]*([^2\n]+?)(?=2\.|DESCRIBE|$)",
-            "DESCRIBE":   r"(?:2\.|DESCRIBE|Description)[:\s]*([^3\n]+?)(?=3\.|INTERPRET|$)",
-            "INTERPRET":  r"(?:3\.|INTERPRET|Interpretation)[:\s]*([^4\n]+?)(?=4\.|HYPOTHESIS|$)",
-            "HYPOTHESIS": r"(?:4\.|HYPOTHESIS|Hypothesis)[:\s]*([^5\n]+?)(?=5\.|DDx|$)",
-            "DDx":        r"(?:5\.|DDx|Differential)[:\s]*([^6\n]+?)(?=6\.|CONCLUSION|$)",
-            "CONCLUSION": r"(?:6\.|CONCLUSION|Conclusion)[:\s]*(.+?)$",
+            "OBSERVE":    r"(?:1\.|OBSERVE|Observation)[:\s]*([\s\S]+?)(?=\n\s*2\.|DESCRIBE|$)",
+            "DESCRIBE":   r"(?:2\.|DESCRIBE|Description)[:\s]*([\s\S]+?)(?=\n\s*3\.|INTERPRET|$)",
+            "INTERPRET":  r"(?:3\.|INTERPRET|Interpretation)[:\s]*([\s\S]+?)(?=\n\s*4\.|HYPOTHESIS|$)",
+            "HYPOTHESIS": r"(?:4\.|HYPOTHESIS|Hypothesis)[:\s]*([\s\S]+?)(?=\n\s*5\.|DDx|$)",
+            "DDx":        r"(?:5\.|DDx|Differential)[:\s]*([\s\S]+?)(?=\n\s*6\.|CONCLUSION|$)",
+            "CONCLUSION": r"(?:6\.|CONCLUSION|Conclusion)[:\s]*([\s\S]+?)$",
         }
         sections = {}
         for step, pattern in patterns.items():
-            m = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+            m = re.search(pattern, text, re.IGNORECASE)
             if m:
                 content = re.sub(r'\*\*(.+?)\*\*', r'\1', m.group(1).strip())
                 content = re.sub(r'- ', '', content).replace('\n', ' ').strip()
                 sections[step] = content[:500]
+        logger.debug(f"[_parse_findings] regex matched sections: {list(sections.keys())}")
         if sections:
             fallback.update(sections)
             return _build_response(fallback, text, modality)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[_parse_findings] regex parse error: {e}")
 
+    logger.warning("[_parse_findings] all parse attempts failed — using fallback")
     return _build_response(fallback, text, modality)
 
 
@@ -413,14 +424,19 @@ def _mock_analyze(modality: str) -> Dict[str, Any]:
     }
 
 
-def analyze_medical_image(image_file, modality: str = "XRAY", region: str = "unspecified") -> Dict[str, Any]:
+def analyze_medical_image(
+    image_files: list,
+    modality: str = "XRAY",
+    region: str = "unspecified",
+) -> Dict[str, Any]:
     """Entry point: phân tích ảnh y tế, trả về findings dict."""
-    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}")
+    total_slices = len(image_files) if image_files else None
+    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}, total_slices={total_slices}")
     token = _get_hf_token()
     if not token:
         return _mock_analyze(modality)
     try:
-        raw = _call_gradio(image_file, modality, region, token)
+        raw = _call_gradio(image_files, modality, region, token, total_slices)
         logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         return _parse_findings(raw, modality)
     except ImportError:
