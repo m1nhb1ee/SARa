@@ -131,17 +131,18 @@ Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 
 | Task | Người làm | Deadline | Trạng thái |
 |---|---|---|---|
-| Implement pipeline state machine (6 bước, score gate ≥ 0.6) | Tiến | 21/04 | ⬜ Chưa làm |
-| Implement `POST /api/v1/sessions/start` + CV Agent async trigger | Tiến | 21/04 | ⬜ Chưa làm |
-| Implement `POST /api/v1/sessions/{id}/answer` + Answer-Check Agent | Tiến | 22/04 | ⬜ Chưa làm |
-| Seed script — 5 ca hardcoded dưới dạng static JSON | Khôi | 21/04 | ⬜ Chưa làm |
-| Populate Supabase với 5 ca mẫu + rubric + answer key | Khôi | 22/04 | ⬜ Chưa làm |
-| Hoàn thiện RLS policy cho tất cả bảng | Khôi | 21/04 | ⬜ Chưa làm |
-| Xử lý race condition CV Agent async vs. sinh viên trả lời bước 1 quá nhanh | Tiến | 22/04 | ⬜ Chưa làm |
-| Implement signed URL refresh logic (TTL > 1h cho session dài) | Khôi | 22/04 | ⬜ Chưa làm |
-| Xây dựng case library UI + image viewer | Minh | 23/04 | ⬜ Chưa làm |
-| Giao diện Socratic dialogue bước đầu | Minh | 24/04 | ⬜ Chưa làm |
-| Hoàn thiện system prompt CV Agent và Socratic Agent | Tiến + Minh | 23/04 | ⬜ Chưa làm |
-| Bắt đầu prompt engineering Answer-Check Agent với rubric JSON mẫu | Tiến | 24/04 | ⬜ Chưa làm |
-| Tuyển 30 sinh viên pilot từ rotation lâm sàng VinUniversity | Minh (PM) | 25/04 | ⬜ Chưa làm |
-| Chạy session thử nghiệm đầu tiên cuối tuần 3 | Cả nhóm | 25/04 | ⬜ Chưa làm |
+| Implement pipeline state machine (6 bước, score gate ≥ 0.6) | Khôi + Minh | 21/04 | ✅ Xong |
+| Implement `POST /api/v1/sessions/` + `POST /api/v1/sessions/{id}/submit_answer/` | Tiến | 22/04 | ✅ Xong |
+| Implement Answer-Check Agent (GPT-4o scoring + rubric JSON) | Minh | 22/04 | ✅ Xong |
+| Populate Supabase với 5 ca mẫu + rubric + answer key | Tiến | 22/04 | 🔄 Đang làm |
+| Refactor `uploaded-cases` route — multi-image upload + `case_images` table | Minh | 23/04 | ✅ Xong |
+| Thêm `region` input vào upload route, đưa vào MedGemma prompt | Tiến | 23/04 | ✅ Xong |
+| Drop `image_url` column khỏi `upload_sessions`, migrate sang `case_images` | Tiến | 23/04 | ✅ Xong |
+| Xây dựng case library UI + image viewer | Minh | 23/04 | ✅ Xong |
+| Giao diện Socratic dialogue bước đầu | Minh | 24/04 | ✅ Xong |
+| Chỉnh sửa system prompt MedGemma (6-step radiology format, region-aware) | Tiến | 23/04 | ✅ Xong |
+| Prompt engineering Answer-Check Agent với rubric JSON mẫu | Tiến | 24/04 | ✅ Xong |
+| Chạy session thử nghiệm đầu tiên cuối tuần 3 | Cả nhóm | 25/04 | ✅ Xong |
+
+---
+
