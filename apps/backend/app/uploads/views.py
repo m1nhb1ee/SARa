@@ -1,4 +1,5 @@
 import logging
+import os
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -7,12 +8,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from app.core.supabase_client import get_supabase
-from .serializers import UploadInputSerializer
+from .serializers import ALLOWED_EXTENSIONS, UploadInputSerializer
 from .services import (
     analyze_medical_image,
     create_case_in_supabase,
     delete_uploaded_case,
-    find_case_by_image_url,
     upload_image_to_storage,
 )
 
@@ -30,44 +30,72 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         user_id = request.user['id']
         try:
             result = sb.table('upload_sessions').select(
-                'id, user_id, case_id, image_url, modality, created_at'
+                'id, user_id, case_id, modality, created_at, cases(case_images(image_url, slice_index))'
             ).eq('user_id', user_id).order('created_at', desc=True).execute()
         except Exception as e:
             logger.error(f"list upload_sessions error: {e}", exc_info=True)
             return Response({'error': 'Lỗi truy vấn database', 'message': str(e)},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response({'count': len(result.data), 'results': result.data})
+
+        rows = []
+        for r in result.data:
+            case_images = (r.pop('cases', None) or {}).get('case_images') or []
+            rows.append({**r, 'images': case_images})
+        return Response({'count': len(rows), 'results': rows})
 
     def create(self, request):
         """
         POST /api/v1/uploaded-cases/
-        Multipart: image (file), title (str), modality (XRAY|CT|MRI|DIFF)
+        Multipart: images (one or more files), title, modality, slice_indexes (one per image, optional)
 
-        Flow: upload → Supabase Storage → HF analysis → create case + answer_keys
+        Flow: upload all images → Supabase Storage → HF analysis (first image) → create case + answer_keys
         """
         serializer = UploadInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        image_file = serializer.validated_data['image']
         modality = serializer.validated_data['modality']
         title = serializer.validated_data['title']
+        region = serializer.validated_data['region']
         user_id = request.user['id']
 
-        logger.info(f"Upload request from user {user_id} — modality={modality}")
+        image_files = request.FILES.getlist('images')
+        if not image_files:
+            return Response({'error': 'Cần ít nhất một ảnh (field: images)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        for f in image_files:
+            ext = os.path.splitext(getattr(f, 'name', ''))[1].lstrip('.').lower()
+            if ext and ext not in ALLOWED_EXTENSIONS:
+                return Response(
+                    {'error': f'Định dạng {ext} không được hỗ trợ. Chấp nhận: {ALLOWED_EXTENSIONS}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        raw_indexes = request.data.getlist('slice_indexes')
+        slice_indexes = []
+        for i in range(len(image_files)):
+            try:
+                slice_indexes.append(int(raw_indexes[i]) if i < len(raw_indexes) else None)
+            except (ValueError, TypeError):
+                slice_indexes.append(None)
+
+        logger.info(f"Upload request from user {user_id} — modality={modality}, {len(image_files)} image(s)")
 
         try:
-            image_bytes = image_file.read()
+            image_data = [(f, f.read()) for f in image_files]
 
-            image_url = upload_image_to_storage(image_bytes, image_file.name)
-            logger.info(f"Stored image: {image_url}")
+            image_entries = []
+            for (f, image_bytes), idx in zip(image_data, slice_indexes):
+                image_url = upload_image_to_storage(image_bytes, f.name)
+                image_entries.append({'image_url': image_url, 'slice_index': idx})
+                logger.info(f"Stored image: {image_url}")
 
-            findings = analyze_medical_image(image_bytes, modality)
+            findings = analyze_medical_image(image_data[0][1], modality, region)
             logger.info(f"HF analysis complete. Steps: {list(findings.get('answer_key', {}).keys())}")
 
             if not title or title == 'Untitled Case':
                 title = findings.get('title', f'{modality} Case')
 
-            result = create_case_in_supabase(user_id, image_url, modality, title, findings)
+            result = create_case_in_supabase(user_id, image_entries, modality, title, findings)
             logger.info(f"Case {result['case']['id']} created, upload_session {result['upload_session']['id']}")
 
             return Response(result, status=status.HTTP_201_CREATED)
@@ -85,7 +113,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         user_id = request.user['id']
         try:
             result = sb.table('upload_sessions').select(
-                'id, user_id, case_id, image_url, modality, created_at'
+                'id, user_id, case_id, modality, created_at'
             ).eq('id', pk).single().execute()
         except Exception:
             return Response({'error': 'Upload not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -94,14 +122,13 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         if upload['user_id'] != user_id:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
+        case = None
         if upload.get('case_id'):
             try:
                 case_result = sb.table('cases').select('id, title').eq('id', upload['case_id']).single().execute()
                 case = case_result.data
             except Exception:
-                case = None
-        else:
-            case = find_case_by_image_url(upload['image_url'])
+                pass
         return Response({**upload, 'case': case})
 
     def destroy(self, request, pk=None):
@@ -129,7 +156,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
 
         try:
             result = sb.table('upload_sessions').select(
-                'id, user_id, image_url'
+                'id, user_id, case_id'
             ).eq('id', pk).single().execute()
         except Exception:
             return Response({'error': 'Upload not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -138,8 +165,8 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         if upload['user_id'] != user_id:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
-        case = find_case_by_image_url(upload['image_url'])
-        if not case:
+        case_id = upload.get('case_id')
+        if not case_id:
             return Response(
                 {'error': 'Case chưa được tạo cho upload này'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -147,7 +174,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
 
         session_result = sb.table('sessions').insert({
             'user_id': user_id,
-            'case_id': case['id'],
+            'case_id': case_id,
             'current_step': 0,
             'status': 'IN_PROGRESS',
         }).execute()
@@ -164,7 +191,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
 
         try:
             result = sb.table('upload_sessions').select(
-                'id, user_id, image_url, modality'
+                'id, user_id, case_id, modality'
             ).eq('id', pk).single().execute()
         except Exception:
             return Response({'error': 'Upload not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -173,22 +200,27 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         if upload['user_id'] != user_id:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
-        case = find_case_by_image_url(upload['image_url'])
-        if not case:
+        case_id = upload.get('case_id')
+        if not case_id:
             return Response(
                 {'error': 'Case chưa được xử lý'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        try:
+            case_result = sb.table('cases').select('id, title').eq('id', case_id).single().execute()
+            case = case_result.data
+        except Exception:
+            return Response({'error': 'Case not found'}, status=status.HTTP_404_NOT_FOUND)
+
         answer_keys = sb.table('answer_keys').select(
             'step_code, expected_finding, clinical_explanation, key_points'
-        ).eq('case_id', case['id']).order('step_order').execute()
+        ).eq('case_id', case_id).order('step_order').execute()
 
         return Response({
             'upload_session_id': upload['id'],
-            'image_url': upload['image_url'],
             'modality': upload['modality'],
-            'case_id': case['id'],
+            'case_id': case_id,
             'case_title': case.get('title'),
             'answer_key_steps': [r['step_code'] for r in (answer_keys.data or [])],
             'answer_keys': answer_keys.data or [],

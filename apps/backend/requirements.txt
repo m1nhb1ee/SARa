@@ -10,4 +10,4 @@ requests>=2.31.0
 huggingface-hub>=0.20.0
 gradio_client
 supabase
-Pillow==10.1.0
+Pillow==11.2.1

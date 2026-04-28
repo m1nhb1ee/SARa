@@ -10,6 +10,7 @@ import logging
 from typing import Dict, Any, Optional
 
 from app.core.supabase_client import get_supabase
+from app.prompt.medgemma_prompt import build_analysis_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +55,14 @@ def upload_image_to_storage(image_bytes: bytes, filename: str) -> str:
 
 def create_case_in_supabase(
     user_id: str,
-    image_url: str,
+    images: list,
     modality: str,
     title: str,
     findings: dict,
 ) -> dict:
     """
-    Ghi case + answer_keys + upload_session vào Supabase.
+    Ghi case + case_images + answer_keys + upload_session vào Supabase.
+    images: [{'image_url': str, 'slice_index': int | None}, ...]
     Trả về {'upload_session': ..., 'case': ...}.
     """
     sb = get_supabase()
@@ -75,10 +77,14 @@ def create_case_in_supabase(
         'modality': MODALITY_MAP.get(modality, 'X-ray'),
         'difficulty': 'medium',
         'clinical_history': findings.get('clinical_history', ''),
-        'image_urls': [image_url],
         'status': 'published',
     }).execute()
     case = case_result.data[0]
+
+    sb.table('case_images').insert([
+        {'case_id': case['id'], 'image_url': img['image_url'], 'slice_index': img['slice_index']}
+        for img in images
+    ]).execute()
 
     answer_key = findings.get('answer_key', {})
     rows = [
@@ -99,7 +105,6 @@ def create_case_in_supabase(
     upload_session = sb.table('upload_sessions').insert({
         'user_id': user_id,
         'case_id': case['id'],
-        'image_url': image_url,
         'modality': modality,
     }).execute().data[0]
 
@@ -107,11 +112,15 @@ def create_case_in_supabase(
 
 
 def find_case_by_image_url(image_url: str) -> dict | None:
-    """Tìm case theo image_url (dùng cho start_practice)."""
+    """Tìm case theo image_url qua bảng case_images."""
     sb = get_supabase()
     try:
-        result = sb.table('cases').select('id, title').contains('image_urls', [image_url]).execute()
-        return result.data[0] if result.data else None
+        result = sb.table('case_images').select('case_id').eq('image_url', image_url).execute()
+        if not result.data:
+            return None
+        case_id = result.data[0]['case_id']
+        case_result = sb.table('cases').select('id, title').eq('id', case_id).single().execute()
+        return case_result.data
     except Exception:
         return None
 
@@ -136,7 +145,7 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
     # 1. Lấy upload_session và kiểm tra quyền sở hữu
     try:
         result = sb.table('upload_sessions').select(
-            'id, user_id, case_id, image_url'
+            'id, user_id, case_id'
         ).eq('id', upload_session_id).single().execute()
     except Exception:
         raise ValueError('Upload session not found')
@@ -146,9 +155,17 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
         raise PermissionError('Bạn không có quyền xóa upload này')
 
     case_id: Optional[str] = upload.get('case_id')
-    image_url: str = upload.get('image_url') or ''
 
-    # 2. Xóa các practice sessions liên quan đến case
+    # 2. Lấy danh sách image_urls từ case_images trước khi xóa case
+    image_urls: list[str] = []
+    if case_id:
+        try:
+            imgs = sb.table('case_images').select('image_url').eq('case_id', case_id).execute()
+            image_urls = [r['image_url'] for r in (imgs.data or [])]
+        except Exception as e:
+            logger.warning(f"Could not fetch case_images for case {case_id}: {e}")
+
+    # 3. Xóa các practice sessions liên quan đến case
     if case_id:
         try:
             sb.table('sessions').delete().eq('case_id', case_id).execute()
@@ -156,7 +173,7 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
         except Exception as e:
             logger.warning(f"Could not delete sessions for case {case_id}: {e}")
 
-    # 3. Xóa answer_keys
+    # 4. Xóa answer_keys
     if case_id:
         try:
             sb.table('answer_keys').delete().eq('case_id', case_id).execute()
@@ -164,11 +181,11 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
         except Exception as e:
             logger.warning(f"Could not delete answer_keys for case {case_id}: {e}")
 
-    # 4. Xóa upload_session (trước khi xóa case để tránh FK violation nếu có)
+    # 5. Xóa upload_session
     sb.table('upload_sessions').delete().eq('id', upload_session_id).execute()
     logger.info(f"Deleted upload_session {upload_session_id}")
 
-    # 5. Xóa case
+    # 6. Xóa case (cascade xóa case_images)
     if case_id:
         try:
             sb.table('cases').delete().eq('id', case_id).execute()
@@ -176,15 +193,15 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
         except Exception as e:
             logger.warning(f"Could not delete case {case_id}: {e}")
 
-    # 6. Xóa ảnh khỏi Supabase Storage (best-effort, không fail nếu lỗi)
-    if image_url:
+    # 7. Xóa ảnh khỏi Supabase Storage (best-effort)
+    for url in image_urls:
         try:
-            path = _extract_storage_path(image_url)
+            path = _extract_storage_path(url)
             if path:
                 sb.storage.from_('case_images').remove([path])
                 logger.info(f"Deleted storage file: {path}")
         except Exception as e:
-            logger.warning(f"Could not delete storage image {image_url}: {e}")
+            logger.warning(f"Could not delete storage image {url}: {e}")
 
     return {
         'deleted': True,
@@ -239,30 +256,15 @@ def _to_temp_file(image_file) -> tuple:
     raise ValueError(f"Không đọc được ảnh từ kiểu: {type(image_file)}")
 
 
-def _call_gradio(image_file, modality: str, token: str) -> str:
+def _call_gradio(image_file, modality: str, region: str, token: str) -> str:
     from gradio_client import Client, handle_file
 
-    question = f"""IMPORTANT: Return ONLY valid JSON, nothing else. No markdown, no explanations before or after.
-        Analyze this {modality} medical image and return response in this EXACT JSON structure:
-        {{
-        "OBSERVE": "...",
-        "DESCRIBE": "...",
-        "INTERPRET": "...",
-        "HYPOTHESIS": "...",
-        "DDx": "...",
-        "CONCLUSION": "..."
-        }}
-        Rules:
-        - ONLY output JSON, no other text
-        - Each field must have detailed, clinically relevant content
-        - Use both Vietnamese and English for clarity
-        - Be concise but comprehensive
-        """
+    question = build_analysis_prompt(modality, region)
 
     tmp_path = None
     try:
         tmp_path, _ = _to_temp_file(image_file)
-        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}]")
+        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — modality={modality}, region={region}")
         client = Client(GRADIO_SPACE_ID, token=token)
         result = client.predict(
             gallery=[{"image": handle_file(tmp_path), "caption": None}],
@@ -411,15 +413,15 @@ def _mock_analyze(modality: str) -> Dict[str, Any]:
     }
 
 
-def analyze_medical_image(image_file, modality: str = "XRAY") -> Dict[str, Any]:
+def analyze_medical_image(image_file, modality: str = "XRAY", region: str = "unspecified") -> Dict[str, Any]:
     """Entry point: phân tích ảnh y tế, trả về findings dict."""
-    logger.info(f"Bắt đầu phân tích — modality={modality}")
+    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}")
     token = _get_hf_token()
     if not token:
         return _mock_analyze(modality)
     try:
-        raw = _call_gradio(image_file, modality, token)
-        logger.info(f"Phân tích hoàn tất — modality={modality}")
+        raw = _call_gradio(image_file, modality, region, token)
+        logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         return _parse_findings(raw, modality)
     except ImportError:
         logger.error("gradio_client chưa được cài. Chạy: pip install gradio-client")
