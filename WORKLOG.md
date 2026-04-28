@@ -71,6 +71,21 @@ Observe → Describe → Interpret → DDx → Conclusion.
 
 ---
 
+### [ADR-5] Tách `image_urls` thành bảng `case_images` riêng - 23/04/2026
+
+**Bối cảnh:** Ban đầu ảnh của mỗi case được lưu dưới dạng mảng text (`image_urls text[]`) ngay trong bảng `cases`. Khi cần hỗ trợ multi-image upload với `slice_index` per ảnh, mảng text không còn đủ để lưu metadata ảnh.
+
+**Các lựa chọn đã xem xét:**
+- **Giữ `image_urls text[]` + thêm `slice_indexes int[]` song song:** Đơn giản, không cần migration lớn. Nhưng hai mảng phải luôn đồng bộ độ dài — dễ desync, khó validate, khó extend sau này.
+- **JSONB column trên `cases`:** Một column `images jsonb` chứa array object `{image_url, slice_index}`. Gọn hơn nhưng mất khả năng query từng ảnh riêng, khó set RLS per-row.
+- **Bảng `case_images` riêng (1-N với `cases`):** Mỗi hàng là một ảnh với `case_id FK`, `image_url`, `slice_index`. Chuẩn hoá hoàn toàn, dễ extend (thêm caption, series,…), RLS rõ ràng per-table.
+
+**Quyết định:** Tạo bảng `case_images` với `ON DELETE CASCADE` từ `cases`. Supabase nested select (`cases(case_images(...))`) trả về ảnh cùng với case mà không cần join thủ công ở application layer. Column `image_url` trên `upload_sessions` bị drop.
+
+**Hệ quả:** Cần migration `DROP COLUMN image_url` trên `upload_sessions` và migration RLS riêng cho `case_images`. Logic xoá case trong `delete_uploaded_case` phải fetch URL từ `case_images` trước khi xoá Supabase Storage object. Backend hoàn toàn không còn `image_urls` flat list trong response.
+
+---
+
 ### Sprint 1 — 07/04 → 11/04/2026
 
 | Task | Người làm | Deadline | Trạng thái |
@@ -127,21 +142,22 @@ Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 
 ---
 
-### Sprint 3 — 19/04 → 25/04/2026
+### Sprint 3 - 19/04 → 25/04/2026
 
 | Task | Người làm | Deadline | Trạng thái |
 |---|---|---|---|
-| Implement pipeline state machine (6 bước, score gate ≥ 0.6) | Tiến | 21/04 | ⬜ Chưa làm |
-| Implement `POST /api/v1/sessions/start` + CV Agent async trigger | Tiến | 21/04 | ⬜ Chưa làm |
-| Implement `POST /api/v1/sessions/{id}/answer` + Answer-Check Agent | Tiến | 22/04 | ⬜ Chưa làm |
-| Seed script — 5 ca hardcoded dưới dạng static JSON | Khôi | 21/04 | ⬜ Chưa làm |
-| Populate Supabase với 5 ca mẫu + rubric + answer key | Khôi | 22/04 | ⬜ Chưa làm |
-| Hoàn thiện RLS policy cho tất cả bảng | Khôi | 21/04 | ⬜ Chưa làm |
-| Xử lý race condition CV Agent async vs. sinh viên trả lời bước 1 quá nhanh | Tiến | 22/04 | ⬜ Chưa làm |
-| Implement signed URL refresh logic (TTL > 1h cho session dài) | Khôi | 22/04 | ⬜ Chưa làm |
-| Xây dựng case library UI + image viewer | Minh | 23/04 | ⬜ Chưa làm |
-| Giao diện Socratic dialogue bước đầu | Minh | 24/04 | ⬜ Chưa làm |
-| Hoàn thiện system prompt CV Agent và Socratic Agent | Tiến + Minh | 23/04 | ⬜ Chưa làm |
-| Bắt đầu prompt engineering Answer-Check Agent với rubric JSON mẫu | Tiến | 24/04 | ⬜ Chưa làm |
-| Tuyển 30 sinh viên pilot từ rotation lâm sàng VinUniversity | Minh (PM) | 25/04 | ⬜ Chưa làm |
-| Chạy session thử nghiệm đầu tiên cuối tuần 3 | Cả nhóm | 25/04 | ⬜ Chưa làm |
+| Implement pipeline state machine (6 bước, score gate ≥ 0.6) | Khôi + Minh | 21/04 | ✅ Xong |
+| Implement `POST /api/v1/sessions/` + `POST /api/v1/sessions/{id}/submit_answer/` | Tiến | 21/04 | ✅ Xong |
+| Implement Answer-Check Agent (GPT-4o scoring + rubric JSON) | Minh | 22/04 | ✅ Xong |
+| Populate Supabase với 5 ca mẫu + rubric + answer key | Tiến | 22/04 | 🔄 Đang làm |
+| Refactor `uploaded-cases` route — multi-image upload + `case_images` table | Minh | 23/04 | ✅ Xong |
+| Thêm `region` input vào upload route, đưa vào MedGemma prompt | Tiến | 23/04 | ✅ Xong |
+| Drop `image_url` column khỏi `upload_sessions`, migrate sang `case_images` | Tiến | 23/04 | ✅ Xong |
+| Xây dựng case library UI + image viewer | Minh | 23/04 | ✅ Xong |
+| Giao diện Socratic dialogue bước đầu | Minh | 24/04 | ✅ Xong |
+| Chỉnh sửa system prompt MedGemma (6-step radiology format, region-aware) | Tiến | 23/04 | ✅ Xong |
+| Prompt engineering Answer-Check Agent với rubric JSON mẫu | Tiến | 24/04 | ✅ Xong |
+| Chạy session thử nghiệm đầu tiên cuối tuần 3 | Cả nhóm | 25/04 | ✅ Xong |
+
+---
+
