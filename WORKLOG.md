@@ -71,21 +71,6 @@ Observe → Describe → Interpret → DDx → Conclusion.
 
 ---
 
-### [ADR-5] Tách `image_urls` thành bảng `case_images` riêng - 23/04/2026
-
-**Bối cảnh:** Ban đầu ảnh của mỗi case được lưu dưới dạng mảng text (`image_urls text[]`) ngay trong bảng `cases`. Khi cần hỗ trợ multi-image upload với `slice_index` per ảnh, mảng text không còn đủ để lưu metadata ảnh.
-
-**Các lựa chọn đã xem xét:**
-- **Giữ `image_urls text[]` + thêm `slice_indexes int[]` song song:** Đơn giản, không cần migration lớn. Nhưng hai mảng phải luôn đồng bộ độ dài — dễ desync, khó validate, khó extend sau này.
-- **JSONB column trên `cases`:** Một column `images jsonb` chứa array object `{image_url, slice_index}`. Gọn hơn nhưng mất khả năng query từng ảnh riêng, khó set RLS per-row.
-- **Bảng `case_images` riêng (1-N với `cases`):** Mỗi hàng là một ảnh với `case_id FK`, `image_url`, `slice_index`. Chuẩn hoá hoàn toàn, dễ extend (thêm caption, series,…), RLS rõ ràng per-table.
-
-**Quyết định:** Tạo bảng `case_images` với `ON DELETE CASCADE` từ `cases`. Supabase nested select (`cases(case_images(...))`) trả về ảnh cùng với case mà không cần join thủ công ở application layer. Column `image_url` trên `upload_sessions` bị drop.
-
-**Hệ quả:** Cần migration `DROP COLUMN image_url` trên `upload_sessions` và migration RLS riêng cho `case_images`. Logic xoá case trong `delete_uploaded_case` phải fetch URL từ `case_images` trước khi xoá Supabase Storage object. Backend hoàn toàn không còn `image_urls` flat list trong response.
-
----
-
 ### Sprint 1 — 07/04 → 11/04/2026
 
 | Task | Người làm | Deadline | Trạng thái |
@@ -142,7 +127,7 @@ Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 
 ---
 
-### Sprint 3 - 19/04 → 25/04/2026
+### Sprint 3 — 19/04 → 25/04/2026
 
 | Task | Người làm | Deadline | Trạng thái |
 |---|---|---|---|
