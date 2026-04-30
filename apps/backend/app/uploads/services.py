@@ -73,6 +73,7 @@ def create_case_in_supabase(
 
     case_result = sb.table('cases').insert({
         'uploaded_by': user_id,
+        'source': 'uploaded',
         'title': title,
         'modality': MODALITY_MAP.get(modality, 'X-ray'),
         'difficulty': 'medium',

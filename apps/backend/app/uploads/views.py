@@ -30,8 +30,8 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         user_id = request.user['id']
         try:
             result = sb.table('upload_sessions').select(
-                'id, user_id, case_id, modality, created_at, cases(case_images(image_url, slice_index, volume_name))'
-            ).eq('user_id', user_id).order('created_at', desc=True).execute()
+                'id, user_id, case_id, modality, created_at, cases!inner(source, case_images(image_url, slice_index, volume_name))'
+            ).eq('user_id', user_id).eq('cases.source', 'uploaded').order('created_at', desc=True).execute()
         except Exception as e:
             logger.error(f"list upload_sessions error: {e}", exc_info=True)
             return Response({'error': 'Lỗi truy vấn database', 'message': str(e)},
@@ -39,7 +39,8 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
 
         rows = []
         for r in result.data:
-            raw_images = (r.pop('cases', None) or {}).get('case_images') or []
+            case_data = r.pop('cases', None) or {}
+            raw_images = case_data.get('case_images') or []
             volumes: dict = {}
             for img in raw_images:
                 vol = img.get('volume_name') or 'Default'
@@ -47,7 +48,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
                     {'image_url': img['image_url'], 'slice_index': img.get('slice_index')}
                 )
             grouped = [{'volume_name': v, 'slices': s} for v, s in volumes.items()]
-            rows.append({**r, 'images': grouped})
+            rows.append({**r, 'source': case_data.get('source'), 'images': grouped})
         return Response({'count': len(rows), 'results': rows})
 
     def create(self, request):
@@ -144,7 +145,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         case = None
         if upload.get('case_id'):
             try:
-                case_result = sb.table('cases').select('id, title').eq('id', upload['case_id']).single().execute()
+                case_result = sb.table('cases').select('id, title, source').eq('id', upload['case_id']).single().execute()
                 case = case_result.data
             except Exception:
                 pass

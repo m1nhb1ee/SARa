@@ -115,10 +115,13 @@ Authorization: Bearer <token>
 ```
 
 **Query parameters:**
+- `source` — `system` | `uploaded` — filter by case type; omit for all visible cases
 - `modality` — `XRAY` | `CT` | `MRI`
 - `difficulty` — `easy` | `medium` | `hard`
 - `disease_tag` — filter by disease profile name
 - `status` — session status filter
+
+When `source=uploaded`, only the current user's uploaded cases are returned. When `source=system`, only curated system cases are returned. When omitted, system cases and the user's own uploads are both included.
 
 **Response 200:**
 ```json
@@ -130,6 +133,7 @@ Authorization: Bearer <token>
       "modality": "X-ray",
       "difficulty": "medium",
       "clinical_history": "Bệnh nhân 45 tuổi, ho sốt 3 ngày",
+      "source": "system",
       "images": [
         {
           "volume_name": "Default",
@@ -147,7 +151,7 @@ Authorization: Bearer <token>
 }
 ```
 
-Note: `images` is grouped by volume. Each entry has a `volume_name` and a `slices` array of `{ image_url, slice_index }` objects. Single-volume cases have one entry with `volume_name: "Default"`. `uploaded_by` is `null` for system cases and a user UUID for user-uploaded cases. Cases with `uploaded_by` set are only visible to their owner.
+Note: `source` is `"system"` for curated cases and `"uploaded"` for user-uploaded cases. `images` is grouped by volume — each entry has a `volume_name` and a `slices` array of `{ image_url, slice_index }`. Single-volume cases have one entry named `"Default"`. `uploaded_by` is `null` for system cases.
 
 ---
 
@@ -414,45 +418,9 @@ Marks session as `ABANDONED`. Only works on `IN_PROGRESS` sessions.
 
 ## Uploaded Cases
 
-User-uploaded medical images processed by AI (MedGemma via HuggingFace Gradio). Each upload creates an `upload_session` record and a corresponding `case` with AI-generated `answer_keys`.
+User-uploaded medical images processed by AI (MedGemma via HuggingFace Gradio). Each upload creates an `upload_session` record and a corresponding `case` (`source = "uploaded"`) with AI-generated `answer_keys`. Only the owner can see their uploaded cases.
 
-### List My Uploads
-```
-GET /uploaded-cases/
-Authorization: Bearer <token>
-```
-
-**Response 200:**
-```json
-{
-  "count": 2,
-  "results": [
-    {
-      "id": "<uuid>",
-      "user_id": "<uuid>",
-      "case_id": "<uuid>",
-      "modality": "MRI",
-      "created_at": "2024-04-15T14:00:00+00:00",
-      "images": [
-        {
-          "volume_name": "T1",
-          "slices": [
-            { "image_url": "https://...", "slice_index": 0 },
-            { "image_url": "https://...", "slice_index": 1 }
-          ]
-        },
-        {
-          "volume_name": "T2",
-          "slices": [
-            { "image_url": "https://...", "slice_index": 0 },
-            { "image_url": "https://...", "slice_index": 1 }
-          ]
-        }
-      ]
-    }
-  ]
-}
-```
+> To list uploaded cases use `GET /cases/?source=uploaded`.
 
 ---
 
