@@ -30,8 +30,8 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         user_id = request.user['id']
         try:
             result = sb.table('upload_sessions').select(
-                'id, user_id, case_id, modality, created_at, cases(case_images(image_url, slice_index))'
-            ).eq('user_id', user_id).order('created_at', desc=True).execute()
+                'id, user_id, case_id, modality, created_at, cases!inner(source, case_images(image_url, slice_index, volume_name))'
+            ).eq('user_id', user_id).eq('cases.source', 'uploaded').order('created_at', desc=True).execute()
         except Exception as e:
             logger.error(f"list upload_sessions error: {e}", exc_info=True)
             return Response({'error': 'Lỗi truy vấn database', 'message': str(e)},
@@ -39,16 +39,26 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
 
         rows = []
         for r in result.data:
-            case_images = (r.pop('cases', None) or {}).get('case_images') or []
-            rows.append({**r, 'images': case_images})
+            case_data = r.pop('cases', None) or {}
+            raw_images = case_data.get('case_images') or []
+            volumes: dict = {}
+            for img in raw_images:
+                vol = img.get('volume_name') or 'Default'
+                volumes.setdefault(vol, []).append(
+                    {'image_url': img['image_url'], 'slice_index': img.get('slice_index')}
+                )
+            grouped = [{'volume_name': v, 'slices': s} for v, s in volumes.items()]
+            rows.append({**r, 'source': case_data.get('source'), 'images': grouped})
         return Response({'count': len(rows), 'results': rows})
 
     def create(self, request):
         """
         POST /api/v1/uploaded-cases/
-        Multipart: images (one or more files), title, modality, slice_indexes (one per image, optional)
-
-        Flow: upload all images → Supabase Storage → HF analysis (first image) → create case + answer_keys
+        Multipart fields (parallel arrays):
+          images         file     required
+          slice_indexes  int      optional  — slice position within its volume
+          volume_names   string   optional  — volume label (default: "Default")
+          title, modality, region
         """
         serializer = UploadInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -71,26 +81,34 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
                 )
 
         raw_indexes = request.data.getlist('slice_indexes')
-        slice_indexes = []
+        raw_volumes = request.data.getlist('volume_names')
+
+        slice_indexes, volume_names = [], []
         for i in range(len(image_files)):
             try:
                 slice_indexes.append(int(raw_indexes[i]) if i < len(raw_indexes) else None)
             except (ValueError, TypeError):
                 slice_indexes.append(None)
+            volume_names.append(raw_volumes[i] if i < len(raw_volumes) else 'Default')
 
-        logger.info(f"Upload request from user {user_id} — modality={modality}, {len(image_files)} image(s)")
+        unique_volumes = list(dict.fromkeys(volume_names))
+        logger.info(
+            f"Upload request from user {user_id} — modality={modality}, "
+            f"{len(image_files)} image(s), {len(unique_volumes)} volume(s): {unique_volumes}"
+        )
 
         try:
             image_data = [(f, f.read()) for f in image_files]
 
             image_entries = []
-            for (f, image_bytes), idx in zip(image_data, slice_indexes):
+            for (f, image_bytes), idx, vol in zip(image_data, slice_indexes, volume_names):
                 image_url = upload_image_to_storage(image_bytes, f.name)
-                image_entries.append({'image_url': image_url, 'slice_index': idx})
-                logger.info(f"Stored image: {image_url}")
+                image_entries.append({'image_url': image_url, 'slice_index': idx, 'volume_name': vol})
+                logger.info(f"Stored image: {image_url} (volume={vol})")
 
             findings = analyze_medical_image(
                 [img_bytes for _, img_bytes in image_data], modality, region,
+                volume_names=volume_names,
             )
             logger.info(f"HF analysis complete. Steps: {list(findings.get('answer_key', {}).keys())}")
 
@@ -127,7 +145,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         case = None
         if upload.get('case_id'):
             try:
-                case_result = sb.table('cases').select('id, title').eq('id', upload['case_id']).single().execute()
+                case_result = sb.table('cases').select('id, title, source').eq('id', upload['case_id']).single().execute()
                 case = case_result.data
             except Exception:
                 pass

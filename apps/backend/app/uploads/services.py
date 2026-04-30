@@ -73,6 +73,7 @@ def create_case_in_supabase(
 
     case_result = sb.table('cases').insert({
         'uploaded_by': user_id,
+        'source': 'uploaded',
         'title': title,
         'modality': MODALITY_MAP.get(modality, 'X-ray'),
         'difficulty': 'medium',
@@ -82,7 +83,12 @@ def create_case_in_supabase(
     case = case_result.data[0]
 
     sb.table('case_images').insert([
-        {'case_id': case['id'], 'image_url': img['image_url'], 'slice_index': img['slice_index']}
+        {
+            'case_id':    case['id'],
+            'image_url':  img['image_url'],
+            'slice_index': img.get('slice_index'),
+            'volume_name': img.get('volume_name', 'Default'),
+        }
         for img in images
     ]).execute()
 
@@ -259,10 +265,11 @@ def _to_temp_file(image_file) -> tuple:
 def _call_gradio(
     image_files: list, modality: str, region: str, token: str,
     total_slices: int | None = None,
+    volume_names: list | None = None,
 ) -> str:
     from gradio_client import Client, handle_file
 
-    question = build_analysis_prompt(modality, region, total_slices)
+    question = build_analysis_prompt(modality, region, total_slices, volume_names)
 
     tmp_paths = []
     try:
@@ -428,15 +435,16 @@ def analyze_medical_image(
     image_files: list,
     modality: str = "XRAY",
     region: str = "unspecified",
+    volume_names: list | None = None,
 ) -> Dict[str, Any]:
     """Entry point: phân tích ảnh y tế, trả về findings dict."""
     total_slices = len(image_files) if image_files else None
-    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}, total_slices={total_slices}")
+    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}, total_slices={total_slices}, volumes={list(dict.fromkeys(volume_names or []))}")
     token = _get_hf_token()
     if not token:
         return _mock_analyze(modality)
     try:
-        raw = _call_gradio(image_files, modality, region, token, total_slices)
+        raw = _call_gradio(image_files, modality, region, token, total_slices, volume_names)
         logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         return _parse_findings(raw, modality)
     except ImportError:
