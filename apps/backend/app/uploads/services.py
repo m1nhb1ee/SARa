@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional
 
 from app.core.supabase_client import get_supabase
 from app.prompt.medgemma_prompt import build_analysis_prompt
+from app.prompt.llm_meta_prompt import build_meta_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -262,14 +263,62 @@ def _to_temp_file(image_file) -> tuple:
     raise ValueError(f"Không đọc được ảnh từ kiểu: {type(image_file)}")
 
 
-def _call_gradio(
-    image_files: list, modality: str, region: str, token: str,
-    total_slices: int | None = None,
+def _preprocess_with_llm(
+    image_files: list,
+    modality: str,
+    region: str,
     volume_names: list | None = None,
 ) -> str:
-    from gradio_client import Client, handle_file
+    """
+    Use GPT-4o Vision to verify image modality/volume consistency and return
+    a refined analysis prompt tailored to what is actually visible in the images.
+    Falls back to build_analysis_prompt() if OPENAI_API_KEY is not set or call fails.
+    """
+    import base64
+    from openai import OpenAI
 
-    question = build_analysis_prompt(modality, region, total_slices, volume_names)
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not set — skipping LLM pre-processing, using default prompt")
+        total_slices = len(image_files) if image_files else None
+        return build_analysis_prompt(modality, region, total_slices, volume_names)
+
+    unique_volumes = list(dict.fromkeys(volume_names or []))
+    volume_info = f" Declared volumes: {', '.join(unique_volumes)}." if unique_volumes else ""
+    total_slices = len(image_files)
+
+    sample_files = image_files[:4]
+    image_contents = []
+    for img_bytes in sample_files:
+        b64 = base64.b64encode(img_bytes).decode('utf-8')
+        image_contents.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"},
+        })
+
+    meta_prompt = build_meta_prompt(modality, region, total_slices, volume_info)
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [{"type": "text", "text": meta_prompt}, *image_contents],
+            }],
+            max_tokens=600,
+        )
+        refined_prompt = response.choices[0].message.content.strip()
+        logger.info(f"LLM pre-processing complete — refined prompt generated ({len(refined_prompt)} chars)")
+        logger.debug(f"[LLM prompt]\n{refined_prompt}")
+        return refined_prompt
+    except Exception as e:
+        logger.warning(f"LLM pre-processing failed: {e} — falling back to default prompt")
+        return build_analysis_prompt(modality, region, total_slices, volume_names)
+
+
+def _call_gradio(image_files: list, prompt: str, token: str) -> str:
+    from gradio_client import Client, handle_file
 
     tmp_paths = []
     try:
@@ -278,13 +327,11 @@ def _call_gradio(
             tmp_paths.append(tmp_path)
 
         gallery = [{"image": handle_file(p), "caption": None} for p in tmp_paths]
-        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — modality={modality}, region={region}, images={len(gallery)}")
-        client = Client(GRADIO_SPACE_ID, token=token)
-        result = client.predict(
-            gallery=gallery,
-            question=question,
-            api_name="/analyze"
-        )
+        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — images={len(gallery)}")
+        client = Client(GRADIO_SPACE_ID, token=token, httpx_kwargs={"timeout": 300})
+        job = client.submit(gallery=gallery, question=prompt, api_name="/analyze")
+        result = job.result(timeout=300)
+        logger.debug(f"[VLM answer]\n{result}")
         return str(result)
     finally:
         for tmp_path in tmp_paths:
@@ -444,7 +491,8 @@ def analyze_medical_image(
     if not token:
         return _mock_analyze(modality)
     try:
-        raw = _call_gradio(image_files, modality, region, token, total_slices, volume_names)
+        prompt = _preprocess_with_llm(image_files, modality, region, volume_names)
+        raw = _call_gradio(image_files, prompt, token)
         logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         return _parse_findings(raw, modality)
     except ImportError:
