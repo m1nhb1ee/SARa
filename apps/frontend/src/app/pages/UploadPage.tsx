@@ -301,7 +301,9 @@ export function UploadPage() {
 
   const [dragState, setDragState] = useState<'idle' | 'dragging' | 'uploading' | 'attached'>('idle');
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [volumeNames, setVolumeNames] = useState<string[]>([]);
+  const [region, setRegion] = useState('unspecified');
   const [caseName, setCaseName] = useState('');
   const [scanType, setScanType] = useState('X-Ray');
   const [showModal, setShowModal] = useState(false);
@@ -321,23 +323,37 @@ export function UploadPage() {
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) { setSelectedFile(file); setDragState('attached'); }
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length) {
+      setSelectedFiles(prev => [...prev, ...files]);
+      setVolumeNames(prev => [...prev, ...files.map(() => 'Default')]);
+      setDragState('attached');
+    }
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) { setSelectedFile(file); setDragState('attached'); }
+    const files = Array.from(e.target.files ?? []).filter(f => f.type.startsWith('image/'));
+    if (files.length) {
+      setSelectedFiles(prev => [...prev, ...files]);
+      setVolumeNames(prev => [...prev, ...files.map(() => 'Default')]);
+      setDragState('attached');
+    }
+    e.target.value = '';
   };
 
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
-    setDragState('idle');
-    setUploadProgress(0);
+  const handleRemoveFile = (i: number) => {
+    const newFiles = selectedFiles.filter((_, idx) => idx !== i);
+    setSelectedFiles(newFiles);
+    setVolumeNames(prev => prev.filter((_, idx) => idx !== i));
+    if (newFiles.length === 0) { setDragState('idle'); setUploadProgress(0); }
+  };
+
+  const handleVolumeNameChange = (i: number, name: string) => {
+    setVolumeNames(prev => prev.map((v, idx) => idx === i ? name : v));
   };
 
   const handleSubmit = async () => {
-    if (!selectedFile || !caseName.trim()) return;
+    if (selectedFiles.length === 0 || !caseName.trim()) return;
     setDragState('uploading');
     setUploadProgress(0);
 
@@ -350,9 +366,14 @@ export function UploadPage() {
     try {
       const modality = SCAN_TYPE_TO_MODALITY[scanType] ?? 'XRAY';
       const formData = new FormData();
-      formData.append('image', selectedFile);
+      selectedFiles.forEach((file, i) => {
+        formData.append('images', file);
+        formData.append('slice_indexes', String(i));
+        formData.append('volume_names', volumeNames[i] || 'Default');
+      });
       formData.append('title', caseName);
       formData.append('modality', modality);
+      formData.append('region', region);
 
       const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
       const token = localStorage.getItem('sara_token') || '';
@@ -398,7 +419,7 @@ export function UploadPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const canSubmit = dragState === 'attached' && !!selectedFile && caseName.trim().length > 0;
+  const canSubmit = dragState === 'attached' && selectedFiles.length > 0 && caseName.trim().length > 0;
 
   return (
     <div style={{
@@ -498,23 +519,68 @@ export function UploadPage() {
                   {Math.round(uploadProgress)}%
                 </div>
               </div>
-            ) : dragState === 'attached' && selectedFile ? (
-              <div className="relative flex items-center gap-4 p-4"
+            ) : dragState === 'attached' && selectedFiles.length > 0 ? (
+              <div className="relative"
                 style={{ background: '#FAF3E3', border: '1px solid #C4A882' }}>
                 <IrregularDashedBorder active={true} dragging={false} />
-                <div className="w-16 h-16 flex-shrink-0 border-2 overflow-hidden flex items-center justify-center"
-                  style={{ borderColor: '#8B6355', background: '#D4B896' }}>
-                  <FilmSlideIcon size={40} color="#6B4C3B" />
+                <div style={{ padding: '8px 12px 4px', fontFamily: "'Special Elite', cursive", fontSize: '10px', color: '#6B4C3B', letterSpacing: '0.1em' }}>
+                  {selectedFiles.length} FILM{selectedFiles.length > 1 ? 'S' : ''} SELECTED
                 </div>
-                <div className="flex-1">
-                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: '13px', color: '#2C1810' }}>{selectedFile.name}</div>
-                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: '11px', color: '#8B6355' }}>{formatSize(selectedFile.size)}</div>
+                {selectedFiles.map((file, i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-2"
+                    style={{ borderTop: i > 0 ? '1px solid rgba(196,168,130,0.4)' : undefined }}>
+                    <div className="flex-shrink-0 flex items-center justify-center"
+                      style={{ width: 36, height: 36, background: '#D4B896', border: '1px solid #8B6355' }}>
+                      <FilmSlideIcon size={22} color="#6B4C3B" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: '12px', color: '#2C1810', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</div>
+                      <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: '10px', color: '#8B6355' }}>{formatSize(file.size)}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <span style={{ fontFamily: "'Special Elite', cursive", fontSize: '9px', color: '#6B4C3B', letterSpacing: '0.08em' }}>VOL:</span>
+                      <input
+                        type="text"
+                        value={volumeNames[i] ?? 'Default'}
+                        onChange={e => handleVolumeNameChange(i, e.target.value)}
+                        style={{
+                          width: 90,
+                          fontFamily: "'Courier Prime', monospace",
+                          fontSize: '11px',
+                          color: '#2C1810',
+                          background: 'transparent',
+                          border: 'none',
+                          borderBottom: '1px solid #C4A882',
+                          outline: 'none',
+                          padding: '1px 2px',
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      />
+                    </div>
+                    <button onClick={() => handleRemoveFile(i)}
+                      className="hover:opacity-70 transition-opacity flex-shrink-0"
+                      style={{ fontFamily: "'Caveat', cursive", fontSize: '13px', color: '#C0392B' }}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <div style={{ padding: '6px 12px 10px' }}>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      fontFamily: "'Special Elite', cursive",
+                      fontSize: '11px',
+                      color: '#7D9B76',
+                      letterSpacing: '0.06em',
+                      background: 'none',
+                      border: '1px dashed #7D9B76',
+                      padding: '4px 12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    + Thêm ảnh khác
+                  </button>
                 </div>
-                <button onClick={handleRemoveFile}
-                  className="hover:opacity-70 transition-opacity"
-                  style={{ fontFamily: "'Caveat', cursive", fontSize: '15px', color: '#C0392B', textDecoration: 'underline' }}>
-                  ✕ Remove
-                </button>
               </div>
             ) : (
               <div
@@ -562,6 +628,7 @@ export function UploadPage() {
               ref={fileInputRef}
               type="file"
               accept="image/png,image/jpeg,image/gif,image/webp"
+              multiple
               className="hidden"
               onChange={handleFileChange}
             />
@@ -623,6 +690,42 @@ export function UploadPage() {
                     }}
                   >
                     {type}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── REGION tabs ── */}
+          <div className="mb-8 relative z-10">
+            <label style={{ fontFamily: "'Special Elite', cursive", fontSize: '11.5px', color: '#6B4C3B', letterSpacing: '0.1em', display: 'block', marginBottom: '10px' }}>
+              REGION (tuỳ chọn)
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { label: 'Ngực', value: 'chest' },
+                { label: 'Não', value: 'brain' },
+                { label: 'Cột sống', value: 'spine' },
+                { label: 'Bụng', value: 'abdomen' },
+                { label: 'Không xác định', value: 'unspecified' },
+              ].map(({ label, value }) => {
+                const selected = region === value;
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setRegion(value)}
+                    className="px-4 py-1.5 transition-all"
+                    style={{
+                      fontFamily: "'Special Elite', cursive",
+                      fontSize: '11.5px',
+                      letterSpacing: '0.04em',
+                      background: selected ? 'rgba(29,58,92,0.1)' : '#EDE0C4',
+                      color: selected ? '#1B3A5C' : '#6B4C3B',
+                      border: `1px solid ${selected ? '#1B3A5C' : '#C4A882'}`,
+                      borderRadius: '2px',
+                    }}
+                  >
+                    {label}
                   </button>
                 );
               })}
