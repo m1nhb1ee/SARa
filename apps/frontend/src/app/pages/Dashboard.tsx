@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { useCases, useSessions, useUploadedCases, useDeleteUploadedCase } from '@/api/hooks';
+import { useCases, useSessions, useUploadedCases, useDeleteUploadedCase, useDeleteSession } from '@/api/hooks';
 import { mapModality, mapDifficulty, getImageKey } from '@/utils/mappers';
 import type { CaseItem, SessionStatus, Modality, Difficulty } from '@/types';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
@@ -121,12 +121,15 @@ export function Dashboard() {
   const { data: sessionsData } = useSessions();
   const { data: uploadsData } = useUploadedCases();
   const { deleteCase } = useDeleteUploadedCase();
+  const { deleteSession } = useDeleteSession();
 
   const [activeModality, setActiveModality] = useState('Tất cả');
   const [activeDifficulty, setActiveDifficulty] = useState('Tất cả');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [erasingId, setErasingId] = useState<string | null>(null);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [resumeTarget, setResumeTarget] = useState<{ caseId: string; sessionId: string; title: string } | null>(null);
+  const [discarding, setDiscarding] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -161,6 +164,17 @@ export function Dashboard() {
     const map: Record<string, SessionStatus> = {};
     for (const s of (sessionsData?.results ?? [])) {
       map[s.case_id ?? s.case] = s.status === 'COMPLETED' ? 'Hoàn thành' : 'Đang làm';
+    }
+    return map;
+  }, [sessionsData]);
+
+  // Maps case_id → most recent non-completed session id (for resume/discard flow)
+  const activeSessionMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const s of (sessionsData?.results ?? [])) {
+      if (s.status !== 'COMPLETED') {
+        map[s.case_id ?? s.case] = s.id;
+      }
     }
     return map;
   }, [sessionsData]);
@@ -366,7 +380,15 @@ export function Dashboard() {
                     isErasing ? styles.cardCollapsing : '',
                   ].join(' ')}
                   style={{ animationDelay: `${idx * 55}ms` }}
-                  onClick={() => { if (!isConfirming && !isErasing) navigate(`/session/${c.id}`); }}
+                  onClick={() => {
+                    if (isConfirming || isErasing) return;
+                    const sid = activeSessionMap[c.id];
+                    if (sid) {
+                      setResumeTarget({ caseId: c.id, sessionId: sid, title: c.title });
+                    } else {
+                      navigate(`/session/${c.id}`);
+                    }
+                  }}
                 >
                   {/* erase overlay — sweeps across when deleting */}
                   {isErasing && <div className={styles.eraseOverlay} />}
@@ -524,6 +546,95 @@ export function Dashboard() {
         )}
 
       </div>
+
+      {/* ── Resume/Restart modal ── */}
+      {resumeTarget && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(44,24,16,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={() => !discarding && setResumeTarget(null)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--parchment, #FAF3E3)',
+              border: '1.5px solid var(--sepia, #C4A882)',
+              padding: '40px 48px',
+              maxWidth: 480, width: '92%',
+              fontFamily: "'Special Elite', cursive",
+              position: 'relative',
+            }}
+          >
+            <div style={{ fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-faded, #8B7355)', marginBottom: 12 }}>
+              Case đang làm dở
+            </div>
+            <div style={{ fontSize: 18, color: 'var(--ink, #2C1810)', marginBottom: 10, lineHeight: 1.5 }}>
+              {resumeTarget.title}
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--ink-faded, #8B7355)', marginBottom: 32, fontFamily: "'Lora', Georgia, serif", fontStyle: 'italic' }}>
+              Bạn đã làm dở case này. Muốn tiếp tục từ bước đang dở, hay bắt đầu lại từ đầu?
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                disabled={discarding}
+                onClick={() => {
+                  const cid = resumeTarget.caseId;
+                  setResumeTarget(null);
+                  navigate(`/session/${cid}`);
+                }}
+                style={{
+                  flex: 1,
+                  fontFamily: "'Special Elite', cursive", fontSize: 14,
+                  background: 'var(--ink, #2C1810)', color: 'var(--parchment, #FAF3E3)',
+                  border: 'none', padding: '12px 0', cursor: 'pointer',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                Tiếp tục
+              </button>
+              <button
+                disabled={discarding}
+                onClick={async () => {
+                  setDiscarding(true);
+                  await deleteSession(resumeTarget.sessionId);
+                  setDiscarding(false);
+                  const cid = resumeTarget.caseId;
+                  setResumeTarget(null);
+                  navigate(`/session/${cid}`);
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#C0392B'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--parchment, #FAF3E3)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#C0392B'; }}
+                style={{
+                  flex: 1,
+                  fontFamily: "'Special Elite', cursive", fontSize: 14,
+                  background: 'transparent', color: '#C0392B',
+                  border: '1.5px solid #C0392B', padding: '12px 0', cursor: 'pointer',
+                  letterSpacing: '0.06em',
+                  opacity: discarding ? 0.5 : 1,
+                  transition: 'background 0.18s, color 0.18s',
+                }}
+              >
+                {discarding ? 'Đang xóa...' : 'Làm lại từ đầu'}
+              </button>
+            </div>
+            <button
+              disabled={discarding}
+              onClick={() => setResumeTarget(null)}
+              style={{
+                position: 'absolute', top: 12, right: 16,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontSize: 22, color: '#C0392B', lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

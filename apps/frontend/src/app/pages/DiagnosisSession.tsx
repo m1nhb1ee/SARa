@@ -21,6 +21,37 @@ import type { CaseVolume } from "@/types";
 
 const steps = ["OBSERVE", "DESCRIBE", "INTERPRET", "HYPOTHESIS", "DDx", "CONCLUSION"];
 
+const QUESTION_PROMPTS: Record<number, string> = {
+  0: "Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường mà bạn nhận thấy.",
+  1: "Bước 2: Mô tả chi tiết các đặc điểm của tổn thương bạn quan sát thấy.",
+  2: "Bước 3: Diễn giải ý nghĩa lâm sàn của các phát hiện này.",
+  3: "Bước 4: Đưa ra giả thuyết chẩn đoán dự phòng.",
+  4: "Bước 5: Phân tích các chẩn đoán phân biệt cần loại trừ.",
+  5: "Bước 6: Đưa ra kết luận chẩn đoán cuối cùng.",
+};
+
+function buildMessagesFromAttempts(attempts: any[], currentStep: number): Message[] {
+  const byStep: Record<number, any> = {};
+  for (const a of attempts) {
+    const idx = a.step_index;
+    if (!byStep[idx] || a.attempt_number > byStep[idx].attempt_number) {
+      byStep[idx] = a;
+    }
+  }
+
+  const msgs: Message[] = [];
+  for (let i = 0; i <= currentStep; i++) {
+    msgs.push({ id: `resume-q-${i}`, role: "ai", type: "question", content: QUESTION_PROMPTS[i] ?? `Bước ${i + 1}: Tiếp tục.` });
+    const attempt = byStep[i];
+    if (attempt && i < currentStep) {
+      msgs.push({ id: `resume-a-${i}`, role: "student", content: attempt.student_answer });
+      const feedbackContent = typeof attempt.feedback === "string" ? attempt.feedback : attempt.feedback?.content ?? "";
+      msgs.push({ id: `resume-f-${i}`, role: "ai", type: attempt.score >= 0.6 ? "correct" : "partial", content: feedbackContent });
+    }
+  }
+  return msgs;
+}
+
 interface Message {
   id: string;
   role: "ai" | "student";
@@ -74,29 +105,51 @@ export function DiagnosisSession() {
   const [activeTab, setActiveTab] = useState<"image" | "chat">("image");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Create session on mount
+  // Create or resume session on mount
   useEffect(() => {
     if (!caseId || sessionId) return;
-    const create = async () => {
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-      const token = localStorage.getItem('sara_token') || '';
-      const response = await fetch(`${API_BASE}/sessions/`, {
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    const token = localStorage.getItem('sara_token') || '';
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+    const initSession = async () => {
+      // Check for an existing resumable session (PAUSED or IN_PROGRESS) for this case
+      const listRes = await fetch(`${API_BASE}/sessions/?case=${caseId}`, { headers });
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const resumable = (listData.results as any[] ?? []).find(
+          (s: any) => s.status === 'ABANDONED' || s.status === 'IN_PROGRESS'
+        );
+        if (resumable) {
+          const detailRes = await fetch(`${API_BASE}/sessions/${resumable.id}/`, { headers });
+          if (detailRes.ok) {
+            const detail = await detailRes.json();
+            // Reactivate ABANDONED session (no-op if already IN_PROGRESS)
+            await fetch(`${API_BASE}/sessions/${resumable.id}/resume/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...headers },
+            });
+            setSessionId(detail.id);
+            setMessages(buildMessagesFromAttempts(detail.step_attempts ?? [], detail.current_step ?? 0));
+            return;
+          }
+        }
+      }
+
+      // No resumable session — create a new one
+      const createRes = await fetch(`${API_BASE}/sessions/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ case_id: caseId })
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ case_id: caseId }),
       });
-      if (response.ok) {
-        const data = await response.json();
+      if (createRes.ok) {
+        const data = await createRes.json();
         setSessionId(data.id);
-        setMessages([{
-          id: "1",
-          role: "ai",
-          type: "question",
-          content: `Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường mà bạn nhận thấy.`
-        }]);
+        setMessages([{ id: "1", role: "ai", type: "question", content: QUESTION_PROMPTS[0] }]);
       }
     };
-    create();
+
+    initSession();
   }, [caseId, sessionId]);
 
   // Scroll to latest message
@@ -186,20 +239,11 @@ export function DiagnosisSession() {
 
     if (nextStepNum !== undefined && nextStepNum < steps.length) {
       const nextStepName = steps[nextStepNum];
-      const questionPrompts: Record<number, string> = {
-        0: "Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường.",
-        1: "Bước 2: Mô tả chi tiết các đặc điểm của tổn thương bạn quan sát thấy.",
-        2: "Bước 3: Diễn giải ý nghĩa lâm sàn của các phát hiện này.",
-        3: "Bước 4: Đưa ra giả thuyết chẩn đoán dự phòng.",
-        4: "Bước 5: Phân tích các chẩn đoán phân biệt cần loại trừ.",
-        5: "Bước 6: Đưa ra kết luận chẩn đoán cuối cùng."
-      };
-
       const nextMsg: Message = {
         id: Date.now().toString(),
         role: "ai",
         type: "question",
-        content: questionPrompts[nextStepNum] || `Bước ${nextStepNum + 1}: Hãy tiếp tục với bước ${nextStepName}.`
+        content: QUESTION_PROMPTS[nextStepNum] || `Bước ${nextStepNum + 1}: Hãy tiếp tục với bước ${nextStepName}.`
       };
       setMessages((prev) => [...prev, nextMsg]);
       setActiveTab("chat");

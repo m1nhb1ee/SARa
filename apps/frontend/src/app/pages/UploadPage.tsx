@@ -643,6 +643,33 @@ export function UploadPage() {
               onChange={handleFileChange}
             />
           </div>
+          
+          {/* ── VALIDATION ERROR BANNER ── */}
+          {uploadError && (
+            <div className="mb-6 relative z-10"
+              style={{ border: '1.5px solid #C0392B', background: 'rgba(192,57,43,0.06)', padding: '14px 16px 12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <span style={{ fontFamily: "'Special Elite', cursive", fontSize: '11px', letterSpacing: '0.1em', color: '#C0392B' }}>
+                  {uploadError.errorType === 'not_medical'
+                    ? '⚠ ẢNH KHÔNG HỢP LỆ'
+                    : '⚠ ẢNH KHÔNG NHẤT QUÁN'}
+                </span>
+                <button
+                  onClick={() => setUploadError(null)}
+                  style={{ fontFamily: "'Courier Prime', monospace", fontSize: '13px', color: '#C0392B', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+              <ul style={{ margin: 0, padding: '0 0 0 14px' }}>
+                {uploadError.issues.map((issue, i) => (
+                  <li key={i} style={{ fontFamily: "'Lora', serif", fontSize: '13px', color: '#2C1810', lineHeight: 1.6 }}>
+                    {issue}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Faint ruled line overlay */}
           <div className="absolute inset-0 pointer-events-none" style={{
@@ -770,34 +797,7 @@ export function UploadPage() {
               </p>
             </div>
           </div>
-
-          {/* ── VALIDATION ERROR BANNER ── */}
-          {uploadError && (
-            <div className="mb-6 relative z-10"
-              style={{ border: '1.5px solid #C0392B', background: 'rgba(192,57,43,0.06)', padding: '14px 16px 12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                <span style={{ fontFamily: "'Special Elite', cursive", fontSize: '11px', letterSpacing: '0.1em', color: '#C0392B' }}>
-                  {uploadError.errorType === 'not_medical'
-                    ? '⚠ ẢNH KHÔNG HỢP LỆ'
-                    : '⚠ ẢNH KHÔNG NHẤT QUÁN'}
-                </span>
-                <button
-                  onClick={() => setUploadError(null)}
-                  style={{ fontFamily: "'Courier Prime', monospace", fontSize: '13px', color: '#C0392B', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                >
-                  ✕
-                </button>
-              </div>
-              <ul style={{ margin: 0, padding: '0 0 0 14px' }}>
-                {uploadError.issues.map((issue, i) => (
-                  <li key={i} style={{ fontFamily: "'Lora', serif", fontSize: '13px', color: '#2C1810', lineHeight: 1.6 }}>
-                    {issue}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
+              
           {/* ── SUBMIT BUTTON ── */}
           <div className="relative z-10">
             <button
