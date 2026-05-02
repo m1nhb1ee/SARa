@@ -168,6 +168,17 @@ export function Dashboard() {
     return map;
   }, [sessionsData]);
 
+  // Maps case_id → final_score (0–1) for completed sessions
+  const scoreMap = useMemo<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const s of (sessionsData?.results ?? [])) {
+      if (s.status === 'COMPLETED' && s.final_score != null) {
+        map[s.case_id ?? s.case] = s.final_score;
+      }
+    }
+    return map;
+  }, [sessionsData]);
+
   // Maps case_id → most recent non-completed session id (for resume/discard flow)
   const activeSessionMap = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -350,11 +361,14 @@ export function Dashboard() {
               const isConfirming = confirmDeleteId === c.id;
               const isErasing = erasingId === c.id;
 
+              const rawScore = scoreMap[c.id];
+              const displayScore = rawScore != null ? Math.round(rawScore * 100) : null;
+
               const rightScore =
                 c.status === 'Hoàn thành' ? (
                   <>
                     <div className={styles.cardScore}>
-                      {Math.floor(70 + (globalIdx * 7) % 25)}
+                      {displayScore ?? '—'}
                       <span style={{ fontSize: 12, color: 'var(--ink-faded)' }}>/100</span>
                     </div>
                     <div className={styles.cardScoreLbl}>Your Score</div>
@@ -552,52 +566,108 @@ export function Dashboard() {
         <div
           style={{
             position: 'fixed', inset: 0, zIndex: 100,
-            background: 'rgba(44,24,16,0.55)',
+            background: 'rgba(44,24,16,0.62)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
           }}
           onClick={() => !discarding && setResumeTarget(null)}
         >
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: 'var(--parchment, #FAF3E3)',
-              border: '1.5px solid var(--sepia, #C4A882)',
-              padding: '40px 48px',
-              maxWidth: 480, width: '92%',
-              fontFamily: "'Special Elite', cursive",
+              background: '#F5EDD6',
+              maxWidth: 480, width: '100%',
               position: 'relative',
+              boxShadow: '0 8px 40px rgba(44,24,16,0.32)',
             }}
           >
-            <div style={{ fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-faded, #8B7355)', marginBottom: 12 }}>
-              Case đang làm dở
-            </div>
-            <div style={{ fontSize: 18, color: 'var(--ink, #2C1810)', marginBottom: 10, lineHeight: 1.5 }}>
-              {resumeTarget.title}
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--ink-faded, #8B7355)', marginBottom: 32, fontFamily: "'Lora', Georgia, serif", fontStyle: 'italic' }}>
-              Bạn đã làm dở case này. Muốn tiếp tục từ bước đang dở, hay bắt đầu lại từ đầu?
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <SketchBorder id="resume-modal-border" color="#7A6248" opacity={0.75} />
+
+            {/* ── Header strip ── */}
+            <div style={{
+              background: '#EDE0C4',
+              borderBottom: '2px solid #C4A882',
+              padding: '18px 28px 14px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <div>
+                <div style={{
+                  fontFamily: "'Courier Prime', monospace",
+                  fontSize: 10, letterSpacing: '0.22em',
+                  textTransform: 'uppercase', color: '#6B4C3B',
+                  marginBottom: 4,
+                }}>
+                  — Session đang làm dở —
+                </div>
+                <div style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: 17, fontWeight: 700, color: '#2C1810',
+                  lineHeight: 1.35,
+                }}>
+                  {resumeTarget.title}
+                </div>
+              </div>
               <button
                 disabled={discarding}
+                onClick={() => setResumeTarget(null)}
+                style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  fontFamily: "'Special Elite', cursive",
+                  fontSize: 22, lineHeight: 1,
+                  color: '#C0392B', padding: '0 0 2px 12px',
+                  flexShrink: 0,
+                }}
+                title="Đóng"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* ── Body ── */}
+            <div style={{ padding: '22px 28px 16px' }}>
+              <div style={{
+                fontFamily: "'Lora', Georgia, serif",
+                fontSize: 14, color: '#2C1810', lineHeight: 1.75,
+              }}>
+                Bạn đã làm dở case này. Muốn tiếp tục từ bước đang dở, hay xóa và bắt đầu lại từ đầu?
+              </div>
+            </div>
+
+            {/* ── Footer buttons ── */}
+            <div style={{
+              display: 'flex', gap: 12,
+              padding: '4px 28px 24px',
+            }}>
+              {/* Tiếp tục — dark ink fill */}
+              <div
+                role="button"
                 onClick={() => {
+                  if (discarding) return;
                   const cid = resumeTarget.caseId;
                   setResumeTarget(null);
                   navigate(`/session/${cid}`);
                 }}
                 style={{
-                  flex: 1,
-                  fontFamily: "'Special Elite', cursive", fontSize: 14,
-                  background: 'var(--ink, #2C1810)', color: 'var(--parchment, #FAF3E3)',
-                  border: 'none', padding: '12px 0', cursor: 'pointer',
-                  letterSpacing: '0.06em',
+                  flex: 1, position: 'relative',
+                  background: '#2C1810', color: '#F5EDD6',
+                  padding: '13px 0', textAlign: 'center',
+                  fontFamily: "'Special Elite', cursive",
+                  fontSize: 14, letterSpacing: '0.08em',
+                  cursor: 'pointer',
+                  userSelect: 'none',
                 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#3D2214'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#2C1810'; }}
               >
+                <SketchBorder id="btn-continue" color="#F5EDD6" opacity={0.4} />
                 Tiếp tục
-              </button>
-              <button
-                disabled={discarding}
+              </div>
+
+              {/* Làm lại — terracotta sketch outline, fills on hover */}
+              <div
+                role="button"
                 onClick={async () => {
+                  if (discarding) return;
                   setDiscarding(true);
                   await deleteSession(resumeTarget.sessionId);
                   setDiscarding(false);
@@ -605,32 +675,33 @@ export function Dashboard() {
                   setResumeTarget(null);
                   navigate(`/session/${cid}`);
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#C0392B'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--parchment, #FAF3E3)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#C0392B'; }}
                 style={{
-                  flex: 1,
-                  fontFamily: "'Special Elite', cursive", fontSize: 14,
+                  flex: 1, position: 'relative',
                   background: 'transparent', color: '#C0392B',
-                  border: '1.5px solid #C0392B', padding: '12px 0', cursor: 'pointer',
-                  letterSpacing: '0.06em',
-                  opacity: discarding ? 0.5 : 1,
+                  padding: '13px 0', textAlign: 'center',
+                  fontFamily: "'Special Elite', cursive",
+                  fontSize: 14, letterSpacing: '0.08em',
+                  cursor: discarding ? 'not-allowed' : 'pointer',
+                  opacity: discarding ? 0.55 : 1,
+                  userSelect: 'none',
                   transition: 'background 0.18s, color 0.18s',
                 }}
+                onMouseEnter={e => {
+                  if (discarding) return;
+                  const el = e.currentTarget as HTMLElement;
+                  el.style.background = '#C0392B';
+                  el.style.color = '#F5EDD6';
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget as HTMLElement;
+                  el.style.background = 'transparent';
+                  el.style.color = '#C0392B';
+                }}
               >
+                <SketchBorder id="btn-restart" color="#C0392B" opacity={0.85} />
                 {discarding ? 'Đang xóa...' : 'Làm lại từ đầu'}
-              </button>
+              </div>
             </div>
-            <button
-              disabled={discarding}
-              onClick={() => setResumeTarget(null)}
-              style={{
-                position: 'absolute', top: 12, right: 16,
-                background: 'transparent', border: 'none', cursor: 'pointer',
-                fontSize: 22, color: '#C0392B', lineHeight: 1,
-              }}
-            >
-              ×
-            </button>
           </div>
         </div>
       )}
