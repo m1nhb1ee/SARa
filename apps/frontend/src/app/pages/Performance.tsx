@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   User, Pencil, Home as HomeIcon, ChevronRight,
@@ -19,6 +19,25 @@ export function ProfilePage() {
   const { user } = useAuth();
   const { data: stats } = useMyStats();
   const { data: sessionsData } = useSessions({ status: 'COMPLETED' });
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  // Fetch user profile if not available from auth
+  useEffect(() => {
+    if (user?.id) {
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+      const token = localStorage.getItem('sara_token') || '';
+      
+      fetch(`${API_BASE}/auth/me/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then(res => res.json())
+        .then(data => {
+          console.log('User profile response:', data);
+          setUserProfile(data.user);
+        })
+        .catch(err => console.error('Failed to fetch user profile:', err));
+    }
+  }, [user?.id]);
 
   const recentSessions = (sessionsData?.results ?? []).slice(0, 6);
 
@@ -167,7 +186,7 @@ export function ProfilePage() {
             <div className="flex-1 pt-4">
               <div className="mb-1" style={{ color: '#6B4C3B', fontFamily: "'Courier Prime', monospace", fontSize: '12px' }}>Dr.</div>
               <h1 className="mb-2" style={{ fontFamily: "'Playfair Display', serif", fontSize: '2.5rem', color: '#2C1810', fontWeight: 700 }}>
-                {user?.username ?? '—'}
+                {userProfile?.full_name || '—'}
               </h1>
               <div className="mb-6 h-0.5" style={{ background: '#6B4C3B', width: '200px', transform: 'skewY(-0.5deg)' }} />
 
