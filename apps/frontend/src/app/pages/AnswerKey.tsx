@@ -4,6 +4,7 @@ import { Home, ChevronRight, BookMarked, Save, ArrowRight, RotateCcw, Trophy } f
 import { apiClient } from '@/api/client';
 import { STEPS as STEP_CODES, STEP_LABELS } from '@/constants/training';
 import { scoreColor } from '@/constants/styles';
+import { VolumeSliceViewer } from '@/app/components/shared/VolumeSliceViewer';
 
 // ─── Per-step visual metadata (design tokens only, no mock text) ───
 const STEP_VISUAL_META: Array<{
@@ -287,8 +288,8 @@ function StepCard({
             </div>
             <p
               style={{
-                fontFamily: "'Caveat', cursive",
-                fontSize: '14px',
+                fontFamily: "'Lora', serif",
+                fontSize: '16px',
                 color: '#2C1810',
                 lineHeight: 1.6,
               }}
@@ -599,6 +600,8 @@ export function AnswerKey() {
   const answerKey: Record<string, any> = answerKeyData?.answer_key ?? {};
   const finalScore: number         = sessionScore ?? answerKeyData?.your_score ?? 0;
   const finalScorePct: number      = Math.round(finalScore * 100);
+  const caseImages: any[]          = caseData?.images ?? [];
+  const legacyUrl: string          = caseData?.image_urls?.[0] ?? '';
 
   // Build visual step cards by merging STEP_CODES + API data
   const stepCards: StepItem[] = STEP_CODES.map((code: string, idx: number) => {
@@ -838,17 +841,11 @@ export function AnswerKey() {
                 />
               ))}
 
-              {/* <ImageWithFallback
-                src={caseData?.images?.[0]?.slices?.[0]?.image_url ?? caseData?.image_urls?.[0] ?? ''}
-                alt={`${caseData?.title ?? 'Medical scan'} — Case ${caseLabel}`}
-                style={{
-                  width: '100%',
-                  aspectRatio: '1 / 1.1',
-                  objectFit: 'cover',
-                  filter: 'sepia(12%) contrast(1.1) brightness(0.95)',
-                  display: 'block',
-                }}
-              /> */}
+              <VolumeSliceViewer
+                images={caseImages}
+                legacyUrl={legacyUrl}
+                zoom={1}
+              />
 
               {/* Annotation overlay — visible from step II onwards */}
               {unlockedUntil >= 1 && (
