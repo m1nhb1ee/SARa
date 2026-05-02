@@ -575,7 +575,7 @@ export function DiagnosisSession() {
                       : <AlertTriangle size={14} color="#C4A882" />
                     }
                     <span className={`${styles.feedbackNoteTitle} ${lastFeedback.passed ? styles.feedbackNoteTitlePassed : styles.feedbackNoteTitleFailed}`}>
-                      {lastFeedback.passed ? "Dr. AI's Notes — Chính xác!" : "Dr. AI's Notes — Cần cải thiện"}
+                      {lastFeedback.passed ? "Dr. AI's Notes — Correct!" : "Dr. AI's Notes — Need Improvement"}
                     </span>
                   </div>
                   <p className={styles.feedbackNoteText}>{typeof lastFeedback.attempt.feedback === 'string' ? lastFeedback.attempt.feedback : lastFeedback.attempt.feedback?.content}</p>
@@ -586,7 +586,7 @@ export function DiagnosisSession() {
                   <div className={styles.feedbackErrors}>
                     <div className={styles.feedbackErrorsHeader}>
                       <AlertTriangle size={13} color="#A93226" />
-                      <span className={styles.feedbackErrorsTitle}>Lỗi phát hiện</span>
+                      <span className={styles.feedbackErrorsTitle}>Errors</span>
                     </div>
                     <div className={styles.feedbackErrorTags}>
                       {lastFeedback.attempt.errors.map((error, i) => (
