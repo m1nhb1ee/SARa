@@ -15,7 +15,9 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useCaseDetail, useSessionDetail, useSubmitAnswer, useExitSession } from "@/api/hooks";
-import styles from "./DiagnosisSession.module.css";
+import styles from "@/styles/DiagnosisSession.module.css";
+import { VolumeSliceViewer } from "@/app/components/shared/VolumeSliceViewer";
+import type { CaseVolume } from "@/types";
 
 const steps = ["OBSERVE", "DESCRIBE", "INTERPRET", "HYPOTHESIS", "DDx", "CONCLUSION"];
 
@@ -104,7 +106,8 @@ export function DiagnosisSession() {
 
   const currentStep = sessionData?.current_step || 0;
   const stepName = steps[currentStep] || "UNKNOWN";
-  const caseImage = caseData?.image_urls?.[0] || "";
+  const caseImages: CaseVolume[] = caseData?.images ?? [];
+  const legacyUrl: string = caseData?.image_urls?.[0] ?? '';
   const clinicalHistory = caseData?.clinical_history || "";
 
   const handleSend = async () => {
@@ -323,13 +326,13 @@ export function DiagnosisSession() {
               <div className={styles.imageCornerTR} />
               <div className={styles.imageCornerBL} />
               <div className={styles.imageCornerBR} />
-              {caseImage ? (
+              {(caseImages.length > 0 || legacyUrl) ? (
                 <>
-                  <img
-                    src={caseImage}
-                    alt="Medical Image"
-                    className={styles.medicalImage}
-                    style={{ transform: `scale(${zoom})`, transition: "transform 0.2s" }}
+                  <VolumeSliceViewer
+                    images={caseImages}
+                    legacyUrl={legacyUrl}
+                    zoom={zoom}
+                    imgClassName={styles.medicalImage}
                   />
                   <div className={styles.zoomControls}>
                     {[
@@ -344,7 +347,7 @@ export function DiagnosisSession() {
                   </div>
                 </>
               ) : (
-                <p className={styles.imagePlaceholder}>[ Loading image... ]</p>
+                <p className={styles.imagePlaceholder}>[ Đang tải hình ảnh... ]</p>
               )}
             </div>
           </motion.div>

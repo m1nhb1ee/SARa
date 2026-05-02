@@ -1,0 +1,85 @@
+/* VolumeSliceViewer — vintage medical notebook aesthetic */
+
+.wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Volume tab bar — shown when there are multiple volumes */
+.volumeTabBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  background: rgba(237, 224, 196, 0.92);
+  border-bottom: 1px solid #C4A882;
+  z-index: 4;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+
+.volumeTabBar::-webkit-scrollbar {
+  display: none;
+}
+
+.volumeTab {
+  flex-shrink: 0;
+  font-family: 'Courier Prime', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border: 1px dashed #C4A882;
+  background: transparent;
+  color: #6B4C3B;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.volumeTabActive {
+  border: 1px solid #C0392B;
+  background: rgba(192, 57, 43, 0.12);
+  color: #C0392B;
+}
+
+/* Slice counter badge — bottom-left overlay */
+.sliceBadge {
+  position: absolute;
+  bottom: 48px;
+  left: 8px;
+  z-index: 4;
+  font-family: 'Courier Prime', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #F5EDD6;
+  background: rgba(44, 24, 16, 0.7);
+  padding: 3px 8px;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Scroll hint — fades out after 3s */
+.scrollHint {
+  position: absolute;
+  bottom: 72px;
+  left: 8px;
+  z-index: 4;
+  font-family: 'Courier Prime', monospace;
+  font-size: 10px;
+  color: #F5EDD6;
+  background: rgba(44, 24, 16, 0.55);
+  padding: 2px 7px;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
+  border: 1px dashed rgba(245, 237, 214, 0.4);
+}
