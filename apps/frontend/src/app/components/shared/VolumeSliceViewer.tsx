@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { CaseVolume } from '@/types';
+import { useImageCache } from '@/api/useImageCache';
 import styles from '@/styles/VolumeSliceViewer.module.css';
 
 interface VolumeSliceViewerProps {
@@ -20,6 +21,10 @@ export function VolumeSliceViewer({ images, legacyUrl, zoom, imgClassName }: Vol
   const currentVolume = volumes[activeVolumeIdx];
   const totalSlices = currentVolume?.slices?.length ?? 1;
   const currentUrl = currentVolume?.slices?.[activeSliceIdx]?.image_url ?? legacyUrl ?? '';
+
+  // Image cache — preloads all slices as blob URLs, releases on unmount
+  const { getCachedUrl, isReady, progress } = useImageCache(volumes, legacyUrl);
+  const showCacheBar = progress.total > 1 && !isReady;
 
   // Reset slice index when volume changes
   useEffect(() => { setActiveSliceIdx(0); }, [activeVolumeIdx]);
@@ -51,6 +56,8 @@ export function VolumeSliceViewer({ images, legacyUrl, zoom, imgClassName }: Vol
     return () => el.removeEventListener('wheel', handler);
   }, [totalSlices]);
 
+  const pct = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;
+
   return (
     <div ref={wrapperRef} className={styles.wrapper}>
       {/* Volume tabs — only when multiple volumes */}
@@ -68,15 +75,38 @@ export function VolumeSliceViewer({ images, legacyUrl, zoom, imgClassName }: Vol
         </div>
       )}
 
-      {/* Medical image */}
+      {/* Medical image — uses blob URL once cached, falls back to original while loading */}
       {currentUrl && (
         <img
-          src={currentUrl}
+          src={getCachedUrl(currentUrl)}
           alt="Medical Image"
           className={imgClassName}
           style={{ transform: `scale(${zoom})`, transition: 'transform 0.2s' }}
         />
       )}
+
+      {/* Cache preload progress bar — disappears once all images are in memory */}
+      <AnimatePresence>
+        {showCacheBar && (
+          <motion.div
+            className={styles.cacheProgress}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <span className={styles.cacheProgressLabel}>
+              Cache {progress.loaded}/{progress.total}
+            </span>
+            <div className={styles.cacheProgressTrack}>
+              <div
+                className={styles.cacheProgressFill}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Slice counter badge — only when multiple slices */}
       {totalSlices > 1 && (

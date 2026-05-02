@@ -67,6 +67,46 @@
   user-select: none;
 }
 
+/* Cache preload progress — top-right corner overlay */
+.cacheProgress {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  font-family: 'Courier Prime', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #F5EDD6;
+  background: rgba(44, 24, 16, 0.72);
+  padding: 4px 8px 5px;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 100px;
+}
+
+.cacheProgressLabel {
+  white-space: nowrap;
+}
+
+.cacheProgressTrack {
+  width: 100%;
+  height: 3px;
+  background: rgba(245, 237, 214, 0.2);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.cacheProgressFill {
+  height: 100%;
+  background: #7D9B76;
+  border-radius: 1px;
+  transition: width 0.15s ease;
+}
+
 /* Scroll hint — fades out after 3s */
 .scrollHint {
   position: absolute;
