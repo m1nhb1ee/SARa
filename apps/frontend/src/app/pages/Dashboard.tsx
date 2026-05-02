@@ -4,7 +4,7 @@ import { useCases, useSessions, useUploadedCases, useDeleteUploadedCase } from '
 import { mapModality, mapDifficulty, getImageKey } from '@/utils/mappers';
 import type { CaseItem, SessionStatus, Modality, Difficulty } from '@/types';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
-import styles from './Dashboard.module.css';
+import styles from '@/styles/Dashboard.module.css';
 
 const MODALITY_OPTIONS = ['Tất cả', 'X-Ray', 'CT', 'MRI'];
 const DIFFICULTY_OPTIONS = ['Tất cả', 'Cơ bản', 'Trung bình', 'Nặng cao'];
