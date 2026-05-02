@@ -75,6 +75,7 @@ interface FeedbackResult {
   };
   passed: boolean;
   next_step?: number;
+  session_complete?: boolean;
   hint?: string;
   message: string;
 }
@@ -97,6 +98,7 @@ export function DiagnosisSession() {
   const [input, setInput] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<FeedbackResult | null>(null);
+  const [showCompletion, setShowCompletion] = useState(false);
   const [shortAnswerError, setShortAnswerError] = useState<string | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
@@ -237,6 +239,13 @@ export function DiagnosisSession() {
       nextStepNum = sessionData?.current_step;
     }
 
+    // Session complete — show completion popup instead of navigating
+    if (lastFeedback?.session_complete) {
+      await refetchSession();
+      setShowCompletion(true);
+      return;
+    }
+
     if (nextStepNum !== undefined && nextStepNum < steps.length) {
       const nextStepName = steps[nextStepNum];
       const nextMsg: Message = {
@@ -247,8 +256,6 @@ export function DiagnosisSession() {
       };
       setMessages((prev) => [...prev, nextMsg]);
       setActiveTab("chat");
-    } else {
-      navigate(`/answer-key/${caseId}`);
     }
   };
 
@@ -679,6 +686,84 @@ export function DiagnosisSession() {
                   ) : (
                     <>Xem kết quả cuối cùng <ChevronRight size={15} /></>
                   )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── COMPLETION MODAL ── */}
+      <AnimatePresence>
+        {showCompletion && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={styles.exitModalOverlay}
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.94, opacity: 0, y: 12 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className={styles.exitModalCard}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className={styles.exitModalHeader}>
+                <div className={styles.exitModalHeaderRow}>
+                  <div className={`${styles.exitModalIcon}`} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid #7D9B76' }}>
+                    <CheckCircle2 size={20} color="#7D9B76" />
+                  </div>
+                  <div>
+                    <h3 className={styles.exitModalTitle}>Hoàn thành!</h3>
+                    <p className={styles.exitModalSubtitle}>{caseData?.title}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Body — score */}
+              <div className={styles.exitModalBody}>
+                <div className={styles.exitModalNote} style={{ textAlign: 'center', padding: '20px 12px', transform: 'rotate(0deg)' }}>
+                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--vj-faded)', marginBottom: 8 }}>
+                    Điểm trung bình
+                  </div>
+                  <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 48, fontWeight: 700, color: 'var(--vj-ink)', lineHeight: 1 }}>
+                    {sessionData?.final_score != null
+                      ? Math.round(sessionData.final_score * 100)
+                      : '—'}
+                  </div>
+                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 12, color: 'var(--vj-faded)', marginTop: 4 }}>
+                    / 100
+                  </div>
+                </div>
+
+                <div className={styles.exitModalInfo} style={{ marginTop: 14 }}>
+                  <div className={styles.exitModalInfoLabel}>Kết quả</div>
+                  <div className={styles.exitModalInfoDetails}>
+                    {steps.map((s, i) => (
+                      <span key={s} style={{ display: 'inline-block', marginRight: 6 }}>
+                        <span style={{ color: 'var(--vj-terracotta)' }}>✓</span> {s}{i < steps.length - 1 ? ' ·' : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className={styles.exitModalFooter}>
+                <button
+                  onClick={() => { setShowCompletion(false); navigate('/'); }}
+                  className={styles.exitModalCancelBtn}
+                >
+                  Về trang chính
+                </button>
+                <button
+                  onClick={() => { setShowCompletion(false); navigate(`/answer-key/${caseId}`); }}
+                  className={styles.exitModalConfirmBtn}
+                >
+                  Xem đáp án chi tiết
                 </button>
               </div>
             </motion.div>

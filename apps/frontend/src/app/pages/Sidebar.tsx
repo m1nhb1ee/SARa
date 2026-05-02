@@ -3,7 +3,6 @@ import {
   Home, Upload, FolderOpen, User, Settings, LogOut
 } from 'lucide-react';
 import { useAuth } from '@/api/authContext';
-import { BrainLogo } from '@/app/components/shared/BrainLogo';
 
 const NAV_ITEMS = [
   { name: 'Home',     path: '/home',        tabColor: '#C9882A', icon: Home },
@@ -81,43 +80,81 @@ export function Sidebar() {
           style={{ background: 'radial-gradient(circle at top right, rgba(0,0,0,0.15) 0%, transparent 70%)' }} />
 
         {/* ── Logo / App Identity ── */}
-        <div className="relative z-10 flex flex-col items-center pt-7 pb-5 px-5">
-          <BrainLogo size={40} color="#C9A84C" filterId="sidebar" opacity={0.55} />
+        <div className="relative z-10 flex flex-col items-center pt-8 pb-5 px-5">
 
-          <div className="mt-2 text-center">
+          {/* Minimal modern logo mark */}
+          <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+            <defs>
+              <filter id="logo-sketch" x="-8%" y="-8%" width="116%" height="116%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" seed="9" result="noise" />
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" xChannelSelector="R" yChannelSelector="G" />
+              </filter>
+            </defs>
+            <g filter="url(#logo-sketch)">
+              {/* Outer ring */}
+              <circle cx="36" cy="36" r="28" stroke="#C9A84C" strokeWidth="1.6" opacity="0.9" />
+              {/* Cross-hair lines — stop short of ring */}
+              <line x1="36" y1="12" x2="36" y2="22" stroke="#C9A84C" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+              <line x1="36" y1="50" x2="36" y2="60" stroke="#C9A84C" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+              <line x1="12" y1="36" x2="22" y2="36" stroke="#C9A84C" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+              <line x1="50" y1="36" x2="60" y2="36" stroke="#C9A84C" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+              {/* Center dot */}
+              <circle cx="36" cy="36" r="2.2" fill="#C9A84C" opacity="0.9" />
+              {/* Corner brackets — top-left */}
+              <path d="M6,14 L6,6 L14,6" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+              {/* top-right */}
+              <path d="M66,14 L66,6 L58,6" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+              {/* bottom-left */}
+              <path d="M6,58 L6,66 L14,66" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+              {/* bottom-right */}
+              <path d="M66,58 L66,66 L58,66" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+              {/* Inner thin ring */}
+              <circle cx="36" cy="36" r="10" stroke="#C9A84C" strokeWidth="0.8" strokeDasharray="5 3" opacity="0.35" />
+            </g>
+          </svg>
+
+          {/* SARa wordmark */}
+          <div className="mt-3 text-center">
             <div
               style={{
                 fontFamily: "'Playfair Display', serif",
-                fontSize: '20px',
+                fontSize: '22px',
                 fontWeight: 700,
-                letterSpacing: '0.07em',
+                letterSpacing: '0.12em',
                 color: '#C9A84C',
-                textShadow: '0px 1px 0px rgba(255,255,255,0.07), 0px -1px 3px rgba(0,0,0,0.75), 0px 2px 4px rgba(0,0,0,0.5)',
               }}
             >
               SARa
             </div>
 
-            <div className="mt-2 mx-auto" style={{
-              height: '1px',
-              width: '70px',
-              background: 'linear-gradient(to right, transparent, rgba(201,168,76,0.55), transparent)',
-            }} />
+            {/* Sketch underline */}
+            <svg viewBox="0 0 90 10" style={{ width: 90, height: 10, display: 'block', margin: '3px auto 0' }}>
+              <defs>
+                <filter id="line-jitter" x="-5%" y="-50%" width="110%" height="200%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="3" result="noise" />
+                  <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.5" xChannelSelector="R" yChannelSelector="G" />
+                </filter>
+              </defs>
+              <g filter="url(#line-jitter)">
+                <path d="M8,6 Q30,3 45,5 Q60,7 82,4" fill="none" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" opacity="0.6" />
+                <path d="M12,8 Q35,6 45,7 Q58,8 78,6" fill="none" stroke="#C9A84C" strokeWidth="0.7" strokeLinecap="round" opacity="0.25" />
+              </g>
+            </svg>
 
             <div
-              className="mt-1.5"
+              className="mt-2"
               style={{
                 fontFamily: "'Special Elite', cursive",
                 fontSize: '8px',
-                letterSpacing: '0.22em',
-                color: 'rgba(237,224,196,0.35)',
+                letterSpacing: '0.24em',
+                color: 'rgba(201,168,76,0.5)',
               }}
             >
               SMART AI RADIOLOGY
             </div>
           </div>
 
-          <div className="mt-4" style={{ color: 'rgba(201,168,76,0.3)', fontSize: '11px', letterSpacing: '2px' }}>
+          <div className="mt-4" style={{ color: 'rgba(201,168,76,0.25)', fontSize: '11px', letterSpacing: '3px' }}>
             — ✦ —
           </div>
         </div>
