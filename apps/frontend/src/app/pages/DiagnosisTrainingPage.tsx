@@ -146,21 +146,29 @@ export function DiagnosisTrainingPage() {
       </div>
 
       {/* Images */}
-      {caseData.image_urls && caseData.image_urls.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="font-semibold">Hình ảnh y tế</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {caseData.image_urls.map((url: string, idx: number) => (
-              <img
-                key={idx}
-                src={url}
-                alt={`Image ${idx + 1}`}
-                className="w-full rounded-lg border bg-neutral-100 object-cover max-h-96"
-              />
-            ))}
+      {(() => {
+        const volumes: { volume_name: string; slices: { image_url: string; slice_index: number }[] }[] = caseData?.images ?? [];
+        const allSlices = volumes.flatMap(v => v.slices);
+        const displayUrls: string[] = allSlices.length > 0
+          ? allSlices.map(s => s.image_url)
+          : (caseData?.image_urls ?? []);
+        if (displayUrls.length === 0) return null;
+        return (
+          <div className="space-y-2">
+            <h2 className="font-semibold">Hình ảnh y tế</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {displayUrls.map((url: string, idx: number) => (
+                <img
+                  key={idx}
+                  src={url}
+                  alt={`Hình ${idx + 1}`}
+                  className="w-full rounded-lg border bg-neutral-100 object-cover max-h-96"
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Progress */}
       <div className="space-y-2">

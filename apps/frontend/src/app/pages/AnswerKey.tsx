@@ -839,7 +839,7 @@ export function AnswerKey() {
               ))}
 
               {/* <ImageWithFallback
-                src={caseData?.image_url ?? ''}
+                src={caseData?.images?.[0]?.slices?.[0]?.image_url ?? caseData?.image_urls?.[0] ?? ''}
                 alt={`${caseData?.title ?? 'Medical scan'} — Case ${caseLabel}`}
                 style={{
                   width: '100%',
