@@ -11,6 +11,7 @@ from app.core.supabase_client import get_supabase
 from .serializers import ALLOWED_EXTENSIONS, UploadInputSerializer
 from .services import (
     analyze_medical_image,
+    classify_and_validate_images,
     create_case_in_supabase,
     delete_uploaded_case,
     upload_image_to_storage,
@@ -99,6 +100,17 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
 
         try:
             image_data = [(f, f.read()) for f in image_files]
+            all_bytes = [b for _, b in image_data]
+
+            # ── Bước 1: Kiểm tra ảnh y tế + consistency trước khi upload storage ──
+            validation = classify_and_validate_images(all_bytes, volume_names, modality)
+            if not validation['valid']:
+                return Response({
+                    'error': 'image_validation_failed',
+                    'error_type': validation['error_type'],
+                    'issues': validation['issues'],
+                    'classifications': validation['classifications'],
+                }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
             image_entries = []
             for (f, image_bytes), idx, vol in zip(image_data, slice_indexes, volume_names):

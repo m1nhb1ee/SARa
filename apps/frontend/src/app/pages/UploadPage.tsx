@@ -303,6 +303,7 @@ export function UploadPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [volumeNames, setVolumeNames] = useState<string[]>([]);
+  const [uploadError, setUploadError] = useState<{ errorType: string; issues: string[] } | null>(null);
   const [region, setRegion] = useState('unspecified');
   const [caseName, setCaseName] = useState('');
   const [scanType, setScanType] = useState('X-Ray');
@@ -328,6 +329,7 @@ export function UploadPage() {
       setSelectedFiles(prev => [...prev, ...files]);
       setVolumeNames(prev => [...prev, ...files.map(() => 'Default')]);
       setDragState('attached');
+      setUploadError(null);
     }
   }, []);
 
@@ -337,6 +339,7 @@ export function UploadPage() {
       setSelectedFiles(prev => [...prev, ...files]);
       setVolumeNames(prev => [...prev, ...files.map(() => 'Default')]);
       setDragState('attached');
+      setUploadError(null);
     }
     e.target.value = '';
   };
@@ -402,6 +405,13 @@ export function UploadPage() {
         const n = String(Math.floor(Math.random() * 300 + 100)).padStart(4, '0');
         setCaseNum(n);
         setTimeout(() => { setDragState('attached'); setShowModal(true); }, 600);
+      } else if (response.status === 422) {
+        const data = await response.json();
+        setUploadError({
+          errorType: data.error_type ?? 'unknown',
+          issues: data.issues ?? [],
+        });
+        setDragState('attached');
       } else {
         setDragState('idle');
       }
@@ -760,6 +770,36 @@ export function UploadPage() {
               </p>
             </div>
           </div>
+
+          {/* ── VALIDATION ERROR BANNER ── */}
+          {uploadError && (
+            <div className="mb-6 relative z-10"
+              style={{ border: '1.5px solid #C0392B', background: 'rgba(192,57,43,0.06)', padding: '14px 16px 12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <span style={{ fontFamily: "'Special Elite', cursive", fontSize: '11px', letterSpacing: '0.1em', color: '#C0392B' }}>
+                  {uploadError.errorType === 'not_medical'
+                    ? '⚠ ẢNH KHÔNG HỢP LỆ'
+                    : '⚠ ẢNH KHÔNG NHẤT QUÁN'}
+                </span>
+                <button
+                  onClick={() => setUploadError(null)}
+                  style={{ fontFamily: "'Courier Prime', monospace", fontSize: '13px', color: '#C0392B', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+              <ul style={{ margin: 0, padding: '0 0 0 14px' }}>
+                {uploadError.issues.map((issue, i) => (
+                  <li key={i} style={{ fontFamily: "'Lora', serif", fontSize: '13px', color: '#2C1810', lineHeight: 1.6 }}>
+                    {issue}
+                  </li>
+                ))}
+              </ul>
+              <p style={{ fontFamily: "'Caveat', cursive", fontSize: '12px', color: '#6B4C3B', marginTop: '8px', marginBottom: 0 }}>
+                Vui lòng thay thế ảnh và thử lại.
+              </p>
+            </div>
+          )}
 
           {/* ── SUBMIT BUTTON ── */}
           <div className="relative z-10">
