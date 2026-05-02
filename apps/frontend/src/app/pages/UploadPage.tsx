@@ -795,9 +795,6 @@ export function UploadPage() {
                   </li>
                 ))}
               </ul>
-              <p style={{ fontFamily: "'Caveat', cursive", fontSize: '12px', color: '#6B4C3B', marginTop: '8px', marginBottom: 0 }}>
-                Vui lòng thay thế ảnh và thử lại.
-              </p>
             </div>
           )}
 

@@ -314,29 +314,31 @@ def classify_and_validate_images(
         f'Image {idx} → volume="{volume_names[idx]}"' for idx in sample_indices
     )
 
-    prompt = f"""You are a medical imaging quality-control expert.
+    prompt = f"""Classify each image shown.
 
-Declared modality: {declared_modality}
-Image index → volume mapping: {volume_info}
+Context: a radiology education platform is validating user-uploaded files.
+Declared scan type: {declared_modality}
+Image index → volume group: {volume_info}
 
-For each image shown (in order of index), assess:
-1. Is it a genuine medical image (X-ray, CT scan, MRI, ultrasound, pathology slide, nuclear medicine scan)? Answer true or false.
-2. If medical, what exact type/sequence is it? (e.g. "Chest X-ray PA", "Brain MRI T2 axial", "Abdominal CT portal phase axial")
+Task — for each image:
+1. Identify the imaging technique shown (e.g. "X-ray", "CT axial", "MRI T2", "MRI T1", "Ultrasound", "Pathology slide").
+   If the image is NOT a medical/radiological scan (e.g. a regular photo, screenshot, diagram), set is_medical=false.
+2. Note which volume group it belongs to (given above).
 
-Then check: within each declared volume, are all images the same imaging modality AND sequence type?
+After classifying all images, check: within each volume group, do all images show the same imaging technique and sequence?
 
-Respond ONLY with valid JSON — no markdown, no extra text:
+Return ONLY valid JSON, no markdown:
 {{
   "images": [
-    {{"index": 0, "volume": "Default", "is_medical": true, "type": "Brain MRI T2 axial"}},
-    {{"index": 1, "volume": "Default", "is_medical": true, "type": "Brain MRI T2 axial"}}
+    {{"index": 0, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}},
+    {{"index": 1, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}}
   ],
   "issues": []
 }}
 
-Rules for populating "issues" (in Vietnamese):
-- For each non-medical image: "Ảnh số {{n}} (volume: '{{vol}}') không phải ảnh y tế. Vui lòng chỉ upload ảnh chẩn đoán hình ảnh."
-- For each volume whose images differ in type: "Volume '{{vol}}' chứa ảnh không nhất quán: {{list the detected types}}. Vui lòng upload cùng 1 loại ảnh trong 1 volume."
+Populate "issues" (in Vietnamese) only when:
+- An image is not a medical scan: "Ảnh số {{n}} (volume: '{{vol}}') không phải ảnh y tế. Vui lòng chỉ upload ảnh chẩn đoán hình ảnh."
+- A volume group contains images of different types: "Volume '{{vol}}' chứa ảnh không nhất quán: {{types found}}. Vui lòng upload cùng 1 loại ảnh trong 1 volume."
 """
 
     try:
@@ -351,6 +353,18 @@ Rules for populating "issues" (in Vietnamese):
         )
         raw = (response.choices[0].message.content or '').strip()
         logger.info(f"[image-validation] GPT-4o response: {raw}")
+
+        # GPT-4o content-policy refusal → skip validation gracefully
+        _lower = raw.lower()
+        if (
+            raw.startswith("I'm sorry") or
+            "i can't assist" in _lower or
+            "i cannot assist" in _lower or
+            "unable to assist" in _lower or
+            raw.find('{') < 0
+        ):
+            logger.warning(f"[image-validation] GPT-4o từ chối phân tích — bỏ qua validation: {raw[:80]}")
+            return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
 
         j_start = raw.find('{')
         j_end = raw.rfind('}') + 1
@@ -423,7 +437,21 @@ def _preprocess_with_llm(
             }],
             max_tokens=600,
         )
-        refined_prompt = response.choices[0].message.content.strip()
+        refined_prompt = (response.choices[0].message.content or '').strip()
+
+        # Detect content-policy refusal — don't forward garbage as VLM prompt
+        _lower = refined_prompt.lower()
+        is_refusal = (
+            len(refined_prompt) < 80 or
+            "i'm sorry" in _lower or
+            "i can't assist" in _lower or
+            "i cannot assist" in _lower or
+            "unable to assist" in _lower
+        )
+        if is_refusal:
+            logger.warning(f"LLM pre-processing trả về refusal — dùng default prompt: {refined_prompt[:80]}")
+            return build_analysis_prompt(modality, region, total_slices, volume_names)
+
         logger.info(f"LLM pre-processing complete — refined prompt generated ({len(refined_prompt)} chars)")
         logger.debug(f"[LLM prompt]\n{refined_prompt}")
         return refined_prompt

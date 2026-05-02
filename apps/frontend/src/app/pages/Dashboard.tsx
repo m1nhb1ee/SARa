@@ -310,7 +310,7 @@ export function Dashboard() {
             </button>
           ))}
           <span className={styles.filterCount}>
-            {casesLoading ? 'Đang tải...' : `${filtered.length} ca`}
+            {casesLoading ? 'Loading...' : `${filtered.length} ca`}
           </span>
         </div>
 
