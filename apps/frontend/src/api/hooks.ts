@@ -135,6 +135,11 @@ export function useExitSession() {
   return { exitSession: mutate, loading, error };
 }
 
+export function useDeleteSession() {
+  const { mutate, loading, error } = useMutation((sessionId: string) => apiClient.deleteSession(sessionId));
+  return { deleteSession: mutate, loading, error };
+}
+
 export function useUploadedCases() {
   const [state, patch] = useQueryState<any>();
 
