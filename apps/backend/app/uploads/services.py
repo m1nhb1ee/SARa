@@ -263,6 +263,121 @@ def _to_temp_file(image_file) -> tuple:
     raise ValueError(f"Không đọc được ảnh từ kiểu: {type(image_file)}")
 
 
+def classify_and_validate_images(
+    image_bytes_list: list,
+    volume_names: list,
+    declared_modality: str,
+) -> dict:
+    """
+    Gọi GPT-4o Vision để:
+    1. Kiểm tra ảnh có phải ảnh y tế không (không phải ảnh chụp thường, screenshot, v.v.)
+    2. Kiểm tra các ảnh trong cùng 1 volume có cùng loại/sequence không
+
+    Returns:
+        {
+            'valid': bool,
+            'error_type': None | 'not_medical' | 'inconsistent_volume',
+            'issues': [str],   # tiếng Việt, hiển thị thẳng cho user
+            'classifications': [{'index': int, 'volume': str, 'is_medical': bool, 'type': str}]
+        }
+
+    Nếu không có OPENAI_API_KEY hoặc GPT-4o call thất bại: trả về valid=True (skip validation).
+    """
+    import base64
+    import json
+    from openai import OpenAI
+
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not set — bỏ qua bước kiểm tra ảnh y tế")
+        return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
+
+    # Lấy tối đa 2 ảnh/volume, tổng không quá 6 ảnh để gọi GPT-4o nhanh
+    volume_to_indices: dict = {}
+    for i, vol in enumerate(volume_names):
+        volume_to_indices.setdefault(vol, []).append(i)
+
+    sample_indices: list[int] = []
+    for indices in volume_to_indices.values():
+        sample_indices.extend(indices[:2])
+    sample_indices = sample_indices[:6]
+
+    image_contents = []
+    for idx in sample_indices:
+        b64 = base64.b64encode(image_bytes_list[idx]).decode('utf-8')
+        image_contents.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"},
+        })
+
+    volume_info = ', '.join(
+        f'Image {idx} → volume="{volume_names[idx]}"' for idx in sample_indices
+    )
+
+    prompt = f"""You are a medical imaging quality-control expert.
+
+Declared modality: {declared_modality}
+Image index → volume mapping: {volume_info}
+
+For each image shown (in order of index), assess:
+1. Is it a genuine medical image (X-ray, CT scan, MRI, ultrasound, pathology slide, nuclear medicine scan)? Answer true or false.
+2. If medical, what exact type/sequence is it? (e.g. "Chest X-ray PA", "Brain MRI T2 axial", "Abdominal CT portal phase axial")
+
+Then check: within each declared volume, are all images the same imaging modality AND sequence type?
+
+Respond ONLY with valid JSON — no markdown, no extra text:
+{{
+  "images": [
+    {{"index": 0, "volume": "Default", "is_medical": true, "type": "Brain MRI T2 axial"}},
+    {{"index": 1, "volume": "Default", "is_medical": true, "type": "Brain MRI T2 axial"}}
+  ],
+  "issues": []
+}}
+
+Rules for populating "issues" (in Vietnamese):
+- For each non-medical image: "Ảnh số {{n}} (volume: '{{vol}}') không phải ảnh y tế. Vui lòng chỉ upload ảnh chẩn đoán hình ảnh."
+- For each volume whose images differ in type: "Volume '{{vol}}' chứa ảnh không nhất quán: {{list the detected types}}. Vui lòng upload cùng 1 loại ảnh trong 1 volume."
+"""
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}, *image_contents],
+            }],
+            max_tokens=500,
+        )
+        raw = (response.choices[0].message.content or '').strip()
+        logger.info(f"[image-validation] GPT-4o response: {raw}")
+
+        j_start = raw.find('{')
+        j_end = raw.rfind('}') + 1
+        parsed = json.loads(raw[j_start:j_end])
+
+        classifications = parsed.get('images', [])
+        issues = [s.strip() for s in parsed.get('issues', []) if s.strip()]
+
+        has_non_medical = any(not c.get('is_medical', True) for c in classifications)
+        error_type = None
+        if has_non_medical:
+            error_type = 'not_medical'
+        elif issues:
+            error_type = 'inconsistent_volume'
+
+        return {
+            'valid': len(issues) == 0,
+            'error_type': error_type,
+            'issues': issues,
+            'classifications': classifications,
+        }
+
+    except Exception as e:
+        logger.warning(f"[image-validation] GPT-4o call thất bại: {e} — bỏ qua validation")
+        return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
+
+
 def _preprocess_with_llm(
     image_files: list,
     modality: str,
