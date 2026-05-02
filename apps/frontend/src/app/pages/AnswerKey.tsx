@@ -846,44 +846,6 @@ export function AnswerKey() {
                 legacyUrl={legacyUrl}
                 zoom={1}
               />
-
-              {/* Annotation overlay — visible from step II onwards */}
-              {unlockedUntil >= 1 && (
-                <div className="absolute inset-0 pointer-events-none">
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: '25%',
-                      right: '20%',
-                      width: '72px',
-                      height: '60px',
-                      border: '2px solid #C0392B',
-                      borderRadius: '40% 45% 48% 40%',
-                      transform: 'rotate(8deg)',
-                      opacity: 0.75,
-                    }}
-                  />
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: '27%',
-                      right: '18%',
-                      width: '18px',
-                      height: '18px',
-                      background: '#C0392B',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#F5EDD6',
-                      fontSize: '9px',
-                      fontFamily: "'Special Elite', cursive",
-                    }}
-                  >
-                    1
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Caption */}
@@ -1226,7 +1188,7 @@ export function AnswerKey() {
           {/* Bottom action bar — visible once all steps unlocked */}
           {unlockedUntil >= stepCards.length - 1 && (
             <div
-              className="fixed bottom-0 left-[400px] right-0 flex items-center justify-between px-8 py-4 border-t z-20"
+              className="fixed bottom-0 left-[660px] right-0 flex items-center justify-between px-8 py-4 border-t z-20"
               style={{
                 background: '#F5EDD6',
                 borderColor: '#C4A882',
