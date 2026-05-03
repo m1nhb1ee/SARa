@@ -15,9 +15,42 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useCaseDetail, useSessionDetail, useSubmitAnswer, useExitSession } from "@/api/hooks";
-import styles from "./DiagnosisSession.module.css";
+import styles from "@/styles/DiagnosisSession.module.css";
+import { VolumeSliceViewer } from "@/app/components/shared/VolumeSliceViewer";
+import type { CaseVolume } from "@/types";
 
 const steps = ["OBSERVE", "DESCRIBE", "INTERPRET", "HYPOTHESIS", "DDx", "CONCLUSION"];
+
+const QUESTION_PROMPTS: Record<number, string> = {
+  0: "Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường mà bạn nhận thấy.",
+  1: "Bước 2: Mô tả chi tiết các đặc điểm của tổn thương bạn quan sát thấy.",
+  2: "Bước 3: Diễn giải ý nghĩa lâm sàn của các phát hiện này.",
+  3: "Bước 4: Đưa ra giả thuyết chẩn đoán dự phòng.",
+  4: "Bước 5: Phân tích các chẩn đoán phân biệt cần loại trừ.",
+  5: "Bước 6: Đưa ra kết luận chẩn đoán cuối cùng.",
+};
+
+function buildMessagesFromAttempts(attempts: any[], currentStep: number): Message[] {
+  const byStep: Record<number, any> = {};
+  for (const a of attempts) {
+    const idx = a.step_index;
+    if (!byStep[idx] || a.attempt_number > byStep[idx].attempt_number) {
+      byStep[idx] = a;
+    }
+  }
+
+  const msgs: Message[] = [];
+  for (let i = 0; i <= currentStep; i++) {
+    msgs.push({ id: `resume-q-${i}`, role: "ai", type: "question", content: QUESTION_PROMPTS[i] ?? `Bước ${i + 1}: Tiếp tục.` });
+    const attempt = byStep[i];
+    if (attempt && i < currentStep) {
+      msgs.push({ id: `resume-a-${i}`, role: "student", content: attempt.student_answer });
+      const feedbackContent = typeof attempt.feedback === "string" ? attempt.feedback : attempt.feedback?.content ?? "";
+      msgs.push({ id: `resume-f-${i}`, role: "ai", type: attempt.score >= 0.6 ? "correct" : "partial", content: feedbackContent });
+    }
+  }
+  return msgs;
+}
 
 interface Message {
   id: string;
@@ -42,6 +75,7 @@ interface FeedbackResult {
   };
   passed: boolean;
   next_step?: number;
+  session_complete?: boolean;
   hint?: string;
   message: string;
 }
@@ -64,6 +98,7 @@ export function DiagnosisSession() {
   const [input, setInput] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<FeedbackResult | null>(null);
+  const [showCompletion, setShowCompletion] = useState(false);
   const [shortAnswerError, setShortAnswerError] = useState<string | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
@@ -72,29 +107,51 @@ export function DiagnosisSession() {
   const [activeTab, setActiveTab] = useState<"image" | "chat">("image");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Create session on mount
+  // Create or resume session on mount
   useEffect(() => {
     if (!caseId || sessionId) return;
-    const create = async () => {
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-      const token = localStorage.getItem('sara_token') || '';
-      const response = await fetch(`${API_BASE}/sessions/`, {
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    const token = localStorage.getItem('sara_token') || '';
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+    const initSession = async () => {
+      // Check for an existing resumable session (PAUSED or IN_PROGRESS) for this case
+      const listRes = await fetch(`${API_BASE}/sessions/?case=${caseId}`, { headers });
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const resumable = (listData.results as any[] ?? []).find(
+          (s: any) => s.status === 'ABANDONED' || s.status === 'IN_PROGRESS'
+        );
+        if (resumable) {
+          const detailRes = await fetch(`${API_BASE}/sessions/${resumable.id}/`, { headers });
+          if (detailRes.ok) {
+            const detail = await detailRes.json();
+            // Reactivate ABANDONED session (no-op if already IN_PROGRESS)
+            await fetch(`${API_BASE}/sessions/${resumable.id}/resume/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...headers },
+            });
+            setSessionId(detail.id);
+            setMessages(buildMessagesFromAttempts(detail.step_attempts ?? [], detail.current_step ?? 0));
+            return;
+          }
+        }
+      }
+
+      // No resumable session — create a new one
+      const createRes = await fetch(`${API_BASE}/sessions/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ case_id: caseId })
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ case_id: caseId }),
       });
-      if (response.ok) {
-        const data = await response.json();
+      if (createRes.ok) {
+        const data = await createRes.json();
         setSessionId(data.id);
-        setMessages([{
-          id: "1",
-          role: "ai",
-          type: "question",
-          content: `Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường mà bạn nhận thấy.`
-        }]);
+        setMessages([{ id: "1", role: "ai", type: "question", content: QUESTION_PROMPTS[0] }]);
       }
     };
-    create();
+
+    initSession();
   }, [caseId, sessionId]);
 
   // Scroll to latest message
@@ -104,7 +161,8 @@ export function DiagnosisSession() {
 
   const currentStep = sessionData?.current_step || 0;
   const stepName = steps[currentStep] || "UNKNOWN";
-  const caseImage = caseData?.image_urls?.[0] || "";
+  const caseImages: CaseVolume[] = caseData?.images ?? [];
+  const legacyUrl: string = caseData?.image_urls?.[0] ?? '';
   const clinicalHistory = caseData?.clinical_history || "";
 
   const handleSend = async () => {
@@ -181,27 +239,23 @@ export function DiagnosisSession() {
       nextStepNum = sessionData?.current_step;
     }
 
+    // Session complete — show completion popup instead of navigating
+    if (lastFeedback?.session_complete) {
+      await refetchSession();
+      setShowCompletion(true);
+      return;
+    }
+
     if (nextStepNum !== undefined && nextStepNum < steps.length) {
       const nextStepName = steps[nextStepNum];
-      const questionPrompts: Record<number, string> = {
-        0: "Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường.",
-        1: "Bước 2: Mô tả chi tiết các đặc điểm của tổn thương bạn quan sát thấy.",
-        2: "Bước 3: Diễn giải ý nghĩa lâm sàn của các phát hiện này.",
-        3: "Bước 4: Đưa ra giả thuyết chẩn đoán dự phòng.",
-        4: "Bước 5: Phân tích các chẩn đoán phân biệt cần loại trừ.",
-        5: "Bước 6: Đưa ra kết luận chẩn đoán cuối cùng."
-      };
-
       const nextMsg: Message = {
         id: Date.now().toString(),
         role: "ai",
         type: "question",
-        content: questionPrompts[nextStepNum] || `Bước ${nextStepNum + 1}: Hãy tiếp tục với bước ${nextStepName}.`
+        content: QUESTION_PROMPTS[nextStepNum] || `Bước ${nextStepNum + 1}: Hãy tiếp tục với bước ${nextStepName}.`
       };
       setMessages((prev) => [...prev, nextMsg]);
       setActiveTab("chat");
-    } else {
-      navigate(`/answer-key/${caseId}`);
     }
   };
 
@@ -323,13 +377,13 @@ export function DiagnosisSession() {
               <div className={styles.imageCornerTR} />
               <div className={styles.imageCornerBL} />
               <div className={styles.imageCornerBR} />
-              {caseImage ? (
+              {(caseImages.length > 0 || legacyUrl) ? (
                 <>
-                  <img
-                    src={caseImage}
-                    alt="Medical Image"
-                    className={styles.medicalImage}
-                    style={{ transform: `scale(${zoom})`, transition: "transform 0.2s" }}
+                  <VolumeSliceViewer
+                    images={caseImages}
+                    legacyUrl={legacyUrl}
+                    zoom={zoom}
+                    imgClassName={styles.medicalImage}
                   />
                   <div className={styles.zoomControls}>
                     {[
@@ -344,7 +398,7 @@ export function DiagnosisSession() {
                   </div>
                 </>
               ) : (
-                <p className={styles.imagePlaceholder}>[ Loading image... ]</p>
+                <p className={styles.imagePlaceholder}>[ Đang tải hình ảnh... ]</p>
               )}
             </div>
           </motion.div>
@@ -572,7 +626,7 @@ export function DiagnosisSession() {
                       : <AlertTriangle size={14} color="#C4A882" />
                     }
                     <span className={`${styles.feedbackNoteTitle} ${lastFeedback.passed ? styles.feedbackNoteTitlePassed : styles.feedbackNoteTitleFailed}`}>
-                      {lastFeedback.passed ? "Dr. AI's Notes — Chính xác!" : "Dr. AI's Notes — Cần cải thiện"}
+                      {lastFeedback.passed ? "Dr. AI's Notes — Correct!" : "Dr. AI's Notes — Need Improvement"}
                     </span>
                   </div>
                   <p className={styles.feedbackNoteText}>{typeof lastFeedback.attempt.feedback === 'string' ? lastFeedback.attempt.feedback : lastFeedback.attempt.feedback?.content}</p>
@@ -583,7 +637,7 @@ export function DiagnosisSession() {
                   <div className={styles.feedbackErrors}>
                     <div className={styles.feedbackErrorsHeader}>
                       <AlertTriangle size={13} color="#A93226" />
-                      <span className={styles.feedbackErrorsTitle}>Lỗi phát hiện</span>
+                      <span className={styles.feedbackErrorsTitle}>Errors</span>
                     </div>
                     <div className={styles.feedbackErrorTags}>
                       {lastFeedback.attempt.errors.map((error, i) => (
@@ -632,6 +686,84 @@ export function DiagnosisSession() {
                   ) : (
                     <>Xem kết quả cuối cùng <ChevronRight size={15} /></>
                   )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── COMPLETION MODAL ── */}
+      <AnimatePresence>
+        {showCompletion && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={styles.exitModalOverlay}
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.94, opacity: 0, y: 12 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className={styles.exitModalCard}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className={styles.exitModalHeader}>
+                <div className={styles.exitModalHeaderRow}>
+                  <div className={`${styles.exitModalIcon}`} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid #7D9B76' }}>
+                    <CheckCircle2 size={20} color="#7D9B76" />
+                  </div>
+                  <div>
+                    <h3 className={styles.exitModalTitle}>Hoàn thành!</h3>
+                    <p className={styles.exitModalSubtitle}>{caseData?.title}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Body — score */}
+              <div className={styles.exitModalBody}>
+                <div className={styles.exitModalNote} style={{ textAlign: 'center', padding: '20px 12px', transform: 'rotate(0deg)' }}>
+                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--vj-faded)', marginBottom: 8 }}>
+                    Điểm trung bình
+                  </div>
+                  <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 48, fontWeight: 700, color: 'var(--vj-ink)', lineHeight: 1 }}>
+                    {sessionData?.final_score != null
+                      ? Math.round(sessionData.final_score * 100)
+                      : '—'}
+                  </div>
+                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 12, color: 'var(--vj-faded)', marginTop: 4 }}>
+                    / 100
+                  </div>
+                </div>
+
+                <div className={styles.exitModalInfo} style={{ marginTop: 14 }}>
+                  <div className={styles.exitModalInfoLabel}>Kết quả</div>
+                  <div className={styles.exitModalInfoDetails}>
+                    {steps.map((s, i) => (
+                      <span key={s} style={{ display: 'inline-block', marginRight: 6 }}>
+                        <span style={{ color: 'var(--vj-terracotta)' }}>✓</span> {s}{i < steps.length - 1 ? ' ·' : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className={styles.exitModalFooter}>
+                <button
+                  onClick={() => { setShowCompletion(false); navigate('/'); }}
+                  className={styles.exitModalCancelBtn}
+                >
+                  Về trang chính
+                </button>
+                <button
+                  onClick={() => { setShowCompletion(false); navigate(`/answer-key/${caseId}`); }}
+                  className={styles.exitModalConfirmBtn}
+                >
+                  Xem đáp án chi tiết
                 </button>
               </div>
             </motion.div>

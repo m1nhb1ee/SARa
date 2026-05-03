@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   User, Pencil, Home as HomeIcon, ChevronRight,
@@ -19,6 +19,25 @@ export function ProfilePage() {
   const { user } = useAuth();
   const { data: stats } = useMyStats();
   const { data: sessionsData } = useSessions({ status: 'COMPLETED' });
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  // Fetch user profile if not available from auth
+  useEffect(() => {
+    if (user?.id) {
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+      const token = localStorage.getItem('sara_token') || '';
+      
+      fetch(`${API_BASE}/auth/me/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then(res => res.json())
+        .then(data => {
+          console.log('User profile response:', data);
+          setUserProfile(data.user);
+        })
+        .catch(err => console.error('Failed to fetch user profile:', err));
+    }
+  }, [user?.id]);
 
   const recentSessions = (sessionsData?.results ?? []).slice(0, 6);
 
@@ -32,22 +51,42 @@ export function ProfilePage() {
   const avgScore = stats ? Math.round((stats.average_score ?? 0) * 100) : 0;
   const casesCompleted = stats?.total_cases_completed ?? 0;
 
-  // Charts use some real data where available, rest is illustrative
-  const accuracyByModality = [
-    { modality: 'X-Ray',   accuracy: 82 },
-    { modality: 'CT Scan', accuracy: 75 },
-    { modality: 'MRI',     accuracy: 68 },
-  ];
+  // Real: accuracy by diagnostic step (from stats.accuracy_by_step)
+  const accuracyByStep_chart = useMemo(() => {
+    const entries = Object.entries(accuracyByStep);
+    if (!entries.length) return [
+      { modality: 'OBSERVE',    accuracy: 0 },
+      { modality: 'DESCRIBE',   accuracy: 0 },
+      { modality: 'INTERPRET',  accuracy: 0 },
+      { modality: 'HYPOTHESIS', accuracy: 0 },
+      { modality: 'DDx',        accuracy: 0 },
+      { modality: 'CONCLUSION', accuracy: 0 },
+    ];
+    return entries.map(([step, score]) => ({ modality: step, accuracy: Math.round((score as number) * 100) }));
+  }, [accuracyByStep]);
 
-  const monthlyTrend = [
-    { month: 'Oct', accuracy: 65 },
-    { month: 'Nov', accuracy: 70 },
-    { month: 'Dec', accuracy: 74 },
-    { month: 'Jan', accuracy: 76 },
-    { month: 'Feb', accuracy: 73 },
-    { month: 'Mar', accuracy: 78 },
-    { month: 'Apr', accuracy: avgScore || 78 },
-  ];
+  // Real: monthly trend from completed sessions
+  const monthlyTrend = useMemo(() => {
+    const completed = (sessionsData?.results ?? []).filter(
+      (s: any) => s.status === 'COMPLETED' && s.final_score != null && s.completed_at
+    );
+    if (!completed.length) return [
+      { month: 'Oct', accuracy: 65 }, { month: 'Nov', accuracy: 70 },
+      { month: 'Dec', accuracy: 74 }, { month: 'Jan', accuracy: 76 },
+      { month: 'Feb', accuracy: 73 }, { month: 'Mar', accuracy: 78 },
+      { month: 'Apr', accuracy: avgScore || 78 },
+    ];
+    const byMonth: Record<string, number[]> = {};
+    for (const s of completed) {
+      const d = new Date(s.completed_at);
+      const key = d.toLocaleDateString('en-GB', { month: 'short' }) + ' ' + String(d.getFullYear()).slice(-2);
+      (byMonth[key] = byMonth[key] ?? []).push((s.final_score as number) * 100);
+    }
+    return Object.entries(byMonth).map(([month, scores]) => ({
+      month,
+      accuracy: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+    }));
+  }, [sessionsData, avgScore]);
 
   const modalityBreakdown = [
     { name: 'X-Ray',   value: 45, color: '#C0392B' },
@@ -147,7 +186,7 @@ export function ProfilePage() {
             <div className="flex-1 pt-4">
               <div className="mb-1" style={{ color: '#6B4C3B', fontFamily: "'Courier Prime', monospace", fontSize: '12px' }}>Dr.</div>
               <h1 className="mb-2" style={{ fontFamily: "'Playfair Display', serif", fontSize: '2.5rem', color: '#2C1810', fontWeight: 700 }}>
-                {user?.username ?? '—'}
+                {userProfile?.full_name || '—'}
               </h1>
               <div className="mb-6 h-0.5" style={{ background: '#6B4C3B', width: '200px', transform: 'skewY(-0.5deg)' }} />
 
@@ -211,16 +250,16 @@ export function ProfilePage() {
             <div className="p-6 mb-6 border rounded relative" style={cardStyle}>
               <SketchBorder id="prof-scan-type" color="#7A6248" opacity={0.7} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>
-                Performance by Scan Type
+                Performance by Diagnostic Step
               </h3>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={accuracyByModality} layout="vertical">
+                <BarChart data={accuracyByStep_chart} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="#D4B896" opacity={0.3} />
                   <XAxis type="number" domain={[0, 100]} stroke="#6B4C3B" style={{ fontFamily: "'Courier Prime', monospace", fontSize: '12px' }} />
                   <YAxis type="category" dataKey="modality" stroke="#6B4C3B" style={{ fontFamily: "'Courier Prime', monospace", fontSize: '12px' }} />
                   <Tooltip contentStyle={{ background: '#EDE0C4', border: '1px solid #C4A882', fontFamily: "'Courier Prime', monospace" }} />
                   <Bar dataKey="accuracy" radius={[0, 4, 4, 0]}>
-                    {accuracyByModality.map((_, i) => <Cell key={i} fill="#1B3A5C" opacity={0.7} />)}
+                    {accuracyByStep_chart.map((_, i) => <Cell key={i} fill="#1B3A5C" opacity={0.7} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -411,7 +450,7 @@ export function ProfilePage() {
                           {s.case_title ?? s.case_id}
                         </td>
                         <td className="p-4" style={{ fontFamily: "'Courier Prime', monospace", color: '#6B4C3B', fontSize: '14px' }}>
-                          {s.completed_at ? new Date(s.completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: "'yy" }) : '—'}
+                          {s.completed_at ? new Date(s.completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
                         </td>
                         <td className="p-4">
                           <span className="inline-block px-2 py-1 text-xs"

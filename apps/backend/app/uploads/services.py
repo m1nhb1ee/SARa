@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional
 
 from app.core.supabase_client import get_supabase
 from app.prompt.medgemma_prompt import build_analysis_prompt
+from app.prompt.llm_meta_prompt import build_meta_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ def create_case_in_supabase(
 
     case_result = sb.table('cases').insert({
         'uploaded_by': user_id,
+        'source': 'uploaded',
         'title': title,
         'modality': MODALITY_MAP.get(modality, 'X-ray'),
         'difficulty': 'medium',
@@ -82,7 +84,12 @@ def create_case_in_supabase(
     case = case_result.data[0]
 
     sb.table('case_images').insert([
-        {'case_id': case['id'], 'image_url': img['image_url'], 'slice_index': img['slice_index']}
+        {
+            'case_id':    case['id'],
+            'image_url':  img['image_url'],
+            'slice_index': img.get('slice_index'),
+            'volume_name': img.get('volume_name', 'Default'),
+        }
         for img in images
     ]).execute()
 
@@ -256,13 +263,205 @@ def _to_temp_file(image_file) -> tuple:
     raise ValueError(f"Không đọc được ảnh từ kiểu: {type(image_file)}")
 
 
-def _call_gradio(
-    image_files: list, modality: str, region: str, token: str,
-    total_slices: int | None = None,
-) -> str:
-    from gradio_client import Client, handle_file
+def classify_and_validate_images(
+    image_bytes_list: list,
+    volume_names: list,
+    declared_modality: str,
+) -> dict:
+    """
+    Gọi GPT-4o Vision để:
+    1. Kiểm tra ảnh có phải ảnh y tế không (không phải ảnh chụp thường, screenshot, v.v.)
+    2. Kiểm tra các ảnh trong cùng 1 volume có cùng loại/sequence không
 
-    question = build_analysis_prompt(modality, region, total_slices)
+    Returns:
+        {
+            'valid': bool,
+            'error_type': None | 'not_medical' | 'inconsistent_volume',
+            'issues': [str],   # tiếng Việt, hiển thị thẳng cho user
+            'classifications': [{'index': int, 'volume': str, 'is_medical': bool, 'type': str}]
+        }
+
+    Nếu không có OPENAI_API_KEY hoặc GPT-4o call thất bại: trả về valid=True (skip validation).
+    """
+    import base64
+    import json
+    from openai import OpenAI
+
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not set — bỏ qua bước kiểm tra ảnh y tế")
+        return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
+
+    # Lấy tối đa 2 ảnh/volume, tổng không quá 6 ảnh để gọi GPT-4o nhanh
+    volume_to_indices: dict = {}
+    for i, vol in enumerate(volume_names):
+        volume_to_indices.setdefault(vol, []).append(i)
+
+    sample_indices: list[int] = []
+    for indices in volume_to_indices.values():
+        sample_indices.extend(indices[:2])
+    sample_indices = sample_indices[:6]
+
+    image_contents = []
+    for idx in sample_indices:
+        b64 = base64.b64encode(image_bytes_list[idx]).decode('utf-8')
+        image_contents.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"},
+        })
+
+    volume_info = ', '.join(
+        f'Image {idx} → volume="{volume_names[idx]}"' for idx in sample_indices
+    )
+
+    prompt = f"""Classify each image shown.
+
+Context: a radiology education platform is validating user-uploaded files.
+Declared scan type: {declared_modality}
+Image index → volume group: {volume_info}
+
+Task — for each image:
+1. Identify the imaging technique shown (e.g. "X-ray", "CT axial", "MRI T2", "MRI T1", "Ultrasound", "Pathology slide").
+   If the image is NOT a medical/radiological scan (e.g. a regular photo, screenshot, diagram), set is_medical=false.
+2. Note which volume group it belongs to (given above).
+
+After classifying all images, check: within each volume group, do all images show the same imaging technique and sequence?
+
+Return ONLY valid JSON, no markdown:
+{{
+  "images": [
+    {{"index": 0, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}},
+    {{"index": 1, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}}
+  ],
+  "issues": []
+}}
+
+Populate "issues" (in Vietnamese) only when:
+- An image is not a medical scan: "Ảnh số {{n}} (volume: '{{vol}}') không phải ảnh y tế. Vui lòng chỉ upload ảnh chẩn đoán hình ảnh."
+- A volume group contains images of different types: "Volume '{{vol}}' chứa ảnh không nhất quán: {{types found}}. Vui lòng upload cùng 1 loại ảnh trong 1 volume."
+"""
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}, *image_contents],
+            }],
+            max_tokens=500,
+        )
+        raw = (response.choices[0].message.content or '').strip()
+        logger.info(f"[image-validation] GPT-4o response: {raw}")
+
+        # GPT-4o content-policy refusal → skip validation gracefully
+        _lower = raw.lower()
+        if (
+            raw.startswith("I'm sorry") or
+            "i can't assist" in _lower or
+            "i cannot assist" in _lower or
+            "unable to assist" in _lower or
+            raw.find('{') < 0
+        ):
+            logger.warning(f"[image-validation] GPT-4o từ chối phân tích — bỏ qua validation: {raw[:80]}")
+            return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
+
+        j_start = raw.find('{')
+        j_end = raw.rfind('}') + 1
+        parsed = json.loads(raw[j_start:j_end])
+
+        classifications = parsed.get('images', [])
+        issues = [s.strip() for s in parsed.get('issues', []) if s.strip()]
+
+        has_non_medical = any(not c.get('is_medical', True) for c in classifications)
+        error_type = None
+        if has_non_medical:
+            error_type = 'not_medical'
+        elif issues:
+            error_type = 'inconsistent_volume'
+
+        return {
+            'valid': len(issues) == 0,
+            'error_type': error_type,
+            'issues': issues,
+            'classifications': classifications,
+        }
+
+    except Exception as e:
+        logger.warning(f"[image-validation] GPT-4o call thất bại: {e} — bỏ qua validation")
+        return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
+
+
+def _preprocess_with_llm(
+    image_files: list,
+    modality: str,
+    region: str,
+    volume_names: list | None = None,
+) -> str:
+    """
+    Use GPT-4o Vision to verify image modality/volume consistency and return
+    a refined analysis prompt tailored to what is actually visible in the images.
+    Falls back to build_analysis_prompt() if OPENAI_API_KEY is not set or call fails.
+    """
+    import base64
+    from openai import OpenAI
+
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not set — skipping LLM pre-processing, using default prompt")
+        total_slices = len(image_files) if image_files else None
+        return build_analysis_prompt(modality, region, total_slices, volume_names)
+
+    unique_volumes = list(dict.fromkeys(volume_names or []))
+    volume_info = f" Declared volumes: {', '.join(unique_volumes)}." if unique_volumes else ""
+    total_slices = len(image_files)
+
+    sample_files = image_files[:4]
+    image_contents = []
+    for img_bytes in sample_files:
+        b64 = base64.b64encode(img_bytes).decode('utf-8')
+        image_contents.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"},
+        })
+
+    meta_prompt = build_meta_prompt(modality, region, total_slices, volume_info)
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [{"type": "text", "text": meta_prompt}, *image_contents],
+            }],
+            max_tokens=600,
+        )
+        refined_prompt = (response.choices[0].message.content or '').strip()
+
+        # Detect content-policy refusal — don't forward garbage as VLM prompt
+        _lower = refined_prompt.lower()
+        is_refusal = (
+            len(refined_prompt) < 80 or
+            "i'm sorry" in _lower or
+            "i can't assist" in _lower or
+            "i cannot assist" in _lower or
+            "unable to assist" in _lower
+        )
+        if is_refusal:
+            logger.warning(f"LLM pre-processing trả về refusal — dùng default prompt: {refined_prompt[:80]}")
+            return build_analysis_prompt(modality, region, total_slices, volume_names)
+
+        logger.info(f"LLM pre-processing complete — refined prompt generated ({len(refined_prompt)} chars)")
+        logger.debug(f"[LLM prompt]\n{refined_prompt}")
+        return refined_prompt
+    except Exception as e:
+        logger.warning(f"LLM pre-processing failed: {e} — falling back to default prompt")
+        return build_analysis_prompt(modality, region, total_slices, volume_names)
+
+
+def _call_gradio(image_files: list, prompt: str, token: str) -> str:
+    from gradio_client import Client, handle_file
 
     tmp_paths = []
     try:
@@ -271,13 +470,11 @@ def _call_gradio(
             tmp_paths.append(tmp_path)
 
         gallery = [{"image": handle_file(p), "caption": None} for p in tmp_paths]
-        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — modality={modality}, region={region}, images={len(gallery)}")
-        client = Client(GRADIO_SPACE_ID, token=token)
-        result = client.predict(
-            gallery=gallery,
-            question=question,
-            api_name="/analyze"
-        )
+        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — images={len(gallery)}")
+        client = Client(GRADIO_SPACE_ID, token=token, httpx_kwargs={"timeout": 300})
+        job = client.submit(gallery=gallery, question=prompt, api_name="/analyze")
+        result = job.result(timeout=300)
+        logger.debug(f"[VLM answer]\n{result}")
         return str(result)
     finally:
         for tmp_path in tmp_paths:
@@ -428,15 +625,17 @@ def analyze_medical_image(
     image_files: list,
     modality: str = "XRAY",
     region: str = "unspecified",
+    volume_names: list | None = None,
 ) -> Dict[str, Any]:
     """Entry point: phân tích ảnh y tế, trả về findings dict."""
     total_slices = len(image_files) if image_files else None
-    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}, total_slices={total_slices}")
+    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}, total_slices={total_slices}, volumes={list(dict.fromkeys(volume_names or []))}")
     token = _get_hf_token()
     if not token:
         return _mock_analyze(modality)
     try:
-        raw = _call_gradio(image_files, modality, region, token, total_slices)
+        prompt = _preprocess_with_llm(image_files, modality, region, volume_names)
+        raw = _call_gradio(image_files, prompt, token)
         logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         return _parse_findings(raw, modality)
     except ImportError:

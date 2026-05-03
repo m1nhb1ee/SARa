@@ -4,6 +4,7 @@ import { Home, ChevronRight, BookMarked, Save, ArrowRight, RotateCcw, Trophy } f
 import { apiClient } from '@/api/client';
 import { STEPS as STEP_CODES, STEP_LABELS } from '@/constants/training';
 import { scoreColor } from '@/constants/styles';
+import { VolumeSliceViewer } from '@/app/components/shared/VolumeSliceViewer';
 
 // ─── Per-step visual metadata (design tokens only, no mock text) ───
 const STEP_VISUAL_META: Array<{
@@ -287,8 +288,8 @@ function StepCard({
             </div>
             <p
               style={{
-                fontFamily: "'Caveat', cursive",
-                fontSize: '14px',
+                fontFamily: "'Lora', serif",
+                fontSize: '16px',
                 color: '#2C1810',
                 lineHeight: 1.6,
               }}
@@ -599,6 +600,8 @@ export function AnswerKey() {
   const answerKey: Record<string, any> = answerKeyData?.answer_key ?? {};
   const finalScore: number         = sessionScore ?? answerKeyData?.your_score ?? 0;
   const finalScorePct: number      = Math.round(finalScore * 100);
+  const caseImages: any[]          = caseData?.images ?? [];
+  const legacyUrl: string          = caseData?.image_urls?.[0] ?? '';
 
   // Build visual step cards by merging STEP_CODES + API data
   const stepCards: StepItem[] = STEP_CODES.map((code: string, idx: number) => {
@@ -838,55 +841,11 @@ export function AnswerKey() {
                 />
               ))}
 
-              {/* <ImageWithFallback
-                src={caseData?.image_url ?? ''}
-                alt={`${caseData?.title ?? 'Medical scan'} — Case ${caseLabel}`}
-                style={{
-                  width: '100%',
-                  aspectRatio: '1 / 1.1',
-                  objectFit: 'cover',
-                  filter: 'sepia(12%) contrast(1.1) brightness(0.95)',
-                  display: 'block',
-                }}
-              /> */}
-
-              {/* Annotation overlay — visible from step II onwards */}
-              {unlockedUntil >= 1 && (
-                <div className="absolute inset-0 pointer-events-none">
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: '25%',
-                      right: '20%',
-                      width: '72px',
-                      height: '60px',
-                      border: '2px solid #C0392B',
-                      borderRadius: '40% 45% 48% 40%',
-                      transform: 'rotate(8deg)',
-                      opacity: 0.75,
-                    }}
-                  />
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: '27%',
-                      right: '18%',
-                      width: '18px',
-                      height: '18px',
-                      background: '#C0392B',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#F5EDD6',
-                      fontSize: '9px',
-                      fontFamily: "'Special Elite', cursive",
-                    }}
-                  >
-                    1
-                  </div>
-                </div>
-              )}
+              <VolumeSliceViewer
+                images={caseImages}
+                legacyUrl={legacyUrl}
+                zoom={1}
+              />
             </div>
 
             {/* Caption */}
@@ -1229,7 +1188,7 @@ export function AnswerKey() {
           {/* Bottom action bar — visible once all steps unlocked */}
           {unlockedUntil >= stepCards.length - 1 && (
             <div
-              className="fixed bottom-0 left-[400px] right-0 flex items-center justify-between px-8 py-4 border-t z-20"
+              className="fixed bottom-0 left-[660px] right-0 flex items-center justify-between px-8 py-4 border-t z-20"
               style={{
                 background: '#F5EDD6',
                 borderColor: '#C4A882',

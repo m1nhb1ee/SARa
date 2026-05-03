@@ -2,6 +2,7 @@ import os
 import httpx
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+from app.core.supabase_client import get_supabase
 
 
 class SupabaseUser:
@@ -42,8 +43,17 @@ class SupabaseJWTAuthentication(BaseAuthentication):
                 raise AuthenticationFailed('Invalid or expired Supabase token.')
             user = resp.json()
             role = (user.get('app_metadata') or {}).get('role', 'student')
+            
+            # Query users table để lấy full_name từ database (authoritative source)
+            try:
+                sb = get_supabase()
+                user_record = sb.table('users').select('full_name').eq('id', user['id']).single().execute()
+                full_name = user_record.data.get('full_name', '') if user_record.data else ''
+            except Exception:
+                full_name = ''
+            
             return (
-                SupabaseUser({'id': user['id'], 'email': user.get('email', ''), 'role': role}),
+                SupabaseUser({'id': user['id'], 'email': user.get('email', ''), 'role': role, 'full_name': full_name}),
                 token,
             )
         except AuthenticationFailed:

@@ -101,9 +101,14 @@ export function PracticePage() {
   const currentStepName = STEPS[currentStep] ?? 'OBSERVE';
   const isSessionComplete = sessionData?.status === 'COMPLETED';
 
+  const getFirstUrl = (d: any): string => {
+    const vols = d?.images ?? [];
+    if (vols.length > 0 && vols[0]?.slices?.length > 0) return vols[0].slices[0].image_url;
+    return d?.image_urls?.[0] ?? '';
+  };
   const caseImage = uploadedImage
-    || (uploadedCaseData?.case?.image_urls?.[0])
-    || (caseData?.image_urls?.[0] ?? '');
+    || getFirstUrl(uploadedCaseData?.case)
+    || getFirstUrl(caseData);
   const caseTitle = uploadedCaseData?.case?.title || uploadedCaseData?.title || (caseData?.title || '');
   const caseModality = uploadedCaseData?.case?.modality || uploadedCaseData?.modality || (caseData?.modality || '');
   const caseDifficulty = uploadedCaseData?.case?.difficulty || uploadedCaseData?.difficulty || (caseData?.difficulty || '');
@@ -143,8 +148,12 @@ export function PracticePage() {
         setUploading(false);
         setUploadProcessing(true);
 
-        if (data.upload_session?.image_url) {
-          setUploadedImage(data.upload_session.image_url);
+        const firstUrl = data.upload_session?.image_url
+          || data.case?.images?.[0]?.slices?.[0]?.image_url
+          || data.case?.image_urls?.[0]
+          || null;
+        if (firstUrl) {
+          setUploadedImage(firstUrl);
         }
         setUploadedCaseData(data);
 

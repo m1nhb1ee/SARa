@@ -115,10 +115,13 @@ Authorization: Bearer <token>
 ```
 
 **Query parameters:**
+- `source` — `system` | `uploaded` — filter by case type; omit for all visible cases
 - `modality` — `XRAY` | `CT` | `MRI`
 - `difficulty` — `easy` | `medium` | `hard`
 - `disease_tag` — filter by disease profile name
 - `status` — session status filter
+
+When `source=uploaded`, only the current user's uploaded cases are returned. When `source=system`, only curated system cases are returned. When omitted, system cases and the user's own uploads are both included.
 
 **Response 200:**
 ```json
@@ -130,8 +133,14 @@ Authorization: Bearer <token>
       "modality": "X-ray",
       "difficulty": "medium",
       "clinical_history": "Bệnh nhân 45 tuổi, ho sốt 3 ngày",
+      "source": "system",
       "images": [
-        { "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid>.jpg", "slice_index": 0 }
+        {
+          "volume_name": "Default",
+          "slices": [
+            { "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid>.jpg", "slice_index": 0 }
+          ]
+        }
       ],
       "tags": [],
       "uploaded_by": null,
@@ -142,7 +151,7 @@ Authorization: Bearer <token>
 }
 ```
 
-Note: `images` contains all per-image objects with `image_url` and `slice_index`, sourced from the `case_images` table. `uploaded_by` is `null` for system cases and a user UUID for user-uploaded cases. Cases with `uploaded_by` set are only visible to their owner.
+Note: `source` is `"system"` for curated cases and `"uploaded"` for user-uploaded cases. `images` is grouped by volume — each entry has a `volume_name` and a `slices` array of `{ image_url, slice_index }`. Single-volume cases have one entry named `"Default"`. `uploaded_by` is `null` for system cases.
 
 ---
 
@@ -152,7 +161,30 @@ GET /cases/{uuid}/
 Authorization: Bearer <token>
 ```
 
-**Response 200:** Same shape as list item, with full fields.
+**Response 200:** Same shape as list item. `images` is grouped by volume:
+```json
+{
+  "id": "<uuid>",
+  "title": "CT Brain Series",
+  "modality": "CT",
+  "images": [
+    {
+      "volume_name": "Axial Bone Window",
+      "slices": [
+        { "image_url": "https://...", "slice_index": 0 },
+        { "image_url": "https://...", "slice_index": 1 }
+      ]
+    },
+    {
+      "volume_name": "Axial Non Contrast",
+      "slices": [
+        { "image_url": "https://...", "slice_index": 0 },
+        { "image_url": "https://...", "slice_index": 1 }
+      ]
+    }
+  ]
+}
+```
 
 **Errors:** `400` invalid UUID, `403` not your uploaded case, `404` not found
 
@@ -386,33 +418,9 @@ Marks session as `ABANDONED`. Only works on `IN_PROGRESS` sessions.
 
 ## Uploaded Cases
 
-User-uploaded medical images processed by AI (MedGemma via HuggingFace Gradio). Each upload creates an `upload_session` record and a corresponding `case` with AI-generated `answer_keys`.
+User-uploaded medical images processed by AI (MedGemma via HuggingFace Gradio). Each upload creates an `upload_session` record and a corresponding `case` (`source = "uploaded"`) with AI-generated `answer_keys`. Only the owner can see their uploaded cases.
 
-### List My Uploads
-```
-GET /uploaded-cases/
-Authorization: Bearer <token>
-```
-
-**Response 200:**
-```json
-{
-  "count": 2,
-  "results": [
-    {
-      "id": "<uuid>",
-      "user_id": "<uuid>",
-      "case_id": "<uuid>",
-      "modality": "CT",
-      "created_at": "2024-04-15T14:00:00+00:00",
-      "images": [
-        { "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid>.jpg", "slice_index": 0 },
-        { "image_url": "https://<project>.supabase.co/storage/v1/object/public/case_images/uploads/<uuid2>.jpg", "slice_index": 1 }
-      ]
-    }
-  ]
-}
-```
+> To list uploaded cases use `GET /cases/?source=uploaded`.
 
 ---
 
@@ -423,38 +431,42 @@ Authorization: Bearer <token>
 Content-Type: multipart/form-data
 ```
 
-**Form fields:**
-- `images` (file, required, repeatable) — one or more JPG/PNG medical images; send the field multiple times for multiple files
-- `slice_indexes` (integer, optional, repeatable) — one `slice_index` per image in the same order; omit for images without a slice position
+**Form fields** (all repeatable, sent as parallel arrays in the same order):
+- `images` (file, required) — one or more JPG/PNG medical images
+- `slice_indexes` (integer, optional) — slice position of the corresponding image within its volume
+- `volume_names` (string, optional, default `"Default"`) — volume label for the corresponding image; images sharing the same `volume_name` are grouped into the same volume
 - `title` (string, optional) — case title; AI generates one if omitted or `"Untitled Case"`
 - `modality` (string, optional, default `XRAY`) — `XRAY` | `CT` | `MRI` | `DIFF`
 - `region` (string, optional, default `unspecified`) — anatomical region passed to the AI prompt, e.g. `chest`, `brain`, `spine`, `abdomen`
 
-AI analysis (MedGemma via HuggingFace Gradio) runs on the **first** image only, using `modality` and `region` to build the prompt.
+AI analysis (MedGemma via HuggingFace Gradio) runs across **all uploaded images** at once. The prompt includes volume count and total slice count as context.
 
-**Example — single image:**
-```bash
-curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
-  -H "Authorization: Bearer <token>" \
-  -F "images=@/path/to/scan.jpg" \
-  -F "slice_indexes=0" \
-  -F "title=My CT Brain Scan" \
-  -F "modality=CT" \
-  -F "region=brain"
-```
-
-**Example — multiple images:**
+**Example — single volume, multiple slices:**
 ```bash
 curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
   -H "Authorization: Bearer <token>" \
   -F "images=@/path/to/axial1.jpg" \
   -F "images=@/path/to/axial2.jpg" \
-  -F "images=@/path/to/axial3.jpg" \
   -F "slice_indexes=0" \
   -F "slice_indexes=1" \
-  -F "slice_indexes=2" \
-  -F "title=CT Brain Series" \
+  -F "volume_names=Axial" \
+  -F "volume_names=Axial" \
+  -F "title=CT Brain" \
   -F "modality=CT" \
+  -F "region=brain"
+```
+
+**Example — multiple volumes:**
+```bash
+curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
+  -H "Authorization: Bearer <token>" \
+  -F "images=@/path/to/t1_s1.jpg" \
+  -F "images=@/path/to/t1_s2.jpg" \
+  -F "images=@/path/to/t2_s1.jpg" \
+  -F "images=@/path/to/t2_s2.jpg" \
+  -F "slice_indexes=0" -F "slice_indexes=1" -F "slice_indexes=0" -F "slice_indexes=1" \
+  -F "volume_names=T1" -F "volume_names=T1" -F "volume_names=T2" -F "volume_names=T2" \
+  -F "modality=MRI" \
   -F "region=brain"
 ```
 
@@ -465,22 +477,22 @@ curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
     "id": "<uuid>",
     "user_id": "<uuid>",
     "case_id": "<uuid>",
-    "modality": "CT",
+    "modality": "MRI",
     "created_at": "2024-04-15T14:00:00+00:00"
   },
   "case": {
     "id": "<uuid>",
-    "title": "CT Case – MedGemma",
-    "modality": "CT",
+    "title": "MRI Case – MedGemma",
+    "modality": "MRI",
     "difficulty": "medium",
-    "clinical_history": "AI (MedGemma) analyzed CT: ...",
+    "clinical_history": "AI (MedGemma) analyzed MRI: ...",
     "uploaded_by": "<uuid>",
     "created_at": "2024-04-15T14:00:00+00:00"
   }
 }
 ```
 
-All images (with their `slice_index`) are stored in `case_images` and returned when fetching the case via `/cases/{uuid}/`.
+All images are stored in `case_images` with their `slice_index` and `volume_name`, and returned grouped by volume when fetching via `/cases/{uuid}/`.
 
 **Errors:**
 - `400 { "error": "Cần ít nhất một ảnh (field: images)" }` — no files sent
