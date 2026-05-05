@@ -6,6 +6,17 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from app.core.supabase_client import get_supabase
 
 
+def _ensure_user_profile(sb, user, full_name: str = '') -> None:
+    role = (user.app_metadata or {}).get('role', 'student')
+    payload = {
+        'id': str(user.id),
+        'email': user.email,
+        'full_name': full_name or '',
+        'role': role,
+    }
+    sb.table('users').upsert(payload, on_conflict='id').execute()
+
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -32,6 +43,7 @@ class RegisterView(APIView):
             res = sb.auth.sign_up({'email': email, 'password': password, 'options': options})
             user = res.user
             session = res.session
+            _ensure_user_profile(sb, user, full_name)
 
             if session:
                 # Email confirmation disabled — user is signed in immediately
@@ -80,6 +92,7 @@ class LoginView(APIView):
             res = sb.auth.sign_in_with_password({'email': email, 'password': password})
             user = res.user
             session = res.session
+            _ensure_user_profile(sb, user, (user.user_metadata or {}).get('full_name', ''))
             role = (user.app_metadata or {}).get('role', 'student')
             return Response({
                 'user': {
