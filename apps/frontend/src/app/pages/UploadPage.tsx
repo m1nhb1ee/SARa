@@ -56,16 +56,15 @@ function WavyUnderline({ width = 220, color = '#2C1810', opacity = 0.45 }: { wid
 function IrregularDashedBorder({ active, dragging }: { active: boolean; dragging: boolean }) {
   const stroke = dragging ? '#C0392B' : active ? '#7D9B76' : '#C4A882';
   return (
-    <svg
-      viewBox="0 0 600 200"
-      preserveAspectRatio="none"
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
-    >
-      <rect x="3" y="3" width="594" height="194" fill="none"
-        stroke={stroke} strokeWidth="2"
-        strokeDasharray="14 5 9 3 18 5 7 3 11 6"
-        rx="2" />
-    </svg>
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        border: `2px dashed ${stroke}`,
+        borderRadius: '2px',
+      }}
+    />
   );
 }
 

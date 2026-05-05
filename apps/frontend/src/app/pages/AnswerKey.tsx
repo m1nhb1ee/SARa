@@ -27,6 +27,7 @@ interface StepItem {
   name: string;
   color: string;
   isFinal?: boolean;
+  criterion?: string;
   // Answer-key content
   text: string;
   keyPoint: string;
@@ -161,7 +162,52 @@ function StepCard({
 
       {/* Body */}
       <div className="px-6 pb-4">
+        {/* Criterion text */}
+        {step.criterion && (
+          <div
+            className="mb-4 p-3"
+            style={{
+              background: 'rgba(27,58,92,0.05)',
+              borderLeft: '3px solid #1B3A5C',
+              maxWidth: '95%',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "'Special Elite', cursive",
+                fontSize: '10px',
+                color: '#1B3A5C',
+                letterSpacing: '0.08em',
+                marginBottom: '4px',
+              }}
+            >
+              TIÊU CHÍ
+            </div>
+            <p
+              style={{
+                fontFamily: "'Lora', serif",
+                fontSize: '13.5px',
+                color: '#1B3A5C',
+                lineHeight: 1.7,
+              }}
+            >
+              {step.criterion}
+            </p>
+          </div>
+        )}
+
         {/* Main answer text */}
+        <div
+          style={{
+            fontFamily: "'Special Elite', cursive",
+            fontSize: '10px',
+            color: '#6B4C3B',
+            letterSpacing: '0.08em',
+            marginBottom: '4px',
+          }}
+        >
+          ĐÁP ÁN
+        </div>
         <p
           style={{
             fontFamily: "'Lora', serif",
@@ -621,12 +667,22 @@ export function AnswerKey() {
           }))
         : [];
 
+    const criterionByStep: Record<string, string> = {
+      OBSERVE: 'Liệt kê đầy đủ cấu trúc nhìn thấy và mô tả dấu hiệu bất thường nổi bật.',
+      DESCRIBE: 'Mô tả đặc điểm tổn thương: vị trí, kích thước, đậm độ/tín hiệu, bờ, phân bố.',
+      INTERPRET: 'Diễn giải ý nghĩa lâm sàng của các dấu hiệu hình ảnh đã mô tả.',
+      HYPOTHESIS: 'Đưa ra chẩn đoán khả dĩ nhất dựa trên toàn bộ bằng chứng hình ảnh.',
+      DDx: 'Nêu chẩn đoán phân biệt hợp lý và lý do giữ/loại từng khả năng.',
+      CONCLUSION: 'Tổng hợp kết luận cuối cùng, mức độ tự tin và hướng xử trí phù hợp.',
+    };
+
     return {
       code,
       num:    meta.num,
       name:   (STEP_LABELS as Record<string, string>)?.[code] ?? code,
       color:  meta.color,
       isFinal: meta.isFinal,
+      criterion: criterionByStep[code],
       // Answer key content
       text:    ansKey?.expected_finding ?? '—',
       keyPoint: rawKeyPoint,
@@ -638,7 +694,7 @@ export function AnswerKey() {
       score: detail?.score ?? null,
       // Conclusion extras
       ...(meta.isFinal && {
-        diagnosis:    caseData?.title ?? ansKey?.expected_finding ?? '—',
+        diagnosis:    ansKey?.expected_finding ?? caseData?.title ?? '—',
         confidence:   isUploadView ? undefined : finalScorePct,
         differentials,
       }),
