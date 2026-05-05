@@ -108,3 +108,4 @@ Desktop.ini
 .ai-log/*.jsonl
 
 .claude/
+Data/
