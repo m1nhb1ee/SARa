@@ -9,6 +9,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-key-only-for-local-testing-smart-radiology')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1')
 ALLOWED_HOSTS = ['*', 'localhost', '127.0.0.1']
+DATA_UPLOAD_MAX_NUMBER_FILES = None
+DATA_UPLOAD_MAX_MEMORY_SIZE = None
 
 INSTALLED_APPS = [
     'django.contrib.staticfiles',

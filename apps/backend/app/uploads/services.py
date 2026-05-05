@@ -349,7 +349,7 @@ Populate "issues" (in Vietnamese) only when:
                 "role": "user",
                 "content": [{"type": "text", "text": prompt}, *image_contents],
             }],
-            max_tokens=500,
+            max_tokens=5000,
         )
         raw = (response.choices[0].message.content or '').strip()
         logger.info(f"[image-validation] GPT-4o response: {raw}")
@@ -435,7 +435,7 @@ def _preprocess_with_llm(
                 "role": "user",
                 "content": [{"type": "text", "text": meta_prompt}, *image_contents],
             }],
-            max_tokens=600,
+            max_tokens=5000,
         )
         refined_prompt = (response.choices[0].message.content or '').strip()
 
