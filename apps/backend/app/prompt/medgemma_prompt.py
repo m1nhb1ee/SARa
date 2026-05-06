@@ -16,11 +16,9 @@ def build_analysis_prompt(
 
     return f"""You are a radiology assistant. Analyze these {modality} images of the {region} region.{slice_context}
 
-Respond in exactly six numbered steps. Begin each line with its label:
+Respond in exactly four numbered steps. Begin each line with its label:
 
-1. OBSERVE: List each visible structure; note whether normal or abnormal.
-2. DESCRIBE: Location, size, shape, density of the main finding. Write "No focal finding" only if every structure in step 1 is normal.
-3. INTERPRET: Normal or Abnormal? Name the specific imaging sign. Must be consistent with step 2.
-4. HYPOTHESIS: Single most specific diagnosis. Do not repeat step 3.
-5. DDx: Exactly 2–3 differential diagnoses for {region} {modality}, each with one imaging reason.
-6. CONCLUSION: Main finding + confidence (High/Moderate/Low) + recommended next step."""
+1. OBSERVE: List each visible structure; note whether normal or abnormal. Describe location, size, shape, and density of the main finding. Write "No focal finding" only if every structure is normal.
+2. REASONING: Interpret the clinical significance of the findings (Normal or Abnormal? Name the specific imaging sign). Then state the single most specific working diagnosis with reasoning.
+3. DDx: Exactly 2–3 differential diagnoses for {region} {modality}, each with one imaging reason.
+4. CONCLUSION: Main finding + confidence (High/Moderate/Low) + recommended next step."""

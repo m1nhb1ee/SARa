@@ -1,6 +1,6 @@
 /**
- * DiagnosisTrainingPage - Luyện tập chẩn đoán từng bước  
- * 6 bước: OBSERVE → DESCRIBE → INTERPRET → HYPOTHESIS → DDx → CONCLUSION
+ * DiagnosisTrainingPage - Luyện tập chẩn đoán từng bước
+ * 4 bước: OBSERVE → REASONING → DDx → CONCLUSION
  */
 
 import { useEffect, useState } from 'react';
@@ -11,14 +11,12 @@ import { Card } from '@/app/components/ui/card';
 import { Textarea } from '@/app/components/ui/textarea';
 import { AlertCircle, CheckCircle2, Lightbulb, TrendingUp } from 'lucide-react';
 
-const STEPS = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION'];
+const STEPS = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION'];
 
 const STEP_DESCRIPTIONS = {
-  OBSERVE: 'Quan sát ảnh. Bạn thấy gì ở trên ảnh? Có gì khác lạ?',
-  DESCRIBE: 'Mô tả chi tiết những gì bạn thấy. Kích thước, hình dạng, vị trí?',
-  INTERPRET: 'Diễn giải ý nghĩa. Những điểm này có thể do nguyên nhân nào?',
-  HYPOTHESIS: 'Giả thuyết chẩn đoán. Đâu là chẩn đoán chính?',
-  DDx: 'Chẩn đoán phân biệt. Còn những chẩn đoán khác nào?',
+  OBSERVE: 'Quan sát ảnh. Bạn thấy gì ở trên ảnh? Xác định vùng bất thường và mô tả kích thước, hình dạng, vị trí, mật độ.',
+  REASONING: 'Lý luận lâm sàng. Diễn giải ý nghĩa các phát hiện và đề xuất chẩn đoán làm việc chính.',
+  DDx: 'Chẩn đoán phân biệt. Còn những chẩn đoán khác nào cần loại trừ?',
   CONCLUSION: 'Kết luận. Chẩn đoán cuối cùng của bạn là gì?',
 };
 

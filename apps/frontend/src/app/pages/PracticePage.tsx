@@ -14,7 +14,7 @@ import { useCaseDetail, useCreateSession, useSessionDetail, useSubmitAnswer } fr
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STEPS = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION'];
+const STEPS = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION'];
 
 type Modality = 'X-Ray' | 'CT' | 'MRI';
 type ViewMode = 'upload' | 'training';

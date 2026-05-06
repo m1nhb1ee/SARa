@@ -30,8 +30,8 @@ const NOTES = [
     id: 4, type: 'torn',
     style: { top: '38%', right: '2%', width: 185, rotate: 9 },
     tone: '#FEFDF8', border: '#BEB0A0',
-    title: '6-step pipeline',
-    lines: ['① Observe', '② Describe', '③ Interpret', '④ Hypothesis', '⑤ DDx', '⑥ Conclude ✓'],
+    title: '4-step pipeline',
+    lines: ['① Observe', '② Reasoning', '③ DDx', '④ Conclude ✓'],
   },
   {
     id: 5, type: 'sticky',

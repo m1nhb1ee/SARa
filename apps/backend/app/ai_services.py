@@ -63,9 +63,9 @@ class MockAIAgent:
                     'Cần xem xét kỹ hơn vùng này'
                 ]
         
-        step_names = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+        step_names = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
         step_name = step_names[step_index] if step_index < len(step_names) else 'UNKNOWN'
-        
+
         feedback_templates = {
             'error': f'Bước {step_name}: Nhận xét của bạn chưa chính xác. {". ".join(errors) if errors else "Hãy xem xét kỹ hơn."}',
             'hint': f'Bước {step_name}: Hãy chú ý đến{random.choice([" các tổn thương.", " mô đối xứng.", " kích thước tổn thương."])}',
@@ -93,29 +93,19 @@ class MockAIAgent:
         """
         Tạo gợi ý theo phương pháp Socratic (hỏi chung chung để hướng dẫn)
         """
-        step_names = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+        step_names = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
         step_name = step_names[step_index] if step_index < len(step_names) else 'UNKNOWN'
-        
+
         socratic_hints = {
             'OBSERVE': [
                 'Bạn thấy gì ở các vùng phổi phải? Có bất thường gì về mật độ không?',
                 'Hãy mô tả toàn bộ ảnh từ trên xuống. Có lấn chiếm ranh giới nào không?',
-                'Chú ý đến các vùng ngoại vi. Có dấu phim không rõ nào không?',
+                'Chú ý đến các vùng ngoại vi. Bờ của tổn thương như thế nào - rõ hay mờ?',
             ],
-            'DESCRIBE': [
-                'Bờ của tổn thương như thế nào - rõ hay mờ? Tại sao điều đó quan trọng?',
-                'Tổn thương có đối xứng không? Không?',
-                'Đo kích thước tổn thương. Nó lớn bao nhiêu?',
-            ],
-            'INTERPRET': [
-                'Sự thay đổi này điều gì có thể gây ra? Hãy liệt kê các khả năng.',
-                'Loại mô này là gì - phổi, xương, hay các mô mềm khác?',
+            'REASONING': [
                 'Sự thay đổi mật độ này có ý nghĩa gì về mặt y học?',
-            ],
-            'HYPOTHESIS': [
                 'Khả năng chẩn đoán chính là gì dựa trên những gì bạn thấy?',
-                'Bệnh nhân này có triệu chứng nào phù hợp với giả thuyết của bạn không?',
-                'Tại sao đó là giả thuyết hàng đầu?',
+                'Tại sao đó là chẩn đoán hàng đầu? Những dấu hiệu nào ủng hộ kết luận đó?',
             ],
             'DDx': [
                 'Ngoài chẩn đoán chính, còn cái gì khác có thể gây ra hiện tượng này?',
@@ -168,12 +158,10 @@ class MockSocraticAgent:
     def get_step_question(step_index: int, case_title: str) -> str:
         """Lấy câu hỏi Socratic cho mỗi bước"""
         questions = {
-            0: f'Quan sát ảnh {case_title} này. Bạn thấy gì ở trên ảnh? Có gì khác lạ về mật độ không?',
-            1: 'Hãy mô tả chi tiết những gì bạn thấy. Kích thước, hình dạng, vị trí là như thế nào?',
-            2: 'Những điểm khác lạ này có thể do nguyên nhân nào gây ra?',
-            3: 'Giả thuyết chẩn đoán chính của bạn là gì?',
-            4: 'Ngoài giả thuyết chính, còn những chẩn đoán khác cần loại trừ không?',
-            5: 'Kết luận cuối cùng của bạn là gì? Bạn tự tin bao nhiêu?',
+            0: f'Quan sát ảnh {case_title} này. Bạn thấy gì ở trên ảnh? Xác định vùng bất thường và mô tả kích thước, hình dạng, vị trí, mật độ.',
+            1: 'Diễn giải ý nghĩa lâm sàng của các phát hiện. Chẩn đoán làm việc chính của bạn là gì và tại sao?',
+            2: 'Ngoài chẩn đoán chính, còn những chẩn đoán khác cần loại trừ không?',
+            3: 'Kết luận cuối cùng của bạn là gì? Bạn tự tin bao nhiêu?',
         }
         return questions.get(step_index, 'Câu hỏi không xác định')
 
@@ -215,9 +203,9 @@ class OpenAIAgent:
             logger.error(f"OpenAI error: {e} - falling back to Mock")
             return MockAIAgent.evaluate_answer(case, step_index, student_answer, cv_findings)
         
-        step_names = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+        step_names = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
         step_name = step_names[step_index] if step_index < len(step_names) else 'UNKNOWN'
-        
+
         # case is a plain dict from Supabase
         raw_answer_key = case.get('answer_key', {}) if isinstance(case, dict) else getattr(case, 'answer_key', {})
         if isinstance(raw_answer_key, str):
@@ -234,13 +222,11 @@ class OpenAIAgent:
         system_prompt = """Bạn là một giáo viên chẩn đoán hình ảnh y tế chuyên nghiệp.
 Nhiệm vụ của bạn là đánh giá câu trả lời của sinh viên cho MỘT BƯỚC CỤ THỂ trong pipeline chẩn đoán.
 
-Pipeline chẩn đoán (6 bước):
-1. OBSERVE (Quan sát) - Xác định vùng bất thường
-2. DESCRIBE (Mô tả) - Mô tả chi tiết đặc điểm tổn thương
-3. INTERPRET (Diễn giải) - Diễn giải ý nghĩa lâm sàng
-4. HYPOTHESIS (Giả thuyết) - Đề xuất chẩn đoán dự phòng
-5. DDx (Phân biệt) - Liệt kê chẩn đoán khác cần loại trừ
-6. CONCLUSION (Kết luận) - Kết luận chẩn đoán cuối
+Pipeline chẩn đoán (4 bước):
+1. OBSERVE (Quan sát) - Xác định vùng bất thường và mô tả chi tiết đặc điểm tổn thương
+2. REASONING (Lý luận) - Diễn giải ý nghĩa lâm sàng và đề xuất chẩn đoán làm việc
+3. DDx (Phân biệt) - Liệt kê chẩn đoán khác cần loại trừ
+4. CONCLUSION (Kết luận) - Kết luận chẩn đoán cuối
 
 ⚠️ NGUYÊN TẮC KHÔNG LẠI:
 - CHỈ đánh giá bước hiện tại, không đề cập bước khác
@@ -260,10 +246,8 @@ Trả lời JSON format (KHÔNG MARKDOWN):
         
         # Tiêu chí đánh giá cho từng bước
         step_criteria = {
-            "OBSERVE": "Sinh viên đã xác định được các vùng bất thường trên hình ảnh? Có chỉ ra vị trí cụ thể?",
-            "DESCRIBE": "Sinh viên đã mô tả chi tiết về kích thước, hình dạng, vị trí, mật độ của tổn thương? Mô tả có rõ ràng không?",
-            "INTERPRET": "Sinh viên đã giải thích ý nghĩa lâm sàng của các phát hiện? Có liên kết với bệnh lý không?",
-            "HYPOTHESIS": "Sinh viên đã đề xuất chẩn đoán dự phòng? Giả thuyết có hợp lý với các phát hiện không?",
+            "OBSERVE": "Sinh viên đã xác định được các vùng bất thường trên hình ảnh và mô tả chi tiết kích thước, hình dạng, vị trí, mật độ của tổn thương? Mô tả có rõ ràng không?",
+            "REASONING": "Sinh viên đã giải thích ý nghĩa lâm sàng của các phát hiện và đề xuất chẩn đoán làm việc? Lý luận có liên kết chặt chẽ với hình ảnh quan sát không?",
             "DDx": "Sinh viên đã liệt kê các chẩn đoán cần loại trừ? Có giải thích tại sao không phải là những chẩn đoán này?",
             "CONCLUSION": "Sinh viên đã đưa ra kết luận chẩn đoán cuối? Kết luận có dựa trên cơ sở chắc chắn không?"
         }
@@ -271,7 +255,7 @@ Trả lời JSON format (KHÔNG MARKDOWN):
         user_prompt = f"""Case: {case_title}
 Lịch sử lâm sàng: {clinical_history}
 
-=== BƯỚC HIỆN TẠI: {step_name.upper()} (Bước {step_index + 1}/6) ===
+=== BƯỚC HIỆN TẠI: {step_name.upper()} (Bước {step_index + 1}/4) ===
 
 Tiêu chí đánh giá cho bước {step_name}:
 {step_criteria.get(step_name, "Đánh giá câu trả lời này")}
@@ -366,7 +350,7 @@ Trả lời JSON (không markdown, chỉ pure JSON):"""
             logger.error(f"OpenAI error: {e} - falling back to Mock")
             return MockSocraticAgent.get_step_question(step_index, _case_title)
 
-        step_names = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+        step_names = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
         step_name = step_names[step_index] if step_index < len(step_names) else 'UNKNOWN'
 
         prompt = f"""Case: {_case_title}

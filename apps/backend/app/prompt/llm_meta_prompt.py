@@ -19,13 +19,11 @@ Look at the images. Rewrite the template below:
 Template:
 You are a radiology assistant. Analyze these {modality} images of the [REGION] region.{slice_context}
 
-Respond in exactly six numbered steps. Begin each line with its label:
+Respond in exactly four numbered steps. Begin each line with its label:
 
-1. OBSERVE: [which specific structures to examine and what to check for]
-2. DESCRIBE: [what to characterize about the main finding]
-3. INTERPRET: Normal or Abnormal? [which imaging sign to name; must be consistent with step 2]
-4. HYPOTHESIS: [how to name the specific diagnosis — not a repeat of step 3]
-5. DDx: [2–3 specific differential diagnoses for [REGION] {modality}, each with one imaging reason]
-6. CONCLUSION: Diagnosis + confidence (High/Moderate/Low) + recommended next step.
+1. OBSERVE: [which specific structures to examine, what to look for, and how to characterize the main finding — location, size, shape, density]
+2. REASONING: [how to interpret the clinical significance of findings and name the specific imaging sign; then how to state the single most specific working diagnosis with reasoning]
+3. DDx: [2–3 specific differential diagnoses for [REGION] {modality}, each with one imaging reason]
+4. CONCLUSION: Diagnosis + confidence (High/Moderate/Low) + recommended next step.
 
 Return ONLY the final prompt — no explanation, no markdown."""
