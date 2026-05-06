@@ -233,7 +233,7 @@ function UploadModal({ caseNum, onViewAnswer, onPractice, onClose, onSaveLater }
               Dr. AI's Notes
             </div>
             <p style={{ fontFamily: "'Caveat', cursive", fontSize: '13px', color: '#2C1810', lineHeight: 1.55 }}>
-              Image uploaded and AI analysis complete. 6 diagnostic steps generated.
+              Image uploaded and AI analysis complete. 4 diagnostic steps generated.
             </p>
           </div>
 
@@ -249,7 +249,7 @@ function UploadModal({ caseNum, onViewAnswer, onPractice, onClose, onSaveLater }
               </div>
               <div className="w-full h-px mb-3" style={{ background: '#C4A882', opacity: 0.4 }} />
               <p style={{ fontFamily: "'Lora', serif", fontSize: '12.5px', color: '#6B4C3B', lineHeight: 1.55, marginBottom: '12px' }}>
-                Study the AI's full diagnostic reasoning across 6 steps
+                Study the AI's full diagnostic reasoning across 4 steps
               </p>
               <button
                 className="flex items-center gap-2 hover:gap-3 transition-all"
@@ -787,11 +787,9 @@ export function UploadPage() {
                 Dr. AI's Notes
               </div>
               <p style={{ fontFamily: "'Caveat', cursive", fontSize: '13px', color: '#2C1810', lineHeight: 1.65 }}>
-                AI will analyse your image and generate 6 diagnostic steps:{' '}
+                AI will analyse your image and generate 4 diagnostic steps:{' '}
                 <span style={{ color: '#1B3A5C' }}>OBSERVE</span> →{' '}
-                <span style={{ color: '#1B5C4A' }}>DESCRIBE</span> →{' '}
-                <span style={{ color: '#C9882A' }}>INTERPRET</span> →{' '}
-                <span style={{ color: '#C0392B' }}>HYPOTHESIS</span> →{' '}
+                <span style={{ color: '#C9882A' }}>REASONING</span> →{' '}
                 <span style={{ color: '#5C3D2E' }}>DDx</span> →{' '}
                 <span style={{ color: '#7D9B76' }}>CONCLUSION</span>
               </p>

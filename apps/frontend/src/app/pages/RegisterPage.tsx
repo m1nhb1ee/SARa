@@ -11,7 +11,7 @@ const NOTES = [
   { id: 3, style: { top: '42%', left: '1%', width: 165, rotate: -5 }, tone: '#D4EDDA', border: '#88C99A',
     title: 'Case #107', lines: ['Female, 67 y/o', 'CXR: bilateral patchy', 'infiltrates', '→ DDx: CAP vs CHF?'] },
   { id: 4, style: { top: '38%', right: '2%', width: 185, rotate: 9 }, tone: '#FEFDF8', border: '#BEB0A0',
-    title: '6-step pipeline', lines: ['① Observe', '② Describe', '③ Interpret', '④ Hypothesis', '⑤ DDx', '⑥ Conclude ✓'] },
+    title: '4-step pipeline', lines: ['① Observe', '② Reasoning', '③ DDx', '④ Conclude ✓'] },
   { id: 5, style: { bottom: '8%', left: '3%', width: 190, rotate: -9 }, tone: '#FFE4B5', border: '#DEB887',
     title: 'Pt: Nguyen Van A', lines: ['45M, CT abdomen', 'Hepatomegaly noted,', 'no focal lesion', '→ USG recommended'] },
   { id: 6, style: { bottom: '6%', right: '2%', width: 175, rotate: 7 }, tone: '#FEFCF3', border: '#C4A882',
