@@ -26,6 +26,6 @@ Respond in exactly six numbered steps. Begin each line with its label:
 3. INTERPRET: Normal or Abnormal? [which imaging sign to name; must be consistent with step 2]
 4. HYPOTHESIS: [how to name the specific diagnosis — not a repeat of step 3]
 5. DDx: [2–3 specific differential diagnoses for [REGION] {modality}, each with one imaging reason]
-6. CONCLUSION: Main finding + confidence (High/Moderate/Low) + recommended next step.
+6. CONCLUSION: Diagnosis + confidence (High/Moderate/Low) + recommended next step.
 
 Return ONLY the final prompt — no explanation, no markdown."""
