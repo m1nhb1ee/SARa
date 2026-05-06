@@ -107,6 +107,7 @@ class MeView(APIView):
             'user': {
                 'id': user['id'],
                 'email': user['email'],
+                'full_name': user.get('full_name', ''),
                 'role': user.get('role', 'student'),
             }
         })

@@ -25,6 +25,7 @@ class CaseViewSet(viewsets.ViewSet):
     def list(self, request):
         cases = list_cases(
             user_id=request.user['id'],
+            source=request.query_params.get('source'),
             modality=request.query_params.get('modality'),
             difficulty=request.query_params.get('difficulty'),
             disease_tag=request.query_params.get('disease_tag'),

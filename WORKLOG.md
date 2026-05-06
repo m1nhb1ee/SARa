@@ -67,7 +67,33 @@ Observe → Describe → Interpret → DDx → Conclusion.
 **Quyết định:** Dùng `gradio_client` gọi `ttnguyen6716/MedGemma-1.5-4B` trên HF Space. Token lấy từ `HF_TOKEN` trong `.env`, fallback về mock findings nếu call thất bại.
 
 **Hệ quả:** Phụ thuộc uptime của HF Space (không có SLA). Latency cao hơn self-hosted (~3–8s/request). Cần implement fallback rõ ràng để không block session khi model down.
+---
 
+### [ADR-5] Kiến trúc đa volume cho case ảnh - 29/04/2026
+
+**Bối cảnh:** Mỗi ca bệnh CT/MRI thực tế có nhiều chuỗi ảnh (volume) khác nhau. ví dụ: Axial Bone Window, Axial Non-Contrast, Coronal... Cần thiết kế lại cách lưu và trả về ảnh.
+
+**Các lựa chọn đã xem xét:**
+- **Flat list `image_urls[]`:** Đơn giản nhưng mất thông tin volume, frontend không thể group ảnh theo chuỗi.
+- **Multi-volume grouped:** Mỗi case trả về `images: [{ volume_name, slices: [{ image_url, slice_index }] }]`. Frontend render đúng theo chuỗi ảnh.
+
+**Quyết định:** Chuyển sang multi-volume. Thêm cột `volume_name` vào bảng `case_images`. Upload nhận thêm field `volume_names[]` song song với `images[]`.
+
+**Hệ quả:** API trả về ảnh grouped theo volume, frontend cần cập nhật `VolumeSliceViewer`. Migration cần chạy trên Supabase.
+
+---
+
+### [ADR-6] Thêm GPT-4o làm bước tiền xử lý trước MedGemma - 30/04/2026
+
+**Bối cảnh:** MedGemma hallucinate khi nhận prompt generic. Cần prompt được chuẩn hóa theo từng case có modality/region cụ thể.
+
+**Các lựa chọn đã xem xét:**
+- **Prompt cố định (template):** Dễ maintain nhưng không thích nghi với đặc điểm từng ca.
+- **GPT-4o Vision pre-processing:** Gửi các ảnh mẫu lên GPT-4o, nhờ nó phân loại kèm viết lại prompt phù hợp với modality/anatomy thực tế của ảnh. Tốn thêm 1 API call nhưng prompt chính xác hơn.
+
+**Quyết định:** Thêm `_preprocess_with_llm()` trước `_call_gradio()`. Meta-prompt nằm trong `app/prompt/llm_meta_prompt.py`. Fallback về `build_analysis_prompt()` nếu không có `OPENAI_API_KEY`.
+
+**Hệ quả:** Latency upload tăng thêm ~1–2s. Tốn token GPT-4o mỗi lần upload. Cần giữ ANTI-HALLUCINATION RULES trong prompt để VLM không skip step label hay copy-paste câu giữa các bước.
 
 ---
 
@@ -131,17 +157,40 @@ Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 
 | Task | Người làm | Deadline | Trạng thái |
 |---|---|---|---|
-| Implement pipeline state machine (6 bước, score gate ≥ 0.6) | Tiến | 21/04 | ⬜ Chưa làm |
-| Implement `POST /api/v1/sessions/start` + CV Agent async trigger | Tiến | 21/04 | ⬜ Chưa làm |
-| Implement `POST /api/v1/sessions/{id}/answer` + Answer-Check Agent | Tiến | 22/04 | ⬜ Chưa làm |
-| Seed script — 5 ca hardcoded dưới dạng static JSON | Khôi | 21/04 | ⬜ Chưa làm |
-| Populate Supabase với 5 ca mẫu + rubric + answer key | Khôi | 22/04 | ⬜ Chưa làm |
-| Hoàn thiện RLS policy cho tất cả bảng | Khôi | 21/04 | ⬜ Chưa làm |
-| Xử lý race condition CV Agent async vs. sinh viên trả lời bước 1 quá nhanh | Tiến | 22/04 | ⬜ Chưa làm |
-| Implement signed URL refresh logic (TTL > 1h cho session dài) | Khôi | 22/04 | ⬜ Chưa làm |
-| Xây dựng case library UI + image viewer | Minh | 23/04 | ⬜ Chưa làm |
-| Giao diện Socratic dialogue bước đầu | Minh | 24/04 | ⬜ Chưa làm |
-| Hoàn thiện system prompt CV Agent và Socratic Agent | Tiến + Minh | 23/04 | ⬜ Chưa làm |
-| Bắt đầu prompt engineering Answer-Check Agent với rubric JSON mẫu | Tiến | 24/04 | ⬜ Chưa làm |
-| Tuyển 30 sinh viên pilot từ rotation lâm sàng VinUniversity | Minh (PM) | 25/04 | ⬜ Chưa làm |
-| Chạy session thử nghiệm đầu tiên cuối tuần 3 | Cả nhóm | 25/04 | ⬜ Chưa làm |
+| Implement pipeline state machine (6 bước, score gate ≥ 0.6) | Khôi + Minh | 21/04 | ✅ Xong |
+| Implement `POST /api/v1/sessions/` + `POST /api/v1/sessions/{id}/submit_answer/` | Tiến | 22/04 | ✅ Xong |
+| Implement Answer-Check Agent (GPT-4o scoring + rubric JSON) | Minh | 22/04 | ✅ Xong |
+| Populate Supabase với 5 ca mẫu + rubric + answer key | Tiến | 22/04 | 🔄 Đang làm |
+| Refactor `uploaded-cases` route — multi-image upload + `case_images` table | Minh | 23/04 | ✅ Xong |
+| Thêm `region` input vào upload route, đưa vào MedGemma prompt | Tiến | 23/04 | ✅ Xong |
+| Drop `image_url` column khỏi `upload_sessions`, migrate sang `case_images` | Tiến | 23/04 | ✅ Xong |
+| Xây dựng case library UI + image viewer | Minh | 23/04 | ✅ Xong |
+| Giao diện Socratic dialogue bước đầu | Minh | 24/04 | ✅ Xong |
+| Chỉnh sửa system prompt MedGemma (6-step radiology format, region-aware) | Tiến | 23/04 | ✅ Xong |
+| Prompt engineering Answer-Check Agent với rubric JSON mẫu | Tiến | 24/04 | ✅ Xong |
+| Chạy session thử nghiệm đầu tiên cuối tuần 3 | Cả nhóm | 25/04 | ✅ Xong |
+
+---
+
+### Sprint 4 - 28/04 → 02/05/2026
+
+| Task | Người làm | Deadline | Trạng thái |
+|---|---|---|---|
+| Thiết kế lại kiến trúc nhận ảnh đa volume (`volume_name` trong `case_images`) | Tiến | 29/04 | ✅ Xong |
+| Migration: thêm cột `volume_name` vào `case_images` | Tiến | 29/04 | ✅ Xong |
+| Migration: thêm cột `source` vào `cases` (`system`/`uploaded`) | Tiến | 29/04 | ✅ Xong |
+| Cập nhật upload endpoint nhận `volume_names[]` song song với images | Tiến | 29/04 | ✅ Xong |
+| Thêm GPT-4o pre-processing trước MedGemma (LLM → VLM pipeline) | Tiến | 30/04 | ✅ Xong |
+| Tăng cường anti-hallucination rules trong prompt (step label, consistency) | Tiến | 01/05 | ✅ Xong |
+| Hoàn thiện bộ data cases mẫu | Khôi | 30/04 | ✅ Xong |
+| Viết script bulk upload 22 cases mẫu lên Supabase | Tiến | 01/05 | ✅ Xong |
+| Đồng bộ frontend với backend đã chỉnh sửa | Minh | 30/04 | ✅ Xong |
+| Sửa Frontend để render đa ảnh cho mỗi case | Minh | 01/05 | ✅ Xong |
+| Fix CSS module import path trong Dashboard.tsx, DiagnosisSession.tsx | Minh | 02/05 | ✅ Xong |
+| Hoàn thiện và deploy hệ thống (backend + frontend) | Cả nhóm | ongoing | 🔄 Đang làm |
+| Fix VLM lỗi GPU task abort / NameError (VRAM limit với ảnh nhiều) | Tiến | ongoing | 🔄 Đang làm |
+| Tìm thêm case mẫu để mở rộng thư viện | Khôi | ongoing | 🔄 Đang làm |
+| Viết test cases cho giai đoạn testing | Cả nhóm | ongoing | 🔄 Đang làm |
+
+---
+

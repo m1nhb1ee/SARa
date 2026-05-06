@@ -31,3 +31,13 @@ export interface FeedbackResult {
   session_complete?: boolean;
   attempt?: StepAttempt;
 }
+
+export interface CaseSlice {
+  image_url: string;
+  slice_index: number;
+}
+
+export interface CaseVolume {
+  volume_name: string;
+  slices: CaseSlice[];
+}

@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { useCases, useSessions, useUploadedCases, useDeleteUploadedCase } from '@/api/hooks';
+import { useCases, useSessions, useUploadedCases, useDeleteUploadedCase, useDeleteSession } from '@/api/hooks';
 import { mapModality, mapDifficulty, getImageKey } from '@/utils/mappers';
 import type { CaseItem, SessionStatus, Modality, Difficulty } from '@/types';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
-import styles from './Dashboard.module.css';
+import styles from '@/styles/Dashboard.module.css';
 
 const MODALITY_OPTIONS = ['Tất cả', 'X-Ray', 'CT', 'MRI'];
 const DIFFICULTY_OPTIONS = ['Tất cả', 'Cơ bản', 'Trung bình', 'Nặng cao'];
@@ -121,12 +121,15 @@ export function Dashboard() {
   const { data: sessionsData } = useSessions();
   const { data: uploadsData } = useUploadedCases();
   const { deleteCase } = useDeleteUploadedCase();
+  const { deleteSession } = useDeleteSession();
 
   const [activeModality, setActiveModality] = useState('Tất cả');
   const [activeDifficulty, setActiveDifficulty] = useState('Tất cả');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [erasingId, setErasingId] = useState<string | null>(null);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [resumeTarget, setResumeTarget] = useState<{ caseId: string; sessionId: string; title: string } | null>(null);
+  const [discarding, setDiscarding] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -161,6 +164,28 @@ export function Dashboard() {
     const map: Record<string, SessionStatus> = {};
     for (const s of (sessionsData?.results ?? [])) {
       map[s.case_id ?? s.case] = s.status === 'COMPLETED' ? 'Hoàn thành' : 'Đang làm';
+    }
+    return map;
+  }, [sessionsData]);
+
+  // Maps case_id → final_score (0–1) for completed sessions
+  const scoreMap = useMemo<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const s of (sessionsData?.results ?? [])) {
+      if (s.status === 'COMPLETED' && s.final_score != null) {
+        map[s.case_id ?? s.case] = s.final_score;
+      }
+    }
+    return map;
+  }, [sessionsData]);
+
+  // Maps case_id → most recent non-completed session id (for resume/discard flow)
+  const activeSessionMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const s of (sessionsData?.results ?? [])) {
+      if (s.status !== 'COMPLETED') {
+        map[s.case_id ?? s.case] = s.id;
+      }
     }
     return map;
   }, [sessionsData]);
@@ -310,7 +335,7 @@ export function Dashboard() {
             </button>
           ))}
           <span className={styles.filterCount}>
-            {casesLoading ? 'Đang tải...' : `${filtered.length} ca`}
+            {casesLoading ? 'Loading...' : `${filtered.length} ca`}
           </span>
         </div>
 
@@ -336,11 +361,14 @@ export function Dashboard() {
               const isConfirming = confirmDeleteId === c.id;
               const isErasing = erasingId === c.id;
 
+              const rawScore = scoreMap[c.id];
+              const displayScore = rawScore != null ? Math.round(rawScore * 100) : null;
+
               const rightScore =
                 c.status === 'Hoàn thành' ? (
                   <>
                     <div className={styles.cardScore}>
-                      {Math.floor(70 + (globalIdx * 7) % 25)}
+                      {displayScore ?? '—'}
                       <span style={{ fontSize: 12, color: 'var(--ink-faded)' }}>/100</span>
                     </div>
                     <div className={styles.cardScoreLbl}>Your Score</div>
@@ -366,7 +394,15 @@ export function Dashboard() {
                     isErasing ? styles.cardCollapsing : '',
                   ].join(' ')}
                   style={{ animationDelay: `${idx * 55}ms` }}
-                  onClick={() => { if (!isConfirming && !isErasing) navigate(`/session/${c.id}`); }}
+                  onClick={() => {
+                    if (isConfirming || isErasing) return;
+                    const sid = activeSessionMap[c.id];
+                    if (sid) {
+                      setResumeTarget({ caseId: c.id, sessionId: sid, title: c.title });
+                    } else {
+                      navigate(`/session/${c.id}`);
+                    }
+                  }}
                 >
                   {/* erase overlay — sweeps across when deleting */}
                   {isErasing && <div className={styles.eraseOverlay} />}
@@ -524,6 +560,152 @@ export function Dashboard() {
         )}
 
       </div>
+
+      {/* ── Resume/Restart modal ── */}
+      {resumeTarget && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(44,24,16,0.62)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
+          }}
+          onClick={() => !discarding && setResumeTarget(null)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#F5EDD6',
+              maxWidth: 480, width: '100%',
+              position: 'relative',
+              boxShadow: '0 8px 40px rgba(44,24,16,0.32)',
+            }}
+          >
+            <SketchBorder id="resume-modal-border" color="#7A6248" opacity={0.75} />
+
+            {/* ── Header strip ── */}
+            <div style={{
+              background: '#EDE0C4',
+              borderBottom: '2px solid #C4A882',
+              padding: '18px 28px 14px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <div>
+                <div style={{
+                  fontFamily: "'Courier Prime', monospace",
+                  fontSize: 10, letterSpacing: '0.22em',
+                  textTransform: 'uppercase', color: '#6B4C3B',
+                  marginBottom: 4,
+                }}>
+                  — Session đang làm dở —
+                </div>
+                <div style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: 17, fontWeight: 700, color: '#2C1810',
+                  lineHeight: 1.35,
+                }}>
+                  {resumeTarget.title}
+                </div>
+              </div>
+              <button
+                disabled={discarding}
+                onClick={() => setResumeTarget(null)}
+                style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  fontFamily: "'Special Elite', cursive",
+                  fontSize: 22, lineHeight: 1,
+                  color: '#C0392B', padding: '0 0 2px 12px',
+                  flexShrink: 0,
+                }}
+                title="Đóng"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* ── Body ── */}
+            <div style={{ padding: '22px 28px 16px' }}>
+              <div style={{
+                fontFamily: "'Lora', Georgia, serif",
+                fontSize: 14, color: '#2C1810', lineHeight: 1.75,
+              }}>
+                Bạn đã làm dở case này. Muốn tiếp tục từ bước đang dở, hay xóa và bắt đầu lại từ đầu?
+              </div>
+            </div>
+
+            {/* ── Footer buttons ── */}
+            <div style={{
+              display: 'flex', gap: 12,
+              padding: '4px 28px 24px',
+            }}>
+              {/* Tiếp tục — dark ink fill */}
+              <div
+                role="button"
+                onClick={() => {
+                  if (discarding) return;
+                  const cid = resumeTarget.caseId;
+                  setResumeTarget(null);
+                  navigate(`/session/${cid}`);
+                }}
+                style={{
+                  flex: 1, position: 'relative',
+                  background: '#2C1810', color: '#F5EDD6',
+                  padding: '13px 0', textAlign: 'center',
+                  fontFamily: "'Special Elite', cursive",
+                  fontSize: 14, letterSpacing: '0.08em',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#3D2214'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#2C1810'; }}
+              >
+                <SketchBorder id="btn-continue" color="#F5EDD6" opacity={0.4} />
+                Tiếp tục
+              </div>
+
+              {/* Làm lại — terracotta sketch outline, fills on hover */}
+              <div
+                role="button"
+                onClick={async () => {
+                  if (discarding) return;
+                  setDiscarding(true);
+                  await deleteSession(resumeTarget.sessionId);
+                  setDiscarding(false);
+                  const cid = resumeTarget.caseId;
+                  setResumeTarget(null);
+                  navigate(`/session/${cid}`);
+                }}
+                style={{
+                  flex: 1, position: 'relative',
+                  background: 'transparent', color: '#C0392B',
+                  padding: '13px 0', textAlign: 'center',
+                  fontFamily: "'Special Elite', cursive",
+                  fontSize: 14, letterSpacing: '0.08em',
+                  cursor: discarding ? 'not-allowed' : 'pointer',
+                  opacity: discarding ? 0.55 : 1,
+                  userSelect: 'none',
+                  transition: 'background 0.18s, color 0.18s',
+                }}
+                onMouseEnter={e => {
+                  if (discarding) return;
+                  const el = e.currentTarget as HTMLElement;
+                  el.style.background = '#C0392B';
+                  el.style.color = '#F5EDD6';
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget as HTMLElement;
+                  el.style.background = 'transparent';
+                  el.style.color = '#C0392B';
+                }}
+              >
+                <SketchBorder id="btn-restart" color="#C0392B" opacity={0.85} />
+                {discarding ? 'Đang xóa...' : 'Làm lại từ đầu'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

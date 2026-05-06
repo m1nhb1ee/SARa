@@ -17,7 +17,7 @@ class CaseListSerializer(serializers.Serializer):
     clinical_history = serializers.CharField()
     disease_tag = serializers.CharField(allow_null=True, required=False)
     status = serializers.CharField()
-    image_urls = serializers.ListField(child=serializers.CharField(), default=list)
+    images = serializers.ListField(child=serializers.DictField(), default=list)
     tags = serializers.ListField(child=serializers.CharField(), default=list)
     created_at = serializers.DateTimeField()
 

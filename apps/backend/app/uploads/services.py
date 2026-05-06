@@ -10,6 +10,8 @@ import logging
 from typing import Dict, Any, Optional
 
 from app.core.supabase_client import get_supabase
+from app.prompt.medgemma_prompt import build_analysis_prompt
+from app.prompt.llm_meta_prompt import build_meta_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +56,14 @@ def upload_image_to_storage(image_bytes: bytes, filename: str) -> str:
 
 def create_case_in_supabase(
     user_id: str,
-    image_url: str,
+    images: list,
     modality: str,
     title: str,
     findings: dict,
 ) -> dict:
     """
-    Ghi case + answer_keys + upload_session vào Supabase.
+    Ghi case + case_images + answer_keys + upload_session vào Supabase.
+    images: [{'image_url': str, 'slice_index': int | None}, ...]
     Trả về {'upload_session': ..., 'case': ...}.
     """
     sb = get_supabase()
@@ -71,14 +74,24 @@ def create_case_in_supabase(
 
     case_result = sb.table('cases').insert({
         'uploaded_by': user_id,
+        'source': 'uploaded',
         'title': title,
         'modality': MODALITY_MAP.get(modality, 'X-ray'),
         'difficulty': 'medium',
         'clinical_history': findings.get('clinical_history', ''),
-        'image_urls': [image_url],
         'status': 'published',
     }).execute()
     case = case_result.data[0]
+
+    sb.table('case_images').insert([
+        {
+            'case_id':    case['id'],
+            'image_url':  img['image_url'],
+            'slice_index': img.get('slice_index'),
+            'volume_name': img.get('volume_name', 'Default'),
+        }
+        for img in images
+    ]).execute()
 
     answer_key = findings.get('answer_key', {})
     rows = [
@@ -99,7 +112,6 @@ def create_case_in_supabase(
     upload_session = sb.table('upload_sessions').insert({
         'user_id': user_id,
         'case_id': case['id'],
-        'image_url': image_url,
         'modality': modality,
     }).execute().data[0]
 
@@ -107,11 +119,15 @@ def create_case_in_supabase(
 
 
 def find_case_by_image_url(image_url: str) -> dict | None:
-    """Tìm case theo image_url (dùng cho start_practice)."""
+    """Tìm case theo image_url qua bảng case_images."""
     sb = get_supabase()
     try:
-        result = sb.table('cases').select('id, title').contains('image_urls', [image_url]).execute()
-        return result.data[0] if result.data else None
+        result = sb.table('case_images').select('case_id').eq('image_url', image_url).execute()
+        if not result.data:
+            return None
+        case_id = result.data[0]['case_id']
+        case_result = sb.table('cases').select('id, title').eq('id', case_id).single().execute()
+        return case_result.data
     except Exception:
         return None
 
@@ -136,7 +152,7 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
     # 1. Lấy upload_session và kiểm tra quyền sở hữu
     try:
         result = sb.table('upload_sessions').select(
-            'id, user_id, case_id, image_url'
+            'id, user_id, case_id'
         ).eq('id', upload_session_id).single().execute()
     except Exception:
         raise ValueError('Upload session not found')
@@ -146,9 +162,17 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
         raise PermissionError('Bạn không có quyền xóa upload này')
 
     case_id: Optional[str] = upload.get('case_id')
-    image_url: str = upload.get('image_url') or ''
 
-    # 2. Xóa các practice sessions liên quan đến case
+    # 2. Lấy danh sách image_urls từ case_images trước khi xóa case
+    image_urls: list[str] = []
+    if case_id:
+        try:
+            imgs = sb.table('case_images').select('image_url').eq('case_id', case_id).execute()
+            image_urls = [r['image_url'] for r in (imgs.data or [])]
+        except Exception as e:
+            logger.warning(f"Could not fetch case_images for case {case_id}: {e}")
+
+    # 3. Xóa các practice sessions liên quan đến case
     if case_id:
         try:
             sb.table('sessions').delete().eq('case_id', case_id).execute()
@@ -156,7 +180,7 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
         except Exception as e:
             logger.warning(f"Could not delete sessions for case {case_id}: {e}")
 
-    # 3. Xóa answer_keys
+    # 4. Xóa answer_keys
     if case_id:
         try:
             sb.table('answer_keys').delete().eq('case_id', case_id).execute()
@@ -164,11 +188,11 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
         except Exception as e:
             logger.warning(f"Could not delete answer_keys for case {case_id}: {e}")
 
-    # 4. Xóa upload_session (trước khi xóa case để tránh FK violation nếu có)
+    # 5. Xóa upload_session
     sb.table('upload_sessions').delete().eq('id', upload_session_id).execute()
     logger.info(f"Deleted upload_session {upload_session_id}")
 
-    # 5. Xóa case
+    # 6. Xóa case (cascade xóa case_images)
     if case_id:
         try:
             sb.table('cases').delete().eq('id', case_id).execute()
@@ -176,15 +200,15 @@ def delete_uploaded_case(upload_session_id: str, user_id: str) -> dict:
         except Exception as e:
             logger.warning(f"Could not delete case {case_id}: {e}")
 
-    # 6. Xóa ảnh khỏi Supabase Storage (best-effort, không fail nếu lỗi)
-    if image_url:
+    # 7. Xóa ảnh khỏi Supabase Storage (best-effort)
+    for url in image_urls:
         try:
-            path = _extract_storage_path(image_url)
+            path = _extract_storage_path(url)
             if path:
                 sb.storage.from_('case_images').remove([path])
                 logger.info(f"Deleted storage file: {path}")
         except Exception as e:
-            logger.warning(f"Could not delete storage image {image_url}: {e}")
+            logger.warning(f"Could not delete storage image {url}: {e}")
 
     return {
         'deleted': True,
@@ -239,43 +263,226 @@ def _to_temp_file(image_file) -> tuple:
     raise ValueError(f"Không đọc được ảnh từ kiểu: {type(image_file)}")
 
 
-def _call_gradio(image_file, modality: str, token: str) -> str:
+def classify_and_validate_images(
+    image_bytes_list: list,
+    volume_names: list,
+    declared_modality: str,
+) -> dict:
+    """
+    Gọi GPT-4o Vision để:
+    1. Kiểm tra ảnh có phải ảnh y tế không (không phải ảnh chụp thường, screenshot, v.v.)
+    2. Kiểm tra các ảnh trong cùng 1 volume có cùng loại/sequence không
+
+    Returns:
+        {
+            'valid': bool,
+            'error_type': None | 'not_medical' | 'inconsistent_volume',
+            'issues': [str],   # tiếng Việt, hiển thị thẳng cho user
+            'classifications': [{'index': int, 'volume': str, 'is_medical': bool, 'type': str}]
+        }
+
+    Nếu không có OPENAI_API_KEY hoặc GPT-4o call thất bại: trả về valid=True (skip validation).
+    """
+    import base64
+    import json
+    from openai import OpenAI
+
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not set — bỏ qua bước kiểm tra ảnh y tế")
+        return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
+
+    # Lấy tối đa 2 ảnh/volume, tổng không quá 6 ảnh để gọi GPT-4o nhanh
+    volume_to_indices: dict = {}
+    for i, vol in enumerate(volume_names):
+        volume_to_indices.setdefault(vol, []).append(i)
+
+    sample_indices: list[int] = []
+    for indices in volume_to_indices.values():
+        sample_indices.extend(indices[:2])
+    sample_indices = sample_indices[:6]
+
+    image_contents = []
+    for idx in sample_indices:
+        b64 = base64.b64encode(image_bytes_list[idx]).decode('utf-8')
+        image_contents.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"},
+        })
+
+    volume_info = ', '.join(
+        f'Image {idx} → volume="{volume_names[idx]}"' for idx in sample_indices
+    )
+
+    prompt = f"""Classify each image shown.
+
+Context: a radiology education platform is validating user-uploaded files.
+Declared scan type: {declared_modality}
+Image index → volume group: {volume_info}
+
+Task — for each image:
+1. Identify the imaging technique shown (e.g. "X-ray", "CT axial", "MRI T2", "MRI T1", "Ultrasound", "Pathology slide").
+   If the image is NOT a medical/radiological scan (e.g. a regular photo, screenshot, diagram), set is_medical=false.
+2. Note which volume group it belongs to (given above).
+
+After classifying all images, check: within each volume group, do all images show the same imaging technique and sequence?
+
+Return ONLY valid JSON, no markdown:
+{{
+  "images": [
+    {{"index": 0, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}},
+    {{"index": 1, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}}
+  ],
+  "issues": []
+}}
+
+Populate "issues" (in Vietnamese) only when:
+- An image is not a medical scan: "Ảnh số {{n}} (volume: '{{vol}}') không phải ảnh y tế. Vui lòng chỉ upload ảnh chẩn đoán hình ảnh."
+- A volume group contains images of different types: "Volume '{{vol}}' chứa ảnh không nhất quán: {{types found}}. Vui lòng upload cùng 1 loại ảnh trong 1 volume."
+"""
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}, *image_contents],
+            }],
+            max_tokens=500,
+        )
+        raw = (response.choices[0].message.content or '').strip()
+        logger.info(f"[image-validation] GPT-4o response: {raw}")
+
+        # GPT-4o content-policy refusal → skip validation gracefully
+        _lower = raw.lower()
+        if (
+            raw.startswith("I'm sorry") or
+            "i can't assist" in _lower or
+            "i cannot assist" in _lower or
+            "unable to assist" in _lower or
+            raw.find('{') < 0
+        ):
+            logger.warning(f"[image-validation] GPT-4o từ chối phân tích — bỏ qua validation: {raw[:80]}")
+            return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
+
+        j_start = raw.find('{')
+        j_end = raw.rfind('}') + 1
+        parsed = json.loads(raw[j_start:j_end])
+
+        classifications = parsed.get('images', [])
+        issues = [s.strip() for s in parsed.get('issues', []) if s.strip()]
+
+        has_non_medical = any(not c.get('is_medical', True) for c in classifications)
+        error_type = None
+        if has_non_medical:
+            error_type = 'not_medical'
+        elif issues:
+            error_type = 'inconsistent_volume'
+
+        return {
+            'valid': len(issues) == 0,
+            'error_type': error_type,
+            'issues': issues,
+            'classifications': classifications,
+        }
+
+    except Exception as e:
+        logger.warning(f"[image-validation] GPT-4o call thất bại: {e} — bỏ qua validation")
+        return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
+
+
+def _preprocess_with_llm(
+    image_files: list,
+    modality: str,
+    region: str,
+    volume_names: list | None = None,
+) -> str:
+    """
+    Use GPT-4o Vision to verify image modality/volume consistency and return
+    a refined analysis prompt tailored to what is actually visible in the images.
+    Falls back to build_analysis_prompt() if OPENAI_API_KEY is not set or call fails.
+    """
+    import base64
+    from openai import OpenAI
+
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not set — skipping LLM pre-processing, using default prompt")
+        total_slices = len(image_files) if image_files else None
+        return build_analysis_prompt(modality, region, total_slices, volume_names)
+
+    unique_volumes = list(dict.fromkeys(volume_names or []))
+    volume_info = f" Declared volumes: {', '.join(unique_volumes)}." if unique_volumes else ""
+    total_slices = len(image_files)
+
+    sample_files = image_files[:4]
+    image_contents = []
+    for img_bytes in sample_files:
+        b64 = base64.b64encode(img_bytes).decode('utf-8')
+        image_contents.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"},
+        })
+
+    meta_prompt = build_meta_prompt(modality, region, total_slices, volume_info)
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [{"type": "text", "text": meta_prompt}, *image_contents],
+            }],
+            max_tokens=600,
+        )
+        refined_prompt = (response.choices[0].message.content or '').strip()
+
+        # Detect content-policy refusal — don't forward garbage as VLM prompt
+        _lower = refined_prompt.lower()
+        is_refusal = (
+            len(refined_prompt) < 80 or
+            "i'm sorry" in _lower or
+            "i can't assist" in _lower or
+            "i cannot assist" in _lower or
+            "unable to assist" in _lower
+        )
+        if is_refusal:
+            logger.warning(f"LLM pre-processing trả về refusal — dùng default prompt: {refined_prompt[:80]}")
+            return build_analysis_prompt(modality, region, total_slices, volume_names)
+
+        logger.info(f"LLM pre-processing complete — refined prompt generated ({len(refined_prompt)} chars)")
+        logger.debug(f"[LLM prompt]\n{refined_prompt}")
+        return refined_prompt
+    except Exception as e:
+        logger.warning(f"LLM pre-processing failed: {e} — falling back to default prompt")
+        return build_analysis_prompt(modality, region, total_slices, volume_names)
+
+
+def _call_gradio(image_files: list, prompt: str, token: str) -> str:
     from gradio_client import Client, handle_file
 
-    question = f"""IMPORTANT: Return ONLY valid JSON, nothing else. No markdown, no explanations before or after.
-        Analyze this {modality} medical image and return response in this EXACT JSON structure:
-        {{
-        "OBSERVE": "...",
-        "DESCRIBE": "...",
-        "INTERPRET": "...",
-        "HYPOTHESIS": "...",
-        "DDx": "...",
-        "CONCLUSION": "..."
-        }}
-        Rules:
-        - ONLY output JSON, no other text
-        - Each field must have detailed, clinically relevant content
-        - Use both Vietnamese and English for clarity
-        - Be concise but comprehensive
-        """
-
-    tmp_path = None
+    tmp_paths = []
     try:
-        tmp_path, _ = _to_temp_file(image_file)
-        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}]")
-        client = Client(GRADIO_SPACE_ID, token=token)
-        result = client.predict(
-            gallery=[{"image": handle_file(tmp_path), "caption": None}],
-            question=question,
-            api_name="/analyze"
-        )
+        for image_file in image_files:
+            tmp_path, _ = _to_temp_file(image_file)
+            tmp_paths.append(tmp_path)
+
+        gallery = [{"image": handle_file(p), "caption": None} for p in tmp_paths]
+        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — images={len(gallery)}")
+        client = Client(GRADIO_SPACE_ID, token=token, httpx_kwargs={"timeout": 300})
+        job = client.submit(gallery=gallery, question=prompt, api_name="/analyze")
+        result = job.result(timeout=300)
+        logger.debug(f"[VLM answer]\n{result}")
         return str(result)
     finally:
-        if tmp_path and tmp_path != str(image_file) and os.path.isfile(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        for tmp_path in tmp_paths:
+            if tmp_path and os.path.isfile(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
 
 def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
@@ -292,6 +499,7 @@ def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
     }
 
     text = (description or '').strip()
+    logger.debug(f"[_parse_findings] raw VLM output:\n{text}")
 
     try:
         j_start = text.find('{')
@@ -308,26 +516,28 @@ def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
 
     try:
         patterns = {
-            "OBSERVE":    r"(?:1\.|OBSERVE|Observation)[:\s]*([^2\n]+?)(?=2\.|DESCRIBE|$)",
-            "DESCRIBE":   r"(?:2\.|DESCRIBE|Description)[:\s]*([^3\n]+?)(?=3\.|INTERPRET|$)",
-            "INTERPRET":  r"(?:3\.|INTERPRET|Interpretation)[:\s]*([^4\n]+?)(?=4\.|HYPOTHESIS|$)",
-            "HYPOTHESIS": r"(?:4\.|HYPOTHESIS|Hypothesis)[:\s]*([^5\n]+?)(?=5\.|DDx|$)",
-            "DDx":        r"(?:5\.|DDx|Differential)[:\s]*([^6\n]+?)(?=6\.|CONCLUSION|$)",
-            "CONCLUSION": r"(?:6\.|CONCLUSION|Conclusion)[:\s]*(.+?)$",
+            "OBSERVE":    r"(?:1\.|OBSERVE|Observation)[:\s]*([\s\S]+?)(?=\n\s*2\.|DESCRIBE|$)",
+            "DESCRIBE":   r"(?:2\.|DESCRIBE|Description)[:\s]*([\s\S]+?)(?=\n\s*3\.|INTERPRET|$)",
+            "INTERPRET":  r"(?:3\.|INTERPRET|Interpretation)[:\s]*([\s\S]+?)(?=\n\s*4\.|HYPOTHESIS|$)",
+            "HYPOTHESIS": r"(?:4\.|HYPOTHESIS|Hypothesis)[:\s]*([\s\S]+?)(?=\n\s*5\.|DDx|$)",
+            "DDx":        r"(?:5\.|DDx|Differential)[:\s]*([\s\S]+?)(?=\n\s*6\.|CONCLUSION|$)",
+            "CONCLUSION": r"(?:6\.|CONCLUSION|Conclusion)[:\s]*([\s\S]+?)$",
         }
         sections = {}
         for step, pattern in patterns.items():
-            m = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+            m = re.search(pattern, text, re.IGNORECASE)
             if m:
                 content = re.sub(r'\*\*(.+?)\*\*', r'\1', m.group(1).strip())
                 content = re.sub(r'- ', '', content).replace('\n', ' ').strip()
                 sections[step] = content[:500]
+        logger.debug(f"[_parse_findings] regex matched sections: {list(sections.keys())}")
         if sections:
             fallback.update(sections)
             return _build_response(fallback, text, modality)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[_parse_findings] regex parse error: {e}")
 
+    logger.warning("[_parse_findings] all parse attempts failed — using fallback")
     return _build_response(fallback, text, modality)
 
 
@@ -411,15 +621,22 @@ def _mock_analyze(modality: str) -> Dict[str, Any]:
     }
 
 
-def analyze_medical_image(image_file, modality: str = "XRAY") -> Dict[str, Any]:
+def analyze_medical_image(
+    image_files: list,
+    modality: str = "XRAY",
+    region: str = "unspecified",
+    volume_names: list | None = None,
+) -> Dict[str, Any]:
     """Entry point: phân tích ảnh y tế, trả về findings dict."""
-    logger.info(f"Bắt đầu phân tích — modality={modality}")
+    total_slices = len(image_files) if image_files else None
+    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}, total_slices={total_slices}, volumes={list(dict.fromkeys(volume_names or []))}")
     token = _get_hf_token()
     if not token:
         return _mock_analyze(modality)
     try:
-        raw = _call_gradio(image_file, modality, token)
-        logger.info(f"Phân tích hoàn tất — modality={modality}")
+        prompt = _preprocess_with_llm(image_files, modality, region, volume_names)
+        raw = _call_gradio(image_files, prompt, token)
+        logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         return _parse_findings(raw, modality)
     except ImportError:
         logger.error("gradio_client chưa được cài. Chạy: pip install gradio-client")

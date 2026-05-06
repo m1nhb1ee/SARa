@@ -84,6 +84,20 @@ class SessionViewSet(viewsets.ViewSet):
 
         return Response(session, status=status.HTTP_201_CREATED)
 
+    def destroy(self, request, pk=None):
+        """DELETE /api/v1/sessions/{id}/ — xóa session và toàn bộ step_attempts"""
+        sb = get_supabase()
+        session, err = get_session(sb, pk, request.user['id'])
+        if err:
+            return err
+
+        if session['status'] == 'COMPLETED':
+            return Response({'error': 'Không thể xóa session đã hoàn thành'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sb.table('step_attempts').delete().eq('session_id', pk).execute()
+        sb.table('sessions').delete().eq('id', pk).execute()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def retrieve(self, request, pk=None):
         """GET /api/v1/sessions/{id}/"""
         sb = get_supabase()
@@ -239,6 +253,22 @@ class SessionViewSet(viewsets.ViewSet):
             'last_step': session['current_step'],
             'timestamp': _now_iso(),
         })
+
+    @action(detail=True, methods=['post'])
+    def resume(self, request, pk=None):
+        """POST /api/v1/sessions/{id}/resume/ — reactivate a PAUSED session"""
+        sb = get_supabase()
+        session, err = get_session(sb, pk, request.user['id'])
+        if err:
+            return err
+
+        if session['status'] not in ('ABANDONED', 'IN_PROGRESS'):
+            return Response({'error': 'Session này không thể tiếp tục'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if session['status'] == 'ABANDONED':
+            sb.table('sessions').update({'status': 'IN_PROGRESS', 'completed_at': None}).eq('id', pk).execute()
+
+        return Response({'success': True, 'session_id': pk, 'current_step': session['current_step']})
 
     @action(detail=True, methods=['get'])
     def step_answers(self, request, pk=None):
