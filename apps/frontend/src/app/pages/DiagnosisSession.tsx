@@ -19,15 +19,13 @@ import styles from "@/styles/DiagnosisSession.module.css";
 import { VolumeSliceViewer } from "@/app/components/shared/VolumeSliceViewer";
 import type { CaseVolume } from "@/types";
 
-const steps = ["OBSERVE", "DESCRIBE", "INTERPRET", "HYPOTHESIS", "DDx", "CONCLUSION"];
+const steps = ["OBSERVE", "REASONING", "DDx", "CONCLUSION"];
 
 const QUESTION_PROMPTS: Record<number, string> = {
-  0: "Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường mà bạn nhận thấy.",
-  1: "Bước 2: Mô tả chi tiết các đặc điểm của tổn thương bạn quan sát thấy.",
-  2: "Bước 3: Diễn giải ý nghĩa lâm sàn của các phát hiện này.",
-  3: "Bước 4: Đưa ra giả thuyết chẩn đoán dự phòng.",
-  4: "Bước 5: Phân tích các chẩn đoán phân biệt cần loại trừ.",
-  5: "Bước 6: Đưa ra kết luận chẩn đoán cuối cùng.",
+  0: "Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường và mô tả chi tiết kích thước, hình dạng, vị trí, mật độ.",
+  1: "Bước 2: Lý luận lâm sàng. Diễn giải ý nghĩa của các phát hiện và đề xuất chẩn đoán làm việc chính.",
+  2: "Bước 3: Phân tích các chẩn đoán phân biệt cần loại trừ.",
+  3: "Bước 4: Đưa ra kết luận chẩn đoán cuối cùng.",
 };
 
 function buildMessagesFromAttempts(attempts: any[], currentStep: number): Message[] {

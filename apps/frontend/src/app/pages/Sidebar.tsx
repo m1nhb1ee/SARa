@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router';
 import {
-  Home, Upload, FolderOpen, User, Settings, LogOut
+  Home, Upload, FolderOpen, User, Settings, LogOut, MessagesSquare
 } from 'lucide-react';
 import { useAuth } from '@/api/authContext';
 
@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { name: 'Home',     path: '/home',        tabColor: '#C9882A', icon: Home },
   { name: 'My Cases', path: '/',            tabColor: '#1B3A5C', icon: FolderOpen },
   { name: 'Upload',   path: '/upload',      tabColor: '#C0392B', icon: Upload },
+  { name: 'Swap',     path: '/swap',        tabColor: '#1B5C4A', icon: MessagesSquare },
   { name: 'Profile',  path: '/performance', tabColor: '#8B6355', icon: User },
   { name: 'Settings', path: '/settings',    tabColor: '#4A4A4A', icon: Settings },
 ];
@@ -30,6 +31,9 @@ export function Sidebar() {
         location.pathname.startsWith('/session/') ||
         location.pathname.startsWith('/answer-key/')
       );
+    }
+    if (item.path === '/swap') {
+      return location.pathname.startsWith('/swap');
     }
     if (item.path === '/home') {
       return location.pathname === '/home';

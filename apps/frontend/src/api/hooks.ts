@@ -30,7 +30,7 @@ async function resolveQuery<T>(
 
 // ── Query hooks ───────────────────────────────────────────────────────────────
 
-export function useCases(params?: { modality?: string; difficulty?: string; search?: string; page?: number }) {
+export function useCases(params?: { modality?: string; difficulty?: string; search?: string; page?: number; is_valid?: string }) {
   const [state, patch] = useQueryState<any>();
   const paramsKey = JSON.stringify(params);
 

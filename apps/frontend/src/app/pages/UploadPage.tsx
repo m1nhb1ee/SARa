@@ -11,6 +11,8 @@ const SCAN_TYPE_TO_MODALITY: Record<string, string> = {
   'Other': 'ULTRASOUND',
 };
 
+const UPLOAD_MAX_IMAGES = Number(import.meta.env.VITE_UPLOAD_MAX_IMAGES ?? 20);
+
 const RECENT_CASES = [
   {
     id: '#0247', name: 'Right lung consolidation – PA view',
@@ -233,7 +235,7 @@ function UploadModal({ caseNum, onViewAnswer, onPractice, onClose, onSaveLater }
               Dr. AI's Notes
             </div>
             <p style={{ fontFamily: "'Caveat', cursive", fontSize: '13px', color: '#2C1810', lineHeight: 1.55 }}>
-              Image uploaded and AI analysis complete. 6 diagnostic steps generated.
+              Image uploaded and AI analysis complete. 4 diagnostic steps generated.
             </p>
           </div>
 
@@ -249,7 +251,7 @@ function UploadModal({ caseNum, onViewAnswer, onPractice, onClose, onSaveLater }
               </div>
               <div className="w-full h-px mb-3" style={{ background: '#C4A882', opacity: 0.4 }} />
               <p style={{ fontFamily: "'Lora', serif", fontSize: '12.5px', color: '#6B4C3B', lineHeight: 1.55, marginBottom: '12px' }}>
-                Study the AI's full diagnostic reasoning across 6 steps
+                Study the AI's full diagnostic reasoning across 4 steps
               </p>
               <button
                 className="flex items-center gap-2 hover:gap-3 transition-all"
@@ -305,6 +307,7 @@ export function UploadPage() {
   const [volumeNames, setVolumeNames] = useState<string[]>([]);
   const [uploadError, setUploadError] = useState<{ errorType: string; issues: string[] } | null>(null);
   const [region, setRegion] = useState('unspecified');
+  const [clinicalHistory, setClinicalHistory] = useState('');
   const [caseName, setCaseName] = useState('');
   const [scanType, setScanType] = useState('X-Ray');
   const [showModal, setShowModal] = useState(false);
@@ -322,25 +325,33 @@ export function UploadPage() {
     if (dragState === 'dragging') setDragState('idle');
   }, [dragState]);
 
+  const appendSelectedFiles = (files: File[]) => {
+    const availableSlots = Math.max(UPLOAD_MAX_IMAGES - selectedFiles.length, 0);
+    if (files.length > availableSlots) {
+      setUploadError({
+        errorType: 'too_many_images',
+        issues: [`Upload tối đa ${UPLOAD_MAX_IMAGES} ảnh cho mỗi case. Hãy chọn các lát cắt đại diện nhất.`],
+      });
+    }
+
+    const acceptedFiles = files.slice(0, availableSlots);
+    if (!acceptedFiles.length) return;
+
+    setSelectedFiles(prev => [...prev, ...acceptedFiles]);
+    setVolumeNames(prev => [...prev, ...acceptedFiles.map(() => 'Default')]);
+    setDragState('attached');
+    if (files.length <= availableSlots) setUploadError(null);
+  };
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    if (files.length) {
-      setSelectedFiles(prev => [...prev, ...files]);
-      setVolumeNames(prev => [...prev, ...files.map(() => 'Default')]);
-      setDragState('attached');
-      setUploadError(null);
-    }
-  }, []);
+    if (files.length) appendSelectedFiles(files);
+  }, [selectedFiles.length]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).filter(f => f.type.startsWith('image/'));
-    if (files.length) {
-      setSelectedFiles(prev => [...prev, ...files]);
-      setVolumeNames(prev => [...prev, ...files.map(() => 'Default')]);
-      setDragState('attached');
-      setUploadError(null);
-    }
+    if (files.length) appendSelectedFiles(files);
     e.target.value = '';
   };
 
@@ -377,6 +388,7 @@ export function UploadPage() {
       formData.append('title', caseName);
       formData.append('modality', modality);
       formData.append('region', region);
+      formData.append('clinical_history', clinicalHistory.trim());
 
       const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
       const token = localStorage.getItem('sara_token') || '';
@@ -405,11 +417,11 @@ export function UploadPage() {
         const n = String(Math.floor(Math.random() * 300 + 100)).padStart(4, '0');
         setCaseNum(n);
         setTimeout(() => { setDragState('attached'); setShowModal(true); }, 600);
-      } else if (response.status === 422) {
+      } else if (response.status === 422 || response.status === 400) {
         const data = await response.json();
         setUploadError({
-          errorType: data.error_type ?? 'unknown',
-          issues: data.issues ?? [],
+          errorType: data.error_type ?? data.error ?? 'unknown',
+          issues: data.issues ?? [data.message ?? data.error ?? 'Upload failed'],
         });
         setDragState('attached');
       } else {
@@ -627,7 +639,7 @@ export function UploadPage() {
                       or click to browse files
                     </div>
                     <div className="mt-2" style={{ fontFamily: "'Courier Prime', monospace", fontSize: '11px', color: '#8B6355' }}>
-                      PNG · JPG · GIF · WEBP — max 10MB
+                      PNG · JPG · GIF · WEBP — max {UPLOAD_MAX_IMAGES} images
                     </div>
                   </>
                 )}
@@ -744,6 +756,8 @@ export function UploadPage() {
                 { label: 'Não', value: 'brain' },
                 { label: 'Cột sống', value: 'spine' },
                 { label: 'Bụng', value: 'abdomen' },
+                { label: 'Chi trên', value: 'upper_limb' },
+                { label: 'Chi dưới', value: 'lower_limb' },
                 { label: 'Không xác định', value: 'unspecified' },
               ].map(({ label, value }) => {
                 const selected = region === value;
@@ -769,6 +783,27 @@ export function UploadPage() {
             </div>
           </div>
 
+          <div className="mb-8 relative z-10">
+            <label style={{ fontFamily: "'Special Elite', cursive", fontSize: '11.5px', color: '#6B4C3B', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
+              CLINICAL HISTORY (OPTIONAL)
+            </label>
+            <textarea
+              value={clinicalHistory}
+              onChange={e => setClinicalHistory(e.target.value)}
+              placeholder="Nhập bệnh án ngắn gọn của bệnh nhân (tuổi, giới tính, triệu chứng, bệnh nền, thời gian khởi phát...)"
+              rows={4}
+              className="w-full bg-transparent focus:outline-none placeholder:italic"
+              style={{
+                fontFamily: "'Lora', serif",
+                fontSize: '14px',
+                color: '#2C1810',
+                border: '1px solid #C4A882',
+                padding: '10px 12px',
+                resize: 'vertical',
+              }}
+            />
+          </div>
+
           {/* ── THUMBTACK INFO NOTE ── */}
           <div className="mb-8 flex justify-center relative z-10">
             <div
@@ -787,11 +822,9 @@ export function UploadPage() {
                 Dr. AI's Notes
               </div>
               <p style={{ fontFamily: "'Caveat', cursive", fontSize: '13px', color: '#2C1810', lineHeight: 1.65 }}>
-                AI will analyse your image and generate 6 diagnostic steps:{' '}
+                AI will analyse your image and generate 4 diagnostic steps:{' '}
                 <span style={{ color: '#1B3A5C' }}>OBSERVE</span> →{' '}
-                <span style={{ color: '#1B5C4A' }}>DESCRIBE</span> →{' '}
-                <span style={{ color: '#C9882A' }}>INTERPRET</span> →{' '}
-                <span style={{ color: '#C0392B' }}>HYPOTHESIS</span> →{' '}
+                <span style={{ color: '#C9882A' }}>REASONING</span> →{' '}
                 <span style={{ color: '#5C3D2E' }}>DDx</span> →{' '}
                 <span style={{ color: '#7D9B76' }}>CONCLUSION</span>
               </p>

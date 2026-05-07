@@ -3,12 +3,13 @@ import os
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from app.core.supabase_client import get_supabase
-from .serializers import ALLOWED_EXTENSIONS, UploadInputSerializer
+from .serializers import ALLOWED_EXTENSIONS, UploadInputSerializer, VLMAnswerInputSerializer
 from .services import (
     analyze_medical_image,
     classify_and_validate_images,
@@ -18,6 +19,70 @@ from .services import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def get_upload_max_images() -> int:
+    return max(1, int(os.getenv('UPLOAD_MAX_IMAGES', '20')))
+
+
+def validate_image_count(image_files) -> Response | None:
+    max_images = get_upload_max_images()
+    if len(image_files) > max_images:
+        return Response(
+            {
+                'error': 'too_many_images',
+                'message': f'Too many images. Maximum allowed is {max_images}.',
+                'max_images': max_images,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return None
+
+
+class VLMAnswerView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request):
+        serializer = VLMAnswerInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        image_files = request.FILES.getlist('images')
+        if not image_files:
+            return Response({'error': 'Cần ít nhất một ảnh (field: images)'}, status=status.HTTP_400_BAD_REQUEST)
+        image_count_error = validate_image_count(image_files)
+        if image_count_error:
+            return image_count_error
+
+        for f in image_files:
+            ext = os.path.splitext(getattr(f, 'name', ''))[1].lstrip('.').lower()
+            if ext and ext not in ALLOWED_EXTENSIONS:
+                return Response(
+                    {'error': f'Định dạng {ext} không được hỗ trợ. Chấp nhận: {ALLOWED_EXTENSIONS}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        raw_volumes = request.data.getlist('volume_names')
+        volume_names = [
+            raw_volumes[i] if i < len(raw_volumes) and raw_volumes[i] else 'Default'
+            for i in range(len(image_files))
+        ]
+        image_data = [f.read() for f in image_files]
+
+        findings = analyze_medical_image(
+            image_data,
+            serializer.validated_data['modality'],
+            serializer.validated_data['region'] or 'unspecified',
+            volume_names=volume_names,
+        )
+
+        return Response({
+            'type': serializer.validated_data['type'],
+            'title': findings.get('title') or serializer.validated_data['title'],
+            'answer_key': findings.get('answer_key', {}),
+            'raw_findings': findings.get('raw_findings', ''),
+            'description': findings.get('description', ''),
+        })
 
 
 class UserUploadedCaseViewSet(viewsets.ViewSet):
@@ -67,11 +132,15 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         modality = serializer.validated_data['modality']
         title = serializer.validated_data['title']
         region = serializer.validated_data['region']
+        clinical_history = serializer.validated_data.get('clinical_history', '')
         user_id = request.user['id']
 
         image_files = request.FILES.getlist('images')
         if not image_files:
             return Response({'error': 'Cần ít nhất một ảnh (field: images)'}, status=status.HTTP_400_BAD_REQUEST)
+        image_count_error = validate_image_count(image_files)
+        if image_count_error:
+            return image_count_error
 
         for f in image_files:
             ext = os.path.splitext(getattr(f, 'name', ''))[1].lstrip('.').lower()
@@ -127,7 +196,9 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
             if not title or title == 'Untitled Case':
                 title = findings.get('title', f'{modality} Case')
 
-            result = create_case_in_supabase(user_id, image_entries, modality, title, findings)
+            result = create_case_in_supabase(
+                user_id, image_entries, modality, title, findings, clinical_history=clinical_history
+            )
             logger.info(f"Case {result['case']['id']} created, upload_session {result['upload_session']['id']}")
 
             return Response(result, status=status.HTTP_201_CREATED)

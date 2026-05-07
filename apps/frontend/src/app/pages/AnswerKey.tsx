@@ -228,7 +228,7 @@ function StepCard({
         )}
 
         {/* Clinical explanation note (if separate from key point) */}
-        {step.clinicalExplanation && step.clinicalExplanation !== step.keyPoint && (
+        {!isUploadView && step.clinicalExplanation && step.clinicalExplanation !== step.keyPoint && (
           <div
             className="mt-4 p-3 relative"
             style={{
@@ -1165,7 +1165,7 @@ export function AnswerKey() {
                 }}
               >
                 {isUploadView
-                  ? <>6 diagnostic steps: <span style={{ color: '#1B3A5C' }}>OBSERVE</span> → <span style={{ color: '#1B5C4A' }}>DESCRIBE</span> → <span style={{ color: '#C9882A' }}>INTERPRET</span> → <span style={{ color: '#C0392B' }}>HYPOTHESIS</span> → <span style={{ color: '#5C3D2E' }}>DDx</span> → <span style={{ color: '#7D9B76' }}>CONCLUSION</span>. Click each step to unlock the next.</>
+                  ? <>4 diagnostic steps: <span style={{ color: '#1B3A5C' }}>OBSERVE</span> → <span style={{ color: '#C9882A' }}>REASONING</span> → <span style={{ color: '#5C3D2E' }}>DDx</span> → <span style={{ color: '#7D9B76' }}>CONCLUSION</span>. Click each step to unlock the next.</>
                   : <>AI Reference case — <span style={{ fontWeight: 600 }}>{caseData?.modality}</span>. Detected: {caseData?.title}. Confidence: <span style={{ color: '#C0392B' }}>{finalScorePct}%</span></>
                 }
               </p>

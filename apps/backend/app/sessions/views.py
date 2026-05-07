@@ -15,7 +15,7 @@ from .services import get_session, get_rubric_id
 
 logger = logging.getLogger(__name__)
 
-STEP_CODES = ['OBSERVE', 'DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
+STEP_CODES = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
 
 
 def _now_iso() -> str:

@@ -17,15 +17,13 @@ logger = logging.getLogger(__name__)
 
 GRADIO_SPACE_ID = "ttnguyen6716/MedGemma-1.5-4B"
 
-STEP_CODES = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
-ANSWER_KEY_STEP_CODES = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+STEP_CODES = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
+ANSWER_KEY_STEP_CODES = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
 
 STEP_TEMPLATES = {
-    "OBSERVE":    "Quan sát kỹ lưỡng các vùng của ảnh. Xác định vùng bất thường.",
-    "DESCRIBE":   "Mô tả chi tiết các đặc điểm: kích thước, hình dạng, vị trí, mật độ.",
-    "INTERPRET":  "Diễn giải ý nghĩa lâm sàng của các phát hiện.",
-    "HYPOTHESIS": "Đề xuất chẩn đoán dự phòng chính dựa trên hình ảnh.",
-    "DDx":        "Liệt kê chẩn đoán phân biệt cần loại trừ.",
+    "OBSERVE":   "Quan sát kỹ lưỡng các vùng của ảnh. Xác định vùng bất thường, mô tả chi tiết kích thước, hình dạng, vị trí, mật độ.",
+    "REASONING": "Diễn giải ý nghĩa lâm sàng của các phát hiện và đề xuất chẩn đoán làm việc chính.",
+    "DDx":       "Liệt kê chẩn đoán phân biệt cần loại trừ.",
     "CONCLUSION": "Kết luận chẩn đoán cuối cùng và khuyến cáo tiếp theo.",
 }
 
@@ -60,6 +58,7 @@ def create_case_in_supabase(
     modality: str,
     title: str,
     findings: dict,
+    clinical_history: str = '',
 ) -> dict:
     """
     Ghi case + case_images + answer_keys + upload_session vào Supabase.
@@ -78,7 +77,7 @@ def create_case_in_supabase(
         'title': title,
         'modality': MODALITY_MAP.get(modality, 'X-ray'),
         'difficulty': 'medium',
-        'clinical_history': findings.get('clinical_history', ''),
+        'clinical_history': (clinical_history or '').strip(),
         'status': 'published',
     }).execute()
     case = case_result.data[0]
@@ -485,16 +484,48 @@ def _call_gradio(image_files: list, prompt: str, token: str) -> str:
                     pass
 
 
+def _sample_vlm_images(
+    image_files: list,
+    volume_names: list | None,
+    max_images: int,
+) -> tuple[list, list[str]]:
+    if len(image_files) <= max_images:
+        return image_files, volume_names or ['Default'] * len(image_files)
+
+    names = volume_names or ['Default'] * len(image_files)
+    volume_to_indices: dict[str, list[int]] = {}
+    for idx, volume in enumerate(names):
+        volume_to_indices.setdefault(volume or 'Default', []).append(idx)
+
+    selected: list[int] = []
+    per_volume = max(1, max_images // max(1, len(volume_to_indices)))
+    for indices in volume_to_indices.values():
+        if len(indices) <= per_volume:
+            selected.extend(indices)
+            continue
+        if per_volume == 1:
+            selected.append(indices[len(indices) // 2])
+            continue
+        step = (len(indices) - 1) / (per_volume - 1)
+        selected.extend(indices[round(i * step)] for i in range(per_volume))
+
+    if len(selected) < max_images:
+        remaining = [i for i in range(len(image_files)) if i not in selected]
+        gap = max(1, len(remaining) // max(1, max_images - len(selected)))
+        selected.extend(remaining[::gap][:max_images - len(selected)])
+
+    selected = sorted(dict.fromkeys(selected))[:max_images]
+    return [image_files[i] for i in selected], [names[i] for i in selected]
+
+
 def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
     import json
     import re
 
     fallback = {
-        "OBSERVE":    "Observation details",
-        "DESCRIBE":   "Description details",
-        "INTERPRET":  "Interpretation details",
-        "HYPOTHESIS": "Hypothesis details",
-        "DDx":        _get_ddx(modality),
+        "OBSERVE":   "Observation details",
+        "REASONING": "Reasoning details",
+        "DDx":       _get_ddx(modality),
         "CONCLUSION": _get_conclusion(modality),
     }
 
@@ -516,12 +547,10 @@ def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
 
     try:
         patterns = {
-            "OBSERVE":    r"(?:1\.|OBSERVE|Observation)[:\s]*([\s\S]+?)(?=\n\s*2\.|DESCRIBE|$)",
-            "DESCRIBE":   r"(?:2\.|DESCRIBE|Description)[:\s]*([\s\S]+?)(?=\n\s*3\.|INTERPRET|$)",
-            "INTERPRET":  r"(?:3\.|INTERPRET|Interpretation)[:\s]*([\s\S]+?)(?=\n\s*4\.|HYPOTHESIS|$)",
-            "HYPOTHESIS": r"(?:4\.|HYPOTHESIS|Hypothesis)[:\s]*([\s\S]+?)(?=\n\s*5\.|DDx|$)",
-            "DDx":        r"(?:5\.|DDx|Differential)[:\s]*([\s\S]+?)(?=\n\s*6\.|CONCLUSION|$)",
-            "CONCLUSION": r"(?:6\.|CONCLUSION|Conclusion)[:\s]*([\s\S]+?)$",
+            "OBSERVE":   r"(?:1\.|OBSERVE|Observation)[:\s]*([\s\S]+?)(?=\n\s*2\.|REASONING|$)",
+            "REASONING": r"(?:2\.|REASONING|Reasoning)[:\s]*([\s\S]+?)(?=\n\s*3\.|DDx|$)",
+            "DDx":       r"(?:3\.|DDx|Differential)[:\s]*([\s\S]+?)(?=\n\s*4\.|CONCLUSION|$)",
+            "CONCLUSION": r"(?:4\.|CONCLUSION|Conclusion)[:\s]*([\s\S]+?)$",
         }
         sections = {}
         for step, pattern in patterns.items():
@@ -544,7 +573,7 @@ def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
 def _build_response(answer_key: dict, raw: str, modality: str) -> Dict[str, Any]:
     summary = " ".join([
         answer_key.get("OBSERVE", "")[:80],
-        answer_key.get("DESCRIBE", "")[:80],
+        answer_key.get("REASONING", "")[:80],
     ])[:200]
     return {
         "title":            f"{modality} Case – MedGemma",
@@ -578,35 +607,27 @@ def _get_conclusion(modality: str) -> str:
 def _mock_analyze(modality: str) -> Dict[str, Any]:
     mock_keys = {
         "XRAY": {
-            "OBSERVE":    "Phổi trái bình thường; phổi phải có mờ phím nhẹ ở thùy dưới.",
-            "DESCRIBE":   "Đám mờ ~3–4 cm, bờ không rõ, vị trí thùy dưới phải.",
-            "INTERPRET":  "Mật độ cao gợi ý infiltrate — viêm phổi hoặc phù.",
-            "HYPOTHESIS": "Viêm phổi thùy dưới phổi phải.",
-            "DDx":        "Lao phổi, ung thư phổi, edema phổi, hemothorax, viêm phổi.",
+            "OBSERVE":   "Phổi trái bình thường; phổi phải có đám mờ ~3–4 cm, bờ không rõ, vị trí thùy dưới phải.",
+            "REASONING": "Mật độ cao gợi ý infiltrate — viêm phổi hoặc phù. Chẩn đoán làm việc: viêm phổi thùy dưới phổi phải.",
+            "DDx":       "Lao phổi, ung thư phổi, edema phổi, hemothorax, viêm phổi.",
             "CONCLUSION": "Cần xét nghiệm máu CBC, cấy đờm, theo dõi lâm sàng 48–72h.",
         },
         "CT": {
-            "OBSERVE":    "Não bình thường, không thấy máu tụ; cột sống bình thường.",
-            "DESCRIBE":   "Các thất não bình thường, mô trắng không dị thường.",
-            "INTERPRET":  "Không có bất thường bệnh lý rõ ràng.",
-            "HYPOTHESIS": "Não bình thường.",
-            "DDx":        "U não, máu tụ nội sọ, nhồi máu não, viêm màng não.",
+            "OBSERVE":   "Não bình thường, không thấy máu tụ; các thất não và mô trắng không dị thường; cột sống bình thường.",
+            "REASONING": "Không có bất thường bệnh lý rõ ràng. Chẩn đoán làm việc: não bình thường.",
+            "DDx":       "U não, máu tụ nội sọ, nhồi máu não, viêm màng não.",
             "CONCLUSION": "Tham khảo thần kinh học. Xem xét MRI bổ sung nếu cần.",
         },
         "MRI": {
-            "OBSERVE":    "Tín hiệu T2 tăng ở vùng nghi ngờ.",
-            "DESCRIBE":   "Tổn thương khu trú, bờ rõ, tín hiệu dị thường.",
-            "INTERPRET":  "Gợi ý tổn thương mô mềm hoặc viêm.",
-            "HYPOTHESIS": "Viêm hoặc u lành tính.",
-            "DDx":        "Thoát vị đĩa đệm, u tủy, xơ cứng rải rác, viêm.",
+            "OBSERVE":   "Tín hiệu T2 tăng ở vùng nghi ngờ; tổn thương khu trú, bờ rõ, tín hiệu dị thường.",
+            "REASONING": "Gợi ý tổn thương mô mềm hoặc viêm. Chẩn đoán làm việc: viêm hoặc u lành tính.",
+            "DDx":       "Thoát vị đĩa đệm, u tủy, xơ cứng rải rác, viêm.",
             "CONCLUSION": "Tư vấn chỉnh hình / thần kinh. Theo dõi định kỳ.",
         },
         "DIFF": {
-            "OBSERVE":    "Cấu trúc cơ quan bình thường; không thấy khối.",
-            "DESCRIBE":   "Kích thước bình thường, echo đồng nhất.",
-            "INTERPRET":  "Không có bất thường rõ.",
-            "HYPOTHESIS": "Bình thường.",
-            "DDx":        "U lành/ác tính, nang, viêm, xơ hóa.",
+            "OBSERVE":   "Cấu trúc cơ quan bình thường; kích thước bình thường, echo đồng nhất; không thấy khối.",
+            "REASONING": "Không có bất thường rõ. Chẩn đoán làm việc: bình thường.",
+            "DDx":       "U lành/ác tính, nang, viêm, xơ hóa.",
             "CONCLUSION": "Theo dõi siêu âm định kỳ. Sinh thiết nếu nghi ngờ ác tính.",
         },
     }
@@ -635,7 +656,11 @@ def analyze_medical_image(
         return _mock_analyze(modality)
     try:
         prompt = _preprocess_with_llm(image_files, modality, region, volume_names)
-        raw = _call_gradio(image_files, prompt, token)
+        max_gradio_images = max(1, int(os.getenv('VLM_MAX_GRADIO_IMAGES', '20')))
+        gradio_images, _ = _sample_vlm_images(image_files, volume_names, max_gradio_images)
+        if len(gradio_images) < len(image_files):
+            logger.info(f"Sampling VLM gallery: sending {len(gradio_images)}/{len(image_files)} representative slices to Gradio")
+        raw = _call_gradio(gradio_images, prompt, token)
         logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         return _parse_findings(raw, modality)
     except ImportError:
