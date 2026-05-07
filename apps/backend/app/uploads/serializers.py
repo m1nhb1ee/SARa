@@ -12,6 +12,7 @@ class UploadInputSerializer(serializers.Serializer):
         required=False,
     )
     region = serializers.CharField(required=False, default='unspecified')
+    clinical_history = serializers.CharField(required=False, allow_blank=True, default='')
 
 
 class UploadSessionSerializer(serializers.Serializer):

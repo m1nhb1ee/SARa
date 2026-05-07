@@ -228,7 +228,7 @@ function StepCard({
         )}
 
         {/* Clinical explanation note (if separate from key point) */}
-        {step.clinicalExplanation && step.clinicalExplanation !== step.keyPoint && (
+        {!isUploadView && step.clinicalExplanation && step.clinicalExplanation !== step.keyPoint && (
           <div
             className="mt-4 p-3 relative"
             style={{

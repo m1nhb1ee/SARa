@@ -67,6 +67,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         modality = serializer.validated_data['modality']
         title = serializer.validated_data['title']
         region = serializer.validated_data['region']
+        clinical_history = serializer.validated_data.get('clinical_history', '')
         user_id = request.user['id']
 
         image_files = request.FILES.getlist('images')
@@ -127,7 +128,9 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
             if not title or title == 'Untitled Case':
                 title = findings.get('title', f'{modality} Case')
 
-            result = create_case_in_supabase(user_id, image_entries, modality, title, findings)
+            result = create_case_in_supabase(
+                user_id, image_entries, modality, title, findings, clinical_history=clinical_history
+            )
             logger.info(f"Case {result['case']['id']} created, upload_session {result['upload_session']['id']}")
 
             return Response(result, status=status.HTTP_201_CREATED)

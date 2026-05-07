@@ -305,6 +305,7 @@ export function UploadPage() {
   const [volumeNames, setVolumeNames] = useState<string[]>([]);
   const [uploadError, setUploadError] = useState<{ errorType: string; issues: string[] } | null>(null);
   const [region, setRegion] = useState('unspecified');
+  const [clinicalHistory, setClinicalHistory] = useState('');
   const [caseName, setCaseName] = useState('');
   const [scanType, setScanType] = useState('X-Ray');
   const [showModal, setShowModal] = useState(false);
@@ -377,6 +378,7 @@ export function UploadPage() {
       formData.append('title', caseName);
       formData.append('modality', modality);
       formData.append('region', region);
+      formData.append('clinical_history', clinicalHistory.trim());
 
       const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
       const token = localStorage.getItem('sara_token') || '';
@@ -744,6 +746,8 @@ export function UploadPage() {
                 { label: 'Não', value: 'brain' },
                 { label: 'Cột sống', value: 'spine' },
                 { label: 'Bụng', value: 'abdomen' },
+                { label: 'Chi trên', value: 'upper_limb' },
+                { label: 'Chi dưới', value: 'lower_limb' },
                 { label: 'Không xác định', value: 'unspecified' },
               ].map(({ label, value }) => {
                 const selected = region === value;
@@ -767,6 +771,27 @@ export function UploadPage() {
                 );
               })}
             </div>
+          </div>
+
+          <div className="mb-8 relative z-10">
+            <label style={{ fontFamily: "'Special Elite', cursive", fontSize: '11.5px', color: '#6B4C3B', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
+              CLINICAL HISTORY (OPTIONAL)
+            </label>
+            <textarea
+              value={clinicalHistory}
+              onChange={e => setClinicalHistory(e.target.value)}
+              placeholder="Nhập bệnh án ngắn gọn của bệnh nhân (tuổi, giới tính, triệu chứng, bệnh nền, thời gian khởi phát...)"
+              rows={4}
+              className="w-full bg-transparent focus:outline-none placeholder:italic"
+              style={{
+                fontFamily: "'Lora', serif",
+                fontSize: '14px',
+                color: '#2C1810',
+                border: '1px solid #C4A882',
+                padding: '10px 12px',
+                resize: 'vertical',
+              }}
+            />
           </div>
 
           {/* ── THUMBTACK INFO NOTE ── */}
