@@ -1,77 +1,63 @@
 {
   "OBSERVE": {
-    "question": "Ban thay gi tren phim nay?",
+    "question": "Quan sát phim một cách có hệ thống. Những vùng nào bình thường và bất thường?",
     "criteria": [
-      {"label": "Quet du cac vung (phoi, tim, xuong, mo mem)", "max_score": 2, "error_code": "incomplete_scan"},
-      {"label": "Phat hien duoc diem bat thuong chinh",         "max_score": 2, "error_code": "missed_main_finding"}
+      {"label": "Quét có hệ thống, bao phủ các vùng chính không bỏ sót", "max_score": 2, "error_code": "incomplete_scan"},
+      {"label": "Xác định đúng bất thường chính (vùng, bên, trung tâm/ngoại vi)", "max_score": 2, "error_code": "missed_main_finding"},
+      {"label": "Duy trì quan sát khách quan, chưa diễn giải hay kết luận sớm", "max_score": 1, "error_code": "premature_observation"}
     ],
     "total_max": 5,
     "pass_threshold": 3,
-    "scoring_guide": "Award 2pts if student scans all regions systematically. Award 2pts if student identifies the main abnormality. Award 1pt if student comments on film quality or patient positioning.",
+    "scoring_guide": "Award 2pts for systematic survey covering all major regions. Award 2pts for correctly identifying key abnormalities with location/region/laterality. Award 1pt if student stays objective without jumping to interpretation or diagnosis.",
     "pass_score": 0.6
   },
   "DESCRIBE": {
-    "question": "Hay mo ta chi tiet diem bat thuong ban thay.",
+    "question": "Mô tả chi tiết các bất thường bạn thấy (vị trí, mật độ, hình dạng, dấu hiệu liên quan).",
     "criteria": [
-      {"label": "Vi tri dung (thuy nao, ben nao)",  "max_score": 2, "error_code": "missing_location"},
-      {"label": "Mo ta duoc do dam / mo",            "max_score": 2, "error_code": "missing_density"},
-      {"label": "Mo ta duoc bo ro hay khong ro",     "max_score": 2, "error_code": "missing_margin"},
-      {"label": "Uoc luong kich thuoc",              "max_score": 1, "error_code": "missing_size"},
-      {"label": "De cap finding kem theo",           "max_score": 1, "error_code": "missing_associated_findings"}
+      {"label": "Vị trí chính xác (giải phẫu học cụ thể)", "max_score": 2, "error_code": "missing_location"},
+      {"label": "Đặc điểm hình ảnh đúng (mật độ, hình dạng, bờ, kích thước)", "max_score": 2, "error_code": "missing_imaging_characteristics"},
+      {"label": "Đề cập các dấu hiệu kèm theo", "max_score": 1, "error_code": "missing_associated_findings"}
     ],
-    "total_max": 8,
-    "pass_threshold": 5,
-    "scoring_guide": "Award pts for each criterion met: correct location 2pts, density description 2pts, margin description 2pts, size estimate 1pt, associated findings 1pt.",
+    "total_max": 5,
+    "pass_threshold": 3,
+    "scoring_guide": "Award 2pts for precise anatomical location. Award 2pts for correct imaging characteristics (density, shape, margin, size — partial credit if most are covered). Award 1pt for associated findings.",
     "pass_score": 0.6
   },
-  "INTERPRET": {
-    "question": "Nhung gi ban mo ta co y nghia benh ly gi?",
+  "REASONING": {
+    "question": "Dựa trên các dấu hiệu hình ảnh và thông tin lâm sàng, hãy đề xuất các giả thiết chẩn đoán ban đầu và giải thích bằng bằng chứng.",
     "criteria": [
-      {"label": "Giai thich duoc finding noi len dieu gi ve mat benh ly", "max_score": 3, "error_code": "missing_pathological_interpretation"},
-      {"label": "Ket noi voi co che benh sinh co the",                    "max_score": 2, "error_code": "missing_pathophysiology_link"},
-      {"label": "Chua ket luan chan doan o buoc nay",                     "max_score": 2, "error_code": "premature_diagnosis"}
+      {"label": "Dẫn chứng đủ và liên quan từ các findings đã mô tả", "max_score": 2, "error_code": "insufficient_evidence"},
+      {"label": "Tích hợp thông tin lâm sàng (tuổi, giới, triệu chứng)", "max_score": 1, "error_code": "missing_clinical_integration"},
+      {"label": "Kết nối đúng finding → ý nghĩa bệnh lý", "max_score": 1, "error_code": "missing_finding_mapping"},
+      {"label": "Đề xuất giả thiết chẩn đoán hợp lý", "max_score": 2, "error_code": "missing_reasonable_hypothesis"}
     ],
-    "total_max": 7,
+    "total_max": 6,
     "pass_threshold": 4,
-    "scoring_guide": "Award 3pts for correct pathological interpretation. Award 2pts for linking to pathophysiology. Award 2pts if student does NOT jump to final diagnosis — deduct 2pts if they do.",
-    "penalty_note": "If student jumps to conclusion at this step, deduct 2pts from criterion 3.",
-    "pass_score": 0.6
-  },
-  "HYPOTHESIS": {
-    "question": "Theo ban, day co the la benh gi?",
-    "criteria": [
-      {"label": "Dua ra duoc 1 chan doan chinh hop ly",         "max_score": 3, "error_code": "missing_primary_diagnosis"},
-      {"label": "Dan chung tu it nhat 2 findings da mo ta",    "max_score": 2, "error_code": "insufficient_evidence_cited"},
-      {"label": "Tich hop thong tin lam sang tu benh su",      "max_score": 2, "error_code": "missing_clinical_integration"}
-    ],
-    "total_max": 7,
-    "pass_threshold": 4,
-    "scoring_guide": "Award 3pts for a reasonable primary diagnosis. Award 2pts if student references at least 2 findings described earlier. Award 2pts if student integrates clinical history.",
+    "scoring_guide": "Award 2pts if student cites sufficient relevant evidence from described findings. Award 1pt for clinical integration (age, sex, symptoms). Award 1pt for correct mapping of findings to pathological meaning. Award 2pts for a reasonable diagnostic hypothesis supported by the evidence.",
     "pass_score": 0.6
   },
   "DDx": {
-    "question": "Ngoai chan doan do, con benh nao khac can loai tru khong?",
+    "question": "Các chẩn đoán phân biệt có thể là gì?",
     "criteria": [
-      {"label": "Liet ke toi thieu 2 chan doan phan biet hop ly",  "max_score": 3, "error_code": "insufficient_ddx_count"},
-      {"label": "Lap luan tai sao giu hoac loai tung chan doan",   "max_score": 3, "error_code": "missing_ddx_reasoning"},
-      {"label": "Co it nhat 1 benh nguy hiem can loai tru",        "max_score": 1, "error_code": "missing_dangerous_dx"}
+      {"label": "Liệt kê ≥2 chẩn đoán phân biệt hợp lý", "max_score": 2, "error_code": "insufficient_ddx_count"},
+      {"label": "Ưu tiên hóa có logic (bệnh nào khả dĩ nhất và tại sao)", "max_score": 2, "error_code": "missing_ddx_prioritization"},
+      {"label": "So sánh dựa trên bằng chứng (giữ/loại từng chẩn đoán)", "max_score": 2, "error_code": "missing_evidence_comparison"}
     ],
-    "total_max": 7,
-    "pass_threshold": 5,
-    "scoring_guide": "Award 3pts for listing 2+ plausible differentials. Award 3pts for reasoning why each is kept or excluded. Award 1pt for including at least one dangerous must-not-miss diagnosis.",
-    "note": "Highest threshold step — students most commonly skip this.",
+    "total_max": 6,
+    "pass_threshold": 4,
+    "scoring_guide": "Award 2pts for listing 2+ plausible differentials. Award 2pts for logical prioritization (most likely first with justification). Award 2pts for evidence-based comparison that keeps or excludes each differential.",
     "pass_score": 0.6
   },
   "CONCLUSION": {
-    "question": "Vay chan doan cuoi cua ban la gi va tai sao?",
+    "question": "Kết luận chẩn đoán khả dĩ nhất và giải thích ngắn gọn.",
     "criteria": [
-      {"label": "Dua ra chan doan cuoi ro rang , hợp lý",                          "max_score": 3, "error_code": "missing_final_diagnosis"},
-      {"label": "Giai thich tai sao chon chan doan nay thay vi benh khac","max_score": 2, "error_code": "missing_diagnosis_justification"},
-      {"label": "Goi y buoc xu tri tiep theo",                           "max_score": 1, "error_code": "missing_management_plan"}
+      {"label": "Chẩn đoán khả dĩ nhất rõ ràng", "max_score": 3, "error_code": "missing_final_diagnosis"},
+      {"label": "Có bằng chứng hỗ trợ cho chẩn đoán", "max_score": 2, "error_code": "missing_diagnosis_justification"},
+      {"label": "Nhất quán với lập luận từ các bước trước", "max_score": 2, "error_code": "missing_reasoning_consistency"}
     ],
     "total_max": 7,
     "pass_threshold": 4,
-    "scoring_guide": "Award 3pts for clear final diagnosis. Award 2pts for justification over differentials. Award 1-2pts (partial) if student lists 1 differential with reasoning. Award 0pts only if no differential mentioned at all Award 1pt for next management steps.",
+    "scoring_guide": "Award 3pts for a clear most-likely diagnosis. Award 2pts for evidence supporting that diagnosis over differentials. Award 2pts if conclusion is logically consistent with reasoning built across previous steps.",
     "pass_score": 0.6
   }
 }

@@ -15,7 +15,7 @@ from . import answer_check, socratic
 
 DATA_DIR = Path(__file__).parent / "data"
 
-STEPS = ["OBSERVE", "DESCRIBE", "INTERPRET", "HYPOTHESIS", "DDx", "CONCLUSION"]
+STEPS = ["OBSERVE", "DESCRIBE", "REASONING", "DDx", "CONCLUSION"]
 
 
 def load_data():
@@ -54,7 +54,7 @@ def run_session():
 
     for step_index, step_code in enumerate(STEPS):
         print(f"\n{'─'*60}")
-        print(f"Bước {step_index + 1}/6: {step_code}")
+        print(f"Bước {step_index + 1}/{len(STEPS)}: {step_code}")
         print(f"{'─'*60}")
 
         current_question = socratic.get_opening_question(step_code, step_index)

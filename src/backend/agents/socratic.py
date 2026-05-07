@@ -63,7 +63,7 @@ Return the question as plain text only. No explanation, no prefix.
 SYSTEM_PROMPT_CLASSIFY = """
 Persona:
 You are a Socratic radiology teacher reading a student's message during a
-structured 6-step diagnostic pipeline session.
+structured 5-step diagnostic pipeline session.
 
 Task:
 Classify the student's intent AND generate a response that keeps them engaged
@@ -120,7 +120,7 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "step_name": {
                         "type": "string",
-                        "description": "Tên bước: OBSERVE | DESCRIBE | INTERPRET | HYPOTHESIS | DDx | CONCLUSION"
+                        "description": "Tên bước: OBSERVE | DESCRIBE | REASONING | DDx | CONCLUSION"
                     }
                 },
                 "required": ["step_name"]
@@ -162,12 +162,11 @@ TOOLS_SCHEMA = [
 # ── Fallback templates ────────────────────────────────────────────────────────
 
 STEP_TEMPLATES = {
-    "OBSERVE":    "Hãy quan sát toàn bộ hình ảnh. Bạn nhận thấy điều gì bất thường?",
-    "DESCRIBE":   "Mô tả chi tiết những gì bạn thấy — vị trí, kích thước, mật độ, bờ.",
-    "INTERPRET":  "Những phát hiện này có ý nghĩa lâm sàng gì?",
-    "HYPOTHESIS": "Dựa trên những gì bạn thấy, giả thuyết chẩn đoán của bạn là gì?",
-    "DDx":        "Ngoài giả thuyết chính, còn những chẩn đoán nào khác cần loại trừ?",
-    "CONCLUSION": "Kết luận chẩn đoán cuối cùng của bạn là gì? Bạn tự tin ở mức nào?"
+    "OBSERVE":   "Hãy quan sát toàn bộ hình ảnh. Bạn nhận thấy điều gì bất thường?",
+    "DESCRIBE":  "Mô tả chi tiết những gì bạn thấy — vị trí, kích thước, mật độ, bờ.",
+    "REASONING": "Dựa trên những dấu hiệu bạn đã mô tả và thông tin lâm sàng, hãy lý giải và đề xuất giả thiết chẩn đoán ban đầu.",
+    "DDx":       "Ngoài giả thiết chính, còn những chẩn đoán nào khác cần loại trừ?",
+    "CONCLUSION": "Kết luận chẩn đoán khả dĩ nhất của bạn là gì và tại sao?"
 }
 
 # ── Agent ─────────────────────────────────────────────────────────────────────

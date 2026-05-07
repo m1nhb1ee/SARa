@@ -153,7 +153,7 @@ def evaluate(
 
     last_step_instruction = (
         "This is the FINAL step. next_step_preview must say "
-        "'Bạn đã hoàn thành toàn bộ 6 bước phân tích. Chúc mừng!' — do NOT mention any next step."
+        "'Bạn đã hoàn thành toàn bộ 5 bước phân tích. Chúc mừng!' — do NOT mention any next step."
         if is_last_step else ""
     )
 

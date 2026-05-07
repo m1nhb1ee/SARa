@@ -1,4 +1,3 @@
-import time
 import logging
 from datetime import timezone as dt_timezone
 from datetime import datetime
@@ -9,30 +8,18 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from app.core.supabase_client import get_supabase
-from app.ai_services import MockAIAgent, OpenAIAgent
-import os
+from app.ai_services import classify_intent, evaluate_answer, get_socratic_hint
 
 from .serializers import StepAnswerSubmitSerializer
 from .services import get_session, get_rubric_id
 
 logger = logging.getLogger(__name__)
 
-STEP_CODES = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+STEP_CODES = ['OBSERVE', 'DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
 
 
 def _now_iso() -> str:
     return datetime.now(dt_timezone.utc).isoformat()
-
-
-def _get_ai_agent():
-    use_openai = os.getenv('USE_OPENAI', 'true').lower() == 'true'
-    has_api_key = bool(os.getenv('OPENAI_API_KEY', '').strip())
-    if use_openai and has_api_key:
-        logger.info("Using OpenAI Agent for evaluation")
-        return OpenAIAgent
-    reason = "OpenAI disabled" if not use_openai else "OPENAI_API_KEY not set"
-    logger.info(f"Using Mock Agent ({reason})")
-    return MockAIAgent
 
 
 class SessionViewSet(viewsets.ViewSet):
@@ -136,50 +123,75 @@ class SessionViewSet(viewsets.ViewSet):
         student_answer = serializer.validated_data['student_answer']
         current_step = session['current_step']
         step_code = STEP_CODES[current_step] if current_step < len(STEP_CODES) else 'UNKNOWN'
+        is_last = current_step == len(STEP_CODES) - 1
 
-        rubric_id = get_rubric_id(sb, step_code)
-        if not rubric_id:
-            return Response(
-                {'error': f'No rubric found for step {step_code}. Run the SQL migration first.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # ── 1. Classify intent — handle question/chit-chat without evaluating ──
+        current_question = request.data.get('current_question', '')
+        classified = classify_intent(student_answer, step_code, current_step, current_question)
+        if classified['intent'] in ('question', 'chit-chat'):
+            return Response({'type': 'socratic', 'message': classified['response']})
 
+        # ── 2. Fetch answer key ───────────────────────────────────────────────
         try:
-            case_result = sb.table('cases').select('*').eq('id', session['case_id']).single().execute()
-            case = case_result.data
+            ak_result = sb.table('answer_keys').select('expected_finding').eq(
+                'case_id', session['case_id']
+            ).eq('step_code', step_code).single().execute()
+            answer_key = {'expected_finding': ak_result.data.get('expected_finding', '')}
         except Exception:
-            case = {}
+            answer_key = {'expected_finding': ''}
 
-        prev = sb.table('step_attempts').select('id', count='exact').eq('session_id', pk).eq('step_index', current_step).execute()
-        attempt_number = (prev.count or 0) + 1
+        # ── 3. Build context from DB ──────────────────────────────────────────
+        prev_rows = sb.table('step_attempts').select(
+            'step_index, step_code, student_answer, score'
+        ).eq('session_id', pk).lt('step_index', current_step).order('step_index').execute()
 
-        start_time = time.time()
-        ai_agent = _get_ai_agent()
-        ai_feedback = ai_agent.evaluate_answer(
-            case=case,
-            step_index=current_step,
+        best_prev: dict = {}
+        for a in (prev_rows.data or []):
+            idx = a['step_index']
+            if idx not in best_prev or (a['score'] or 0) > (best_prev[idx].get('_score') or 0):
+                best_prev[idx] = {'step': a['step_code'], 'answer': a['student_answer'], '_score': a['score']}
+        previous_steps = [
+            {'step': v['step'], 'answer': v['answer']}
+            for v in (best_prev[i] for i in sorted(best_prev))
+        ]
+
+        cur_rows = sb.table('step_attempts').select(
+            'student_answer, score'
+        ).eq('session_id', pk).eq('step_index', current_step).order('attempt_number').execute()
+        step_attempts_texts = [a['student_answer'] for a in (cur_rows.data or [])]
+        hint_count = sum(1 for a in (cur_rows.data or []) if a['score'] is not None and a['score'] < 0.6)
+
+        # ── 4. Evaluate ───────────────────────────────────────────────────────
+        result = evaluate_answer(
             student_answer=student_answer,
+            step_code=step_code,
+            step_index=current_step,
+            answer_key=answer_key,
             cv_findings={},
+            previous_steps=previous_steps,
+            step_attempts=step_attempts_texts,
+            is_last_step=is_last,
         )
-        latency_ms = int((time.time() - start_time) * 1000)
 
-        feedback_text = ai_feedback.get('feedback', {})
-        if isinstance(feedback_text, dict):
-            feedback_text = feedback_text.get('content', str(feedback_text))
+        # ── 5. Save attempt ───────────────────────────────────────────────────
+        attempt_number = len(step_attempts_texts) + 1
+        rubric_id = get_rubric_id(sb, step_code)
+        insert_data = {
+            'session_id': pk,
+            'step_index': current_step,
+            'step_code': step_code,
+            'student_answer': student_answer,
+            'score': result['score'],
+            'errors': result['errors'],
+            'feedback': result['feedback'] if not result['passed'] else result['positive_feedback'],
+            'attempt_number': attempt_number,
+            'latency_ms': result['latency_ms'],
+        }
+        if rubric_id:
+            insert_data['rubric_criterion_id'] = rubric_id
 
         try:
-            attempt_result = sb.table('step_attempts').insert({
-                'session_id': pk,
-                'rubric_criterion_id': rubric_id,
-                'step_index': current_step,
-                'step_code': step_code,
-                'student_answer': student_answer,
-                'score': ai_feedback['score'],
-                'errors': ai_feedback.get('errors', []),
-                'feedback': feedback_text,
-                'attempt_number': attempt_number,
-                'latency_ms': latency_ms,
-            }).execute()
+            attempt_result = sb.table('step_attempts').insert(insert_data).execute()
         except Exception as e:
             err_msg = str(e)
             if 'step_index' in err_msg and 'check constraint' in err_msg:
@@ -193,40 +205,56 @@ class SessionViewSet(viewsets.ViewSet):
             raise
         attempt = attempt_result.data[0]
 
-        passed = ai_feedback['score'] >= 0.6
-        response_data = {'attempt': attempt, 'passed': passed}
+        passed = result['passed']
+        force_advance = not passed and hint_count >= 3
+        response_data = {
+            'attempt': attempt,
+            'passed': passed,
+            'positive_feedback': result.get('positive_feedback', ''),
+            'could_add': result.get('could_add', ''),
+        }
 
-        if passed and current_step < 5:
-            sb.table('sessions').update({'current_step': current_step + 1}).eq('id', pk).execute()
-            response_data['next_step'] = current_step + 1
-            response_data['message'] = 'Đáp án số được! Chuyển sang bước tiếp theo.'
-        elif passed and current_step == 5:
-            all_attempts = sb.table('step_attempts').select(
-                'step_index, score'
-            ).eq('session_id', pk).execute()
-            best_by_step: dict = {}
-            for a in (all_attempts.data or []):
-                if a['score'] is None:
-                    continue
-                idx = a['step_index']
-                if idx not in best_by_step or a['score'] > best_by_step[idx]:
-                    best_by_step[idx] = a['score']
-            final_score = round(
-                sum(best_by_step.values()) / len(STEP_CODES), 4
-            ) if best_by_step else 0.0
-            sb.table('sessions').update({
-                'status': 'COMPLETED',
-                'final_score': final_score,
-                'completed_at': _now_iso(),
-            }).eq('id', pk).execute()
-            response_data['message'] = 'Chúc mừng! Hoàn thành case này.'
-            response_data['session_complete'] = True
+        if passed or force_advance:
+            if force_advance:
+                response_data['force_advance'] = True
+                response_data['message'] = f'Đã nhận {hint_count} gợi ý. Chuyển bước tiếp theo.'
+            else:
+                response_data['next_step_preview'] = result.get('next_step_preview', '')
+                response_data['message'] = 'Đúng rồi! Chuyển sang bước tiếp theo.'
+
+            if not is_last:
+                sb.table('sessions').update({'current_step': current_step + 1}).eq('id', pk).execute()
+                response_data['next_step'] = current_step + 1
+            else:
+                all_attempts = sb.table('step_attempts').select(
+                    'step_index, score'
+                ).eq('session_id', pk).execute()
+                best_by_step: dict = {}
+                for a in (all_attempts.data or []):
+                    if a['score'] is None:
+                        continue
+                    idx = a['step_index']
+                    if idx not in best_by_step or a['score'] > best_by_step[idx]:
+                        best_by_step[idx] = a['score']
+                final_score = round(
+                    sum(best_by_step.values()) / len(STEP_CODES), 4
+                ) if best_by_step else 0.0
+                sb.table('sessions').update({
+                    'status': 'COMPLETED',
+                    'final_score': final_score,
+                    'completed_at': _now_iso(),
+                }).eq('id', pk).execute()
+                response_data['session_complete'] = True
+                if not force_advance:
+                    response_data['message'] = 'Bạn đã hoàn thành toàn bộ 5 bước phân tích. Chúc mừng!'
         else:
-            hint = ai_agent.generate_socratic_hint(
-                case=case, step_index=current_step, errors=ai_feedback.get('errors', [])
+            hint = get_socratic_hint(
+                step_code, current_step,
+                result['errors'], hint_count + 1,
+                step_attempts_texts + [student_answer],
             )
             response_data['hint'] = hint
-            response_data['message'] = 'Chưa đúng. Hãy xem gợi ý và thử lại.'
+            response_data['message'] = 'Chưa đủ. Hãy xem gợi ý và thử lại.'
 
         return Response(response_data, status=status.HTTP_200_OK)
 
