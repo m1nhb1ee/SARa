@@ -58,6 +58,7 @@ def create_case_in_supabase(
     modality: str,
     title: str,
     findings: dict,
+    clinical_history: str = '',
 ) -> dict:
     """
     Ghi case + case_images + answer_keys + upload_session vào Supabase.
@@ -76,7 +77,7 @@ def create_case_in_supabase(
         'title': title,
         'modality': MODALITY_MAP.get(modality, 'X-ray'),
         'difficulty': 'medium',
-        'clinical_history': findings.get('clinical_history', ''),
+        'clinical_history': (clinical_history or '').strip(),
         'status': 'published',
     }).execute()
     case = case_result.data[0]
