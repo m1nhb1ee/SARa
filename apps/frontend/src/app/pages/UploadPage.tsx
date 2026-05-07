@@ -11,6 +11,8 @@ const SCAN_TYPE_TO_MODALITY: Record<string, string> = {
   'Other': 'ULTRASOUND',
 };
 
+const UPLOAD_MAX_IMAGES = Number(import.meta.env.VITE_UPLOAD_MAX_IMAGES ?? 20);
+
 const RECENT_CASES = [
   {
     id: '#0247', name: 'Right lung consolidation – PA view',
@@ -323,25 +325,33 @@ export function UploadPage() {
     if (dragState === 'dragging') setDragState('idle');
   }, [dragState]);
 
+  const appendSelectedFiles = (files: File[]) => {
+    const availableSlots = Math.max(UPLOAD_MAX_IMAGES - selectedFiles.length, 0);
+    if (files.length > availableSlots) {
+      setUploadError({
+        errorType: 'too_many_images',
+        issues: [`Upload tối đa ${UPLOAD_MAX_IMAGES} ảnh cho mỗi case. Hãy chọn các lát cắt đại diện nhất.`],
+      });
+    }
+
+    const acceptedFiles = files.slice(0, availableSlots);
+    if (!acceptedFiles.length) return;
+
+    setSelectedFiles(prev => [...prev, ...acceptedFiles]);
+    setVolumeNames(prev => [...prev, ...acceptedFiles.map(() => 'Default')]);
+    setDragState('attached');
+    if (files.length <= availableSlots) setUploadError(null);
+  };
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    if (files.length) {
-      setSelectedFiles(prev => [...prev, ...files]);
-      setVolumeNames(prev => [...prev, ...files.map(() => 'Default')]);
-      setDragState('attached');
-      setUploadError(null);
-    }
-  }, []);
+    if (files.length) appendSelectedFiles(files);
+  }, [selectedFiles.length]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).filter(f => f.type.startsWith('image/'));
-    if (files.length) {
-      setSelectedFiles(prev => [...prev, ...files]);
-      setVolumeNames(prev => [...prev, ...files.map(() => 'Default')]);
-      setDragState('attached');
-      setUploadError(null);
-    }
+    if (files.length) appendSelectedFiles(files);
     e.target.value = '';
   };
 
@@ -407,11 +417,11 @@ export function UploadPage() {
         const n = String(Math.floor(Math.random() * 300 + 100)).padStart(4, '0');
         setCaseNum(n);
         setTimeout(() => { setDragState('attached'); setShowModal(true); }, 600);
-      } else if (response.status === 422) {
+      } else if (response.status === 422 || response.status === 400) {
         const data = await response.json();
         setUploadError({
-          errorType: data.error_type ?? 'unknown',
-          issues: data.issues ?? [],
+          errorType: data.error_type ?? data.error ?? 'unknown',
+          issues: data.issues ?? [data.message ?? data.error ?? 'Upload failed'],
         });
         setDragState('attached');
       } else {
@@ -629,7 +639,7 @@ export function UploadPage() {
                       or click to browse files
                     </div>
                     <div className="mt-2" style={{ fontFamily: "'Courier Prime', monospace", fontSize: '11px', color: '#8B6355' }}>
-                      PNG · JPG · GIF · WEBP — max 10MB
+                      PNG · JPG · GIF · WEBP — max {UPLOAD_MAX_IMAGES} images
                     </div>
                   </>
                 )}
