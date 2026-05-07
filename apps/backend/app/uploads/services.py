@@ -484,6 +484,40 @@ def _call_gradio(image_files: list, prompt: str, token: str) -> str:
                     pass
 
 
+def _sample_vlm_images(
+    image_files: list,
+    volume_names: list | None,
+    max_images: int,
+) -> tuple[list, list[str]]:
+    if len(image_files) <= max_images:
+        return image_files, volume_names or ['Default'] * len(image_files)
+
+    names = volume_names or ['Default'] * len(image_files)
+    volume_to_indices: dict[str, list[int]] = {}
+    for idx, volume in enumerate(names):
+        volume_to_indices.setdefault(volume or 'Default', []).append(idx)
+
+    selected: list[int] = []
+    per_volume = max(1, max_images // max(1, len(volume_to_indices)))
+    for indices in volume_to_indices.values():
+        if len(indices) <= per_volume:
+            selected.extend(indices)
+            continue
+        if per_volume == 1:
+            selected.append(indices[len(indices) // 2])
+            continue
+        step = (len(indices) - 1) / (per_volume - 1)
+        selected.extend(indices[round(i * step)] for i in range(per_volume))
+
+    if len(selected) < max_images:
+        remaining = [i for i in range(len(image_files)) if i not in selected]
+        gap = max(1, len(remaining) // max(1, max_images - len(selected)))
+        selected.extend(remaining[::gap][:max_images - len(selected)])
+
+    selected = sorted(dict.fromkeys(selected))[:max_images]
+    return [image_files[i] for i in selected], [names[i] for i in selected]
+
+
 def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
     import json
     import re
@@ -622,7 +656,11 @@ def analyze_medical_image(
         return _mock_analyze(modality)
     try:
         prompt = _preprocess_with_llm(image_files, modality, region, volume_names)
-        raw = _call_gradio(image_files, prompt, token)
+        max_gradio_images = max(1, int(os.getenv('VLM_MAX_GRADIO_IMAGES', '20')))
+        gradio_images, _ = _sample_vlm_images(image_files, volume_names, max_gradio_images)
+        if len(gradio_images) < len(image_files):
+            logger.info(f"Sampling VLM gallery: sending {len(gradio_images)}/{len(image_files)} representative slices to Gradio")
+        raw = _call_gradio(gradio_images, prompt, token)
         logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         return _parse_findings(raw, modality)
     except ImportError:
