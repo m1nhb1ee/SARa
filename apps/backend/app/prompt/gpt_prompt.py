@@ -19,7 +19,7 @@ def build_gpt_four_step_analysis_prompt(
 
 Return ONLY valid JSON, no markdown, with exactly these keys:
 {{
-  "OBSERVE": "List each visible structure; note whether normal or abnormal. Describe location, size, shape, and density of the main finding. Write No focal finding only if every structure is normal.",
+  "DESCRIBE": "List each visible structure; note whether normal or abnormal. Describe location, size, shape, and density of the main finding. Write No focal finding only if every structure is normal.",
   "REASONING": "Interpret the clinical significance of the findings. State whether normal or abnormal, name the specific imaging sign if present, and give the single most specific working diagnosis with reasoning.",
   "DDx": "4 differential diagnoses based on previous steps' findings, each with one imaging reason.",
   "CONCLUSION": "Main finding + confidence (High/Moderate/Low) + recommended next step."

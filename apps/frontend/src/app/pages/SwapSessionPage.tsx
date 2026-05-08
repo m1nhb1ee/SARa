@@ -86,7 +86,7 @@ export function SwapSessionPage() {
 
   const caseData = session.case ?? {};
   const currentStep = session.current_step ?? 0;
-  const stepName = STEPS[currentStep] ?? 'OBSERVE';
+  const stepName = STEPS[currentStep] ?? 'DESCRIBE';
   const isComplete = session.status === 'COMPLETED';
   const scorePct = session.final_score != null ? Math.round(session.final_score * 100) : null;
 

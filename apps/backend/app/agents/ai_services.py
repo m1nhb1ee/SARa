@@ -15,8 +15,8 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 try:
-    from src.backend.agents import socratic as _socratic
-    from src.backend.agents import answer_check as _answer_check
+    import socratic as _socratic
+    import answer_check as _answer_check
     _AGENTS_AVAILABLE = True
 except ImportError as e:
     logger.error(f"Failed to import SARa agents: {e}")

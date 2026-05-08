@@ -55,7 +55,7 @@ export function ProfilePage() {
   const accuracyByStep_chart = useMemo(() => {
     const entries = Object.entries(accuracyByStep);
     if (!entries.length) return [
-      { modality: 'OBSERVE',   accuracy: 0 },
+      { modality: 'DESCRIBE',   accuracy: 0 },
       { modality: 'REASONING', accuracy: 0 },
       { modality: 'DDx',       accuracy: 0 },
       { modality: 'CONCLUSION', accuracy: 0 },

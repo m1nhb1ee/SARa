@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from app.core.step_codes import STEP_CODES, index_by_canonical_step, normalize_step_code
 from app.core.supabase_client import get_supabase
-from app.ai_services import classify_intent, evaluate_answer, get_socratic_hint
+from app.agents.ai_services import classify_intent, evaluate_answer, get_socratic_hint
 
 from .serializers import StepAnswerSubmitSerializer
 from .services import get_session, get_rubric_id

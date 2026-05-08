@@ -7,8 +7,7 @@ MODALITY_FILTER_ALIASES = {
     'X-ray': 'X-ray',
     'CT': 'CT',
     'MRI': 'MRI',
-    'ULTRASOUND': 'Ultrasound',
-    'Ultrasound': 'Ultrasound',
+
 }
 
 DIFFICULTY_FILTER_ALIASES = {
