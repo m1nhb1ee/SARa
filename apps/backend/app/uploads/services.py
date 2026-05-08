@@ -16,7 +16,7 @@ from app.config.model_config import (
     OPENAI_STEP_COMPLETION_MODEL,
 )
 from app.core.supabase_client import get_supabase
-from app.prompt.gpt_prompt import build_gpt_four_step_analysis_prompt
+from app.prompt.gpt_prompt import build_gpt_four_step_analysis_prompt, build_gpt_final_steps_prompt
 from app.prompt.medgemma_prompt import build_analysis_prompt
 
 logger = logging.getLogger(__name__)
@@ -551,21 +551,8 @@ def _complete_final_steps_with_llm(findings: Dict[str, Any], modality: str, regi
         logger.warning("OPENAI_API_KEY not set — using default DDx/CONCLUSION completion")
         completed = fallback
     else:
-        prompt = f"""You are a radiology assistant completing a case answer key.
-
-Use ONLY the VLM output below. Do not invent image findings beyond DESCRIBE and REASONING.
-
-Modality: {modality}
-Region: {region}
-
-1. DESCRIBE: {describe}
-2. REASONING: {reasoning}
-
-Return ONLY valid JSON, no markdown:
-{{
-  "DDx": "Exactly 2-3 differential diagnoses for this case, each with one imaging reason.",
-  "CONCLUSION": "Main finding + confidence (High/Moderate/Low) + recommended next step."
-}}"""
+        raw_vlm = str(findings.get('raw_findings', '') or f"DESCRIBE: {describe}\nREASONING: {reasoning}").strip()
+        prompt = build_gpt_final_steps_prompt(modality, region, raw_vlm)
 
         try:
             from openai import OpenAI
@@ -577,6 +564,7 @@ Return ONLY valid JSON, no markdown:
                 max_tokens=800,
             )
             raw = (response.choices[0].message.content or '').strip()
+            logger.debug(f"[LLM completion answer]\n{raw}")
             j_start = raw.find('{')
             j_end = raw.rfind('}') + 1
             parsed = json.loads(raw[j_start:j_end])

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Home, ChevronRight, BookOpen, Stethoscope, ArrowRight, BookMarked } from 'lucide-react';
 import { useCreateSession } from '@/api/hooks';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
+import { useAuth } from '@/api/authContext';
 
 const SCAN_TYPE_TO_MODALITY: Record<string, string> = {
   'X-Ray': 'XRAY',
@@ -299,6 +300,7 @@ function UploadModal({ caseNum, onViewAnswer, onPractice, onClose, onSaveLater }
 
 export function UploadPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { createSession } = useCreateSession();
 
   const [dragState, setDragState] = useState<'idle' | 'dragging' | 'uploading' | 'attached'>('idle');
@@ -389,6 +391,7 @@ export function UploadPage() {
       formData.append('modality', modality);
       formData.append('region', region);
       formData.append('clinical_history', clinicalHistory.trim());
+      formData.append('engine', user?.is_premium ? 'gpt' : 'vlm');
 
       const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
       const token = localStorage.getItem('sara_token') || '';

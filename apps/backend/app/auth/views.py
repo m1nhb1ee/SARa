@@ -94,11 +94,14 @@ class LoginView(APIView):
             session = res.session
             _ensure_user_profile(sb, user, (user.user_metadata or {}).get('full_name', ''))
             role = (user.app_metadata or {}).get('role', 'student')
+            profile = sb.table('users').select('is_premium').eq('id', str(user.id)).single().execute()
+            is_premium = bool((profile.data or {}).get('is_premium', False))
             return Response({
                 'user': {
                     'id': str(user.id),
                     'email': user.email,
                     'role': role,
+                    'is_premium': is_premium,
                 },
                 'access_token': session.access_token,
                 'refresh_token': session.refresh_token,
@@ -116,12 +119,16 @@ class MeView(APIView):
 
     def get(self, request):
         user = request.user
+        sb = get_supabase()
+        profile = sb.table('users').select('is_premium').eq('id', str(user['id'])).single().execute()
+        is_premium = bool((profile.data or {}).get('is_premium', False))
         return Response({
             'user': {
                 'id': user['id'],
                 'email': user['email'],
                 'full_name': user.get('full_name', ''),
                 'role': user.get('role', 'student'),
+                'is_premium': is_premium,
             }
         })
 
