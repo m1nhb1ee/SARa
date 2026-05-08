@@ -3,7 +3,7 @@ STEP_CODES = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
 # Legacy step_codes that may still exist in DB (from the 6-step pipeline)
 # are folded into the canonical 4-step set on read.
 _LEGACY_TO_CANONICAL = {
-    'DESCRIBE': 'DESCRIBE',
+    'OBSERVE': 'DESCRIBE',
     'INTERPRET': 'REASONING',
     'HYPOTHESIS': 'REASONING',
     'DDX': 'DDx',

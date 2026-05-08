@@ -1,9 +1,9 @@
-export const STEPS = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION'] as const;
+export const STEPS = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION'] as const;
 
 export type StepCode = typeof STEPS[number];
 
 export const STEP_LABELS: Record<StepCode, string> = {
-  OBSERVE: 'Quan sát',
+  DESCRIBE: 'Quan sát',
   REASONING: 'Lý luận',
   DDx: 'Phân biệt',
   CONCLUSION: 'Kết luận',
