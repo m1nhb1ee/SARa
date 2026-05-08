@@ -12,7 +12,11 @@ class UploadInputSerializer(serializers.Serializer):
         required=False,
     )
     region = serializers.CharField(required=False, default='unspecified')
-    clinical_history = serializers.CharField(required=False, allow_blank=True, default='')
+    engine = serializers.ChoiceField(
+        choices=['gpt', 'vlm'],
+        default='vlm',
+        required=False,
+    )
 
 
 class UploadSessionSerializer(serializers.Serializer):
@@ -26,18 +30,5 @@ class UploadSessionSerializer(serializers.Serializer):
 class UploadResultSerializer(serializers.Serializer):
     upload_session = UploadSessionSerializer()
     case = serializers.DictField()
-
-
-class VLMAnswerInputSerializer(serializers.Serializer):
-    title = serializers.CharField(required=False, allow_blank=True, default='Untitled Case')
-    modality = serializers.ChoiceField(
-        choices=['XRAY', 'CT', 'MRI', 'DIFF'],
-        default='XRAY',
-        required=False,
-    )
-    region = serializers.CharField(required=False, allow_blank=True, default='unspecified')
-    type = serializers.ChoiceField(
-        choices=['socratic', 'debate'],
-        default='socratic',
-        required=False,
-    )
+    findings = serializers.DictField(required=False)
+    engine = serializers.CharField(required=False)

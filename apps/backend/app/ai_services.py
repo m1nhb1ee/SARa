@@ -8,6 +8,8 @@ import logging
 from typing import Dict, List, Any
 from datetime import datetime
 
+from app.config.model_config import OPENAI_EVALUATION_MODEL, OPENAI_HINT_MODEL
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -278,7 +280,7 @@ Trả lời JSON (không markdown, chỉ pure JSON):"""
         
         try:
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=OPENAI_EVALUATION_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -364,7 +366,7 @@ Câu hỏi phải hướng đến việc khám phá và tự học của sinh vi
         
         try:
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=OPENAI_HINT_MODEL,
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
