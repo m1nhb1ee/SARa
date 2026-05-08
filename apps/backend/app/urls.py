@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from app.cases.views import CaseViewSet, CaseTagViewSet
 from app.sessions.views import SessionViewSet, StudentPerformanceViewSet
-from app.uploads.views import UserUploadedCaseViewSet, VLMAnswerView
+from app.uploads.views import UserUploadedCaseViewSet
 from app.swap.views import SwapSessionViewSet
 from app.auth.views import LoginView, MeView, LogoutView, RegisterView
 
@@ -16,7 +16,6 @@ router.register('uploaded-cases', UserUploadedCaseViewSet, basename='uploaded-ca
 router.register('swap-sessions', SwapSessionViewSet, basename='swap-sessions')
 
 urlpatterns = router.urls + [
-    path('vlm-answer/', VLMAnswerView.as_view()),
     path('auth/register/', RegisterView.as_view()),
     path('auth/login/', LoginView.as_view()),
     path('auth/me/', MeView.as_view()),

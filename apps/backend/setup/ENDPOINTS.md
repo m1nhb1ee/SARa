@@ -418,7 +418,7 @@ Marks session as `ABANDONED`. Only works on `IN_PROGRESS` sessions.
 
 ## Uploaded Cases
 
-User-uploaded medical images processed by AI (MedGemma via HuggingFace Gradio). Each upload creates an `upload_session` record and a corresponding `case` (`source = "uploaded"`) with AI-generated `answer_keys`. Only the owner can see their uploaded cases.
+User-uploaded medical images processed by AI. Each upload creates an `upload_session` record and a corresponding `case` (`source = "uploaded"`) with AI-generated `answer_keys`. Only the owner can see their uploaded cases.
 
 > To list uploaded cases use `GET /cases/?source=uploaded`.
 
@@ -432,16 +432,23 @@ Content-Type: multipart/form-data
 ```
 
 **Form fields** (all repeatable, sent as parallel arrays in the same order):
-- `images` (file, required) — one or more JPG/PNG medical images
-- `slice_indexes` (integer, optional) — slice position of the corresponding image within its volume
-- `volume_names` (string, optional, default `"Default"`) — volume label for the corresponding image; images sharing the same `volume_name` are grouped into the same volume
-- `title` (string, optional) — case title; AI generates one if omitted or `"Untitled Case"`
-- `modality` (string, optional, default `XRAY`) — `XRAY` | `CT` | `MRI` | `DIFF`
-- `region` (string, optional, default `unspecified`) — anatomical region passed to the AI prompt, e.g. `chest`, `brain`, `spine`, `abdomen`
+- `images` (file, required) - one or more JPG/PNG medical images
+- `slice_indexes` (integer, optional) - slice position of the corresponding image within its volume
+- `volume_names` (string, optional, default `"Default"`) - volume label for the corresponding image; images sharing the same `volume_name` are grouped into the same volume
+- `title` (string, optional) - case title; AI generates one if omitted or `"Untitled Case"`
+- `modality` (string, optional, default `XRAY`) - `XRAY` | `CT` | `MRI` | `DIFF`
+- `region` (string, optional, default `unspecified`) - anatomical region passed to the AI prompt, e.g. `chest`, `brain`, `spine`, `abdomen`
+- `engine` (string, optional, default `vlm`) - `vlm` | `gpt`
 
-AI analysis (MedGemma via HuggingFace Gradio) runs across **all uploaded images** at once. The prompt includes volume count and total slice count as context.
+AI analysis runs across **all uploaded images** at once. The prompt includes volume count and total slice count as context.
 
-**Example — single volume, multiple slices:**
+Engine behavior:
+- `engine=vlm`: MedGemma/VLM generates `OBSERVE` + `REASONING`; GPT completes `DDx` + `CONCLUSION`.
+- `engine=gpt`: GPT vision generates all four steps directly with a separate JSON prompt.
+
+The saved case contains four answer-key steps: `OBSERVE`, `REASONING`, `DDx`, `CONCLUSION`.
+
+**Example - single volume, multiple slices:**
 ```bash
 curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
   -H "Authorization: Bearer <token>" \
@@ -453,10 +460,11 @@ curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
   -F "volume_names=Axial" \
   -F "title=CT Brain" \
   -F "modality=CT" \
-  -F "region=brain"
+  -F "region=brain" \
+  -F "engine=vlm"
 ```
 
-**Example — multiple volumes:**
+**Example - multiple volumes:**
 ```bash
 curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
   -H "Authorization: Bearer <token>" \
@@ -467,7 +475,8 @@ curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
   -F "slice_indexes=0" -F "slice_indexes=1" -F "slice_indexes=0" -F "slice_indexes=1" \
   -F "volume_names=T1" -F "volume_names=T1" -F "volume_names=T2" -F "volume_names=T2" \
   -F "modality=MRI" \
-  -F "region=brain"
+  -F "region=brain" \
+  -F "engine=gpt"
 ```
 
 **Response 201:**
@@ -482,22 +491,90 @@ curl -X POST http://localhost:8000/api/v1/uploaded-cases/ \
   },
   "case": {
     "id": "<uuid>",
-    "title": "MRI Case – MedGemma",
+    "title": "MRI Case - GPT",
     "modality": "MRI",
     "difficulty": "medium",
-    "clinical_history": "AI (MedGemma) analyzed MRI: ...",
+    "clinical_history": "AI (GPT) analyzed MRI: ...",
     "uploaded_by": "<uuid>",
     "created_at": "2024-04-15T14:00:00+00:00"
-  }
+  },
+  "findings": {
+    "title": "MRI Case - GPT",
+    "description": "...",
+    "clinical_history": "AI (GPT) analyzed MRI: ...",
+    "raw_findings": "{...}",
+    "confidence": 0.82,
+    "answer_key": {
+      "OBSERVE": "...",
+      "REASONING": "...",
+      "DDx": "...",
+      "CONCLUSION": "..."
+    },
+    "pipeline_rubric": {
+      "OBSERVE": "...",
+      "REASONING": "...",
+      "DDx": "...",
+      "CONCLUSION": "..."
+    }
+  },
+  "engine": "gpt"
 }
 ```
 
 All images are stored in `case_images` with their `slice_index` and `volume_name`, and returned grouped by volume when fetching via `/cases/{uuid}/`.
 
 **Errors:**
-- `400 { "error": "Cần ít nhất một ảnh (field: images)" }` — no files sent
-- `400 { "error": "Định dạng ... không được hỗ trợ" }` — unsupported file type
-- `400 { "error": "Lỗi xử lý ảnh", "message": "..." }` — storage or AI error
+- `400 { "error": "<missing images message>" }` - no files sent
+- `400 { "error": "<unsupported file type message>" }` - unsupported file type
+- `400 { "error": "<image processing error>", "message": "..." }` - storage or AI error
+- `422 { "error": "image_validation_failed", "error_type": "...", "issues": [...], "classifications": [...] }` - image validation failed
+
+---
+
+### Analyze Uploaded Images Without Creating Case
+```
+POST /uploaded-cases/analyze-image/
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+```
+
+Runs image validation and AI analysis but does **not** upload images to storage and does **not** create a case. This is useful for previewing analysis before saving.
+
+**Form fields:**
+- `images` (file, required) - one or more JPG/PNG medical images
+- `slice_indexes` (integer, optional) - slice position of the corresponding image
+- `volume_names` (string, optional, default `"Default"`) - volume label for the corresponding image
+- `case_id` (uuid, optional) - returned as-is for callers previewing an existing draft
+- `title` (string, optional) - response title; AI generates one if omitted or `"Untitled Case"`
+- `modality` (string, optional, default `XRAY`) - `XRAY` | `CT` | `MRI` | `DIFF`
+- `region` (string, optional, default `unspecified`) - anatomical region passed to the AI prompt
+
+This endpoint currently uses the full four-step VLM/MedGemma prompt directly.
+
+**Response 201:**
+```json
+{
+  "case_id": "<uuid or null>",
+  "title": "MRI Case - MedGemma",
+  "modality": "MRI",
+  "region": "brain",
+  "findings": {
+    "answer_key": {
+      "OBSERVE": "...",
+      "REASONING": "...",
+      "DDx": "...",
+      "CONCLUSION": "..."
+    },
+    "pipeline_rubric": {
+      "OBSERVE": "...",
+      "REASONING": "...",
+      "DDx": "...",
+      "CONCLUSION": "..."
+    },
+    "raw_findings": "..."
+  }
+}
+```
 
 ---
 
@@ -555,7 +632,7 @@ Authorization: Bearer <token>
   "modality": "CT",
   "case_id": "<uuid>",
   "case_title": "CT Case – MedGemma",
-  "answer_key_steps": ["OBSERVE", "DESCRIBE", "INTERPRET", "HYPOTHESIS", "DDx", "CONCLUSION"],
+  "answer_key_steps": ["OBSERVE", "REASONING", "DDx", "CONCLUSION"],
   "answer_keys": [
     {
       "step_code": "OBSERVE",

@@ -9,10 +9,9 @@ from openai import OpenAI
 from rest_framework import status
 from rest_framework.response import Response
 
+from app.core.step_codes import STEP_CODES, index_by_canonical_step
 from app.core.supabase_client import get_supabase
 from app.uploads.services import analyze_medical_image
-
-STEP_CODES = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
 
 MODALITY_TO_UPLOAD = {
     'X-ray': 'XRAY',
@@ -80,9 +79,9 @@ def _download_case_images(case: dict) -> tuple[list[bytes], list[int | None], li
 def _answer_key_for_case(case_id: str) -> dict[str, dict[str, Any]]:
     sb = get_supabase()
     result = sb.table('answer_keys').select(
-        'step_code, expected_finding, clinical_explanation, key_points'
+        'step_code, step_order, expected_finding, clinical_explanation, key_points'
     ).eq('case_id', case_id).order('step_order').execute()
-    return {row['step_code']: row for row in (result.data or [])}
+    return index_by_canonical_step(result.data or [])
 
 
 def _json_from_text(text: str) -> dict[str, Any]:
@@ -415,8 +414,19 @@ def create_swap_session(case_id: str, user_id: str) -> tuple[dict | None, Respon
         return None, err
 
     answer_key = _answer_key_for_case(case_id)
-    if not all(code in answer_key for code in STEP_CODES):
-        return None, Response({'error': 'Case answer key is incomplete'}, status=status.HTTP_400_BAD_REQUEST)
+    missing = [code for code in STEP_CODES if code not in answer_key]
+    if missing:
+        return None, Response(
+            {
+                'error': (
+                    f"Case answer key is incomplete. "
+                    f"Missing: {missing}. Found: {list(answer_key.keys())}"
+                ),
+                'missing_steps': missing,
+                'found_steps': list(answer_key.keys()),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         image_bytes, _, volume_names = _download_case_images(case)
