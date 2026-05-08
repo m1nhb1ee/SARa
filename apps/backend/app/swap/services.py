@@ -343,7 +343,7 @@ Transcript:
 Return ONLY valid JSON:
 {{
   "scores": [
-    {{"step_code": "OBSERVE", "persuasion_score": 0.0, "reasoning": "short reason"}},
+    {{"step_code": "DESCRIBE", "persuasion_score": 0.0, "reasoning": "short reason"}},
     {{"step_code": "REASONING", "persuasion_score": 0.0, "reasoning": "short reason"}},
     {{"step_code": "DDx", "persuasion_score": 0.0, "reasoning": "short reason"}},
     {{"step_code": "CONCLUSION", "persuasion_score": 0.0, "reasoning": "short reason"}}
@@ -450,7 +450,11 @@ def create_swap_session(case_id: str, user_id: str) -> tuple[dict | None, Respon
         'raw_vlm_output': findings.get('raw_findings', ''),
     }).execute().data[0]
 
-    initial_message = doctor_diagnosis.get('OBSERVE') or 'Tôi sẽ bắt đầu với bước quan sát, nhưng hình ảnh này khá rõ rồi.'
+    initial_message = (
+        doctor_diagnosis.get('DESCRIBE')
+        or doctor_diagnosis.get('OBSERVE')
+        or 'Tôi sẽ bắt đầu với bước quan sát, nhưng hình ảnh này khá rõ rồi.'
+    )
     sb.table('swap_messages').insert({
         'swap_session_id': inserted['id'],
         'role': 'doctor',

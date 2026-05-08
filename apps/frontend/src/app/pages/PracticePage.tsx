@@ -14,7 +14,7 @@ import { useCaseDetail, useCreateSession, useSessionDetail, useSubmitAnswer } fr
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STEPS = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION'];
+const STEPS = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION'];
 
 type Modality = 'X-Ray' | 'CT' | 'MRI';
 type ViewMode = 'upload' | 'training';
@@ -98,7 +98,7 @@ export function PracticePage() {
   // ── Derived ──
   const isSessionLoading = !!sessionId && sessionLoading;
   const currentStep = sessionData?.current_step ?? 0;
-  const currentStepName = STEPS[currentStep] ?? 'OBSERVE';
+  const currentStepName = STEPS[currentStep] ?? 'DESCRIBE';
   const isSessionComplete = sessionData?.status === 'COMPLETED';
 
   const getFirstUrl = (d: any): string => {

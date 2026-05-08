@@ -823,7 +823,7 @@ export function UploadPage() {
               </div>
               <p style={{ fontFamily: "'Caveat', cursive", fontSize: '13px', color: '#2C1810', lineHeight: 1.65 }}>
                 AI will analyse your image and generate 4 diagnostic steps:{' '}
-                <span style={{ color: '#1B3A5C' }}>OBSERVE</span> →{' '}
+                <span style={{ color: '#1B3A5C' }}>DESCRIBE</span> →{' '}
                 <span style={{ color: '#C9882A' }}>REASONING</span> →{' '}
                 <span style={{ color: '#5C3D2E' }}>DDx</span> →{' '}
                 <span style={{ color: '#7D9B76' }}>CONCLUSION</span>
