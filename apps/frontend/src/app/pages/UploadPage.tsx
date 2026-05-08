@@ -4,6 +4,7 @@ import { Home, ChevronRight, BookOpen, Stethoscope, ArrowRight, BookMarked } fro
 import { useCreateSession } from '@/api/hooks';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
 import { useAuth } from '@/api/authContext';
+import { engineForUser } from '@/constants/engineConfig';
 
 const SCAN_TYPE_TO_MODALITY: Record<string, string> = {
   'X-Ray': 'XRAY',
@@ -391,7 +392,7 @@ export function UploadPage() {
       formData.append('modality', modality);
       formData.append('region', region);
       formData.append('clinical_history', clinicalHistory.trim());
-      formData.append('engine', user?.is_premium ? 'gpt' : 'vlm');
+      formData.append('engine', engineForUser(user?.is_premium ?? false));
 
       const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
       const token = localStorage.getItem('sara_token') || '';
