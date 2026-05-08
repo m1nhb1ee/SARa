@@ -29,9 +29,20 @@ def get_session(sb, pk: str, user_id: str):
     return result.data, None
 
 
+_LEGACY_RUBRIC_FALLBACKS = {
+    'OBSERVE': ['DESCRIBE'],
+    'REASONING': ['INTERPRET', 'HYPOTHESIS'],
+    'DDx': ['DDX', 'ddx'],
+}
+
+
 def get_rubric_id(sb, step_code: str) -> str | None:
-    try:
-        r = sb.table('step_rubrics').select('id').eq('step_code', step_code).single().execute()
-        return r.data['id']
-    except Exception:
-        return None
+    candidates = [step_code, *_LEGACY_RUBRIC_FALLBACKS.get(step_code, [])]
+    for code in candidates:
+        try:
+            r = sb.table('step_rubrics').select('id').eq('step_code', code).single().execute()
+            if r.data:
+                return r.data['id']
+        except Exception:
+            continue
+    return None

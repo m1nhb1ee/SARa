@@ -35,7 +35,7 @@ export default defineConfig({
 
   // Development server with API proxy
   server: {
-    port: 5173,
+    port: 2173,
     strictPort: false,
     proxy: {
       // Proxy API requests to backend during development
