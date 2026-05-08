@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from app.core.supabase_client import get_supabase
-from .serializers import ALLOWED_EXTENSIONS, UploadInputSerializer, VLMAnswerInputSerializer
+from .serializers import ALLOWED_EXTENSIONS, UploadInputSerializer
 from .services import (
     analyze_medical_image,
     classify_and_validate_images,
@@ -37,52 +37,6 @@ def validate_image_count(image_files) -> Response | None:
             status=status.HTTP_400_BAD_REQUEST,
         )
     return None
-
-
-class VLMAnswerView(APIView):
-    permission_classes = [IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser)
-
-    def post(self, request):
-        serializer = VLMAnswerInputSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        image_files = request.FILES.getlist('images')
-        if not image_files:
-            return Response({'error': 'Cần ít nhất một ảnh (field: images)'}, status=status.HTTP_400_BAD_REQUEST)
-        image_count_error = validate_image_count(image_files)
-        if image_count_error:
-            return image_count_error
-
-        for f in image_files:
-            ext = os.path.splitext(getattr(f, 'name', ''))[1].lstrip('.').lower()
-            if ext and ext not in ALLOWED_EXTENSIONS:
-                return Response(
-                    {'error': f'Định dạng {ext} không được hỗ trợ. Chấp nhận: {ALLOWED_EXTENSIONS}'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        raw_volumes = request.data.getlist('volume_names')
-        volume_names = [
-            raw_volumes[i] if i < len(raw_volumes) and raw_volumes[i] else 'Default'
-            for i in range(len(image_files))
-        ]
-        image_data = [f.read() for f in image_files]
-
-        findings = analyze_medical_image(
-            image_data,
-            serializer.validated_data['modality'],
-            serializer.validated_data['region'] or 'unspecified',
-            volume_names=volume_names,
-        )
-
-        return Response({
-            'type': serializer.validated_data['type'],
-            'title': findings.get('title') or serializer.validated_data['title'],
-            'answer_key': findings.get('answer_key', {}),
-            'raw_findings': findings.get('raw_findings', ''),
-            'description': findings.get('description', ''),
-        })
 
 
 class UserUploadedCaseViewSet(viewsets.ViewSet):
