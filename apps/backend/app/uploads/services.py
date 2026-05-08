@@ -21,17 +21,17 @@ from app.prompt.medgemma_prompt import build_analysis_prompt
 
 logger = logging.getLogger(__name__)
 
-STEP_CODES = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
-ANSWER_KEY_STEP_CODES = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
+STEP_CODES = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
+ANSWER_KEY_STEP_CODES = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
 
 
 def _expected_step_codes(prompt_steps: int = 4) -> list[str]:
     if prompt_steps == 2:
-        return ['OBSERVE', 'REASONING']
-    return ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
+        return ['DESCRIBE', 'REASONING']
+    return ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
 
 STEP_TEMPLATES = {
-    "OBSERVE":   "Quan sát kỹ lưỡng các vùng của ảnh. Xác định vùng bất thường, mô tả chi tiết kích thước, hình dạng, vị trí, mật độ.",
+    "DESCRIBE":   "Quan sát kỹ lưỡng các vùng của ảnh. Xác định vùng bất thường, mô tả chi tiết kích thước, hình dạng, vị trí, mật độ.",
     "REASONING": "Diễn giải ý nghĩa lâm sàng của các phát hiện và đề xuất chẩn đoán làm việc chính.",
     "DDx":       "Liệt kê chẩn đoán phân biệt cần loại trừ.",
     "CONCLUSION": "Kết luận chẩn đoán cuối cùng và khuyến cáo tiếp theo.",
@@ -465,7 +465,7 @@ def _parse_findings(description: str, modality: str, prompt_steps: int = 4, sour
     import re
 
     all_fallback = {
-        "OBSERVE":   "Observation details",
+        "DESCRIBE":   "Observation details",
         "REASONING": "Reasoning details",
         "DDx":       _get_ddx(modality),
         "CONCLUSION": _get_conclusion(modality),
@@ -491,7 +491,7 @@ def _parse_findings(description: str, modality: str, prompt_steps: int = 4, sour
 
     try:
         patterns = {
-            "OBSERVE":   r"(?:1\.|OBSERVE|Observation)[:\s]*([\s\S]+?)(?=\n\s*2\.|REASONING|$)",
+            "DESCRIBE":   r"(?:1\.|DESCRIBE|Describe)[:\s]*([\s\S]+?)(?=\n\s*2\.|REASONING|$)",
             "REASONING": r"(?:2\.|REASONING|Reasoning)[:\s]*([\s\S]+?)(?=\n\s*3\.|DDx|$)",
             "DDx":       r"(?:3\.|DDx|Differential)[:\s]*([\s\S]+?)(?=\n\s*4\.|CONCLUSION|$)",
             "CONCLUSION": r"(?:4\.|CONCLUSION|Conclusion)[:\s]*([\s\S]+?)$",
@@ -516,7 +516,7 @@ def _parse_findings(description: str, modality: str, prompt_steps: int = 4, sour
 
 def _build_response(answer_key: dict, raw: str, modality: str, step_codes: list[str], source: str) -> Dict[str, Any]:
     summary = " ".join([
-        answer_key.get("OBSERVE", "")[:80],
+        answer_key.get("DESCRIBE", "")[:80],
         answer_key.get("REASONING", "")[:80],
     ])[:200]
     return {
@@ -532,13 +532,13 @@ def _build_response(answer_key: dict, raw: str, modality: str, step_codes: list[
 
 def _complete_final_steps_with_llm(findings: Dict[str, Any], modality: str, region: str) -> Dict[str, Any]:
     """
-    Generate DDx and CONCLUSION from the VLM's OBSERVE/REASONING output.
+    Generate DDx and CONCLUSION from the VLM's DESCRIBE/REASONING output.
     If the LLM is unavailable, keep the VLM result and fill conservative defaults.
     """
     import json
 
     answer_key = findings.get('answer_key') or {}
-    observe = str(answer_key.get('OBSERVE', '')).strip()
+    describe = str(answer_key.get('DESCRIBE', '')).strip()
     reasoning = str(answer_key.get('REASONING', '')).strip()
 
     fallback = {
@@ -553,12 +553,12 @@ def _complete_final_steps_with_llm(findings: Dict[str, Any], modality: str, regi
     else:
         prompt = f"""You are a radiology assistant completing a case answer key.
 
-Use ONLY the VLM output below. Do not invent image findings beyond OBSERVE and REASONING.
+Use ONLY the VLM output below. Do not invent image findings beyond DESCRIBE and REASONING.
 
 Modality: {modality}
 Region: {region}
 
-1. OBSERVE: {observe}
+1. DESCRIBE: {describe}
 2. REASONING: {reasoning}
 
 Return ONLY valid JSON, no markdown:
@@ -591,13 +591,13 @@ Return ONLY valid JSON, no markdown:
             completed = fallback
 
     findings['answer_key'] = {
-        'OBSERVE': observe or 'Observation details',
+        'DESCRIBE': describe or 'Observation details',
         'REASONING': reasoning or 'Reasoning details',
         **completed,
     }
     findings['pipeline_rubric'] = {code: STEP_TEMPLATES[code] for code in STEP_CODES}
     summary = " ".join([
-        findings['answer_key'].get('OBSERVE', '')[:80],
+        findings['answer_key'].get('DESCRIBE', '')[:80],
         findings['answer_key'].get('REASONING', '')[:80],
     ])[:200]
     findings['description'] = summary
@@ -626,25 +626,25 @@ def _get_conclusion(modality: str) -> str:
 def _mock_analyze(modality: str, prompt_steps: int = 4) -> Dict[str, Any]:
     mock_keys = {
         "XRAY": {
-            "OBSERVE":   "Phổi trái bình thường; phổi phải có đám mờ ~3–4 cm, bờ không rõ, vị trí thùy dưới phải.",
+            "DESCRIBE":   "Phổi trái bình thường; phổi phải có đám mờ ~3–4 cm, bờ không rõ, vị trí thùy dưới phải.",
             "REASONING": "Mật độ cao gợi ý infiltrate — viêm phổi hoặc phù. Chẩn đoán làm việc: viêm phổi thùy dưới phổi phải.",
             "DDx":       "Lao phổi, ung thư phổi, edema phổi, hemothorax, viêm phổi.",
             "CONCLUSION": "Cần xét nghiệm máu CBC, cấy đờm, theo dõi lâm sàng 48–72h.",
         },
         "CT": {
-            "OBSERVE":   "Não bình thường, không thấy máu tụ; các thất não và mô trắng không dị thường; cột sống bình thường.",
+            "DESCRIBE":   "Não bình thường, không thấy máu tụ; các thất não và mô trắng không dị thường; cột sống bình thường.",
             "REASONING": "Không có bất thường bệnh lý rõ ràng. Chẩn đoán làm việc: não bình thường.",
             "DDx":       "U não, máu tụ nội sọ, nhồi máu não, viêm màng não.",
             "CONCLUSION": "Tham khảo thần kinh học. Xem xét MRI bổ sung nếu cần.",
         },
         "MRI": {
-            "OBSERVE":   "Tín hiệu T2 tăng ở vùng nghi ngờ; tổn thương khu trú, bờ rõ, tín hiệu dị thường.",
+            "DESCRIBE":   "Tín hiệu T2 tăng ở vùng nghi ngờ; tổn thương khu trú, bờ rõ, tín hiệu dị thường.",
             "REASONING": "Gợi ý tổn thương mô mềm hoặc viêm. Chẩn đoán làm việc: viêm hoặc u lành tính.",
             "DDx":       "Thoát vị đĩa đệm, u tủy, xơ cứng rải rác, viêm.",
             "CONCLUSION": "Tư vấn chỉnh hình / thần kinh. Theo dõi định kỳ.",
         },
         "DIFF": {
-            "OBSERVE":   "Cấu trúc cơ quan bình thường; kích thước bình thường, echo đồng nhất; không thấy khối.",
+            "DESCRIBE":   "Cấu trúc cơ quan bình thường; kích thước bình thường, echo đồng nhất; không thấy khối.",
             "REASONING": "Không có bất thường rõ. Chẩn đoán làm việc: bình thường.",
             "DDx":       "U lành/ác tính, nang, viêm, xơ hóa.",
             "CONCLUSION": "Theo dõi siêu âm định kỳ. Sinh thiết nếu nghi ngờ ác tính.",

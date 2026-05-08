@@ -19,7 +19,7 @@ def build_two_step_analysis_prompt(
 
 Respond in exactly two numbered steps. Begin each line with its label:
 
-1. OBSERVE: List each visible structure; note whether normal or abnormal. Describe location, size, shape, and density of the main finding. Write "No focal finding" only if every structure is normal.
+1. DESCRIBE: List each visible structure; note whether normal or abnormal. Describe location, size, shape, and density of the main finding. Write "No focal finding" only if every structure is normal.
 2. REASONING: Interpret the clinical significance of the findings (Normal or Abnormal? Name the specific imaging sign). Then state the single most specific working diagnosis with reasoning."""
 
 
@@ -35,7 +35,7 @@ def build_four_step_analysis_prompt(
 
 Respond in exactly four numbered steps. Begin each line with its label:
 
-1. OBSERVE: List each visible structure; note whether normal or abnormal. Describe location, size, shape, and density of the main finding. Write "No focal finding" only if every structure is normal.
+1. DESCRIBE: List each visible structure; note whether normal or abnormal. Describe location, size, shape, and density of the main finding. Write "No focal finding" only if every structure is normal.
 2. REASONING: Interpret the clinical significance of the findings (Normal or Abnormal? Name the specific imaging sign). Then state the single most specific working diagnosis with reasoning.
 3. DDx: Exactly 2-3 differential diagnoses based on previous steps' findings, each with one imaging reason.
 4. CONCLUSION: Main finding + confidence (High/Moderate/Low) + recommended next step."""

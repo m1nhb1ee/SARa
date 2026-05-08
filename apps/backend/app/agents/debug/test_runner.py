@@ -8,8 +8,10 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
+from .. import answer_check
+
 sys.stdout.reconfigure(encoding="utf-8")
-from . import answer_check, socratic
+from .. import socratic
 from .logger import logger
 
 load_dotenv(Path(__file__).parents[3] / ".env")

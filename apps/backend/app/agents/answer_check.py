@@ -2,7 +2,7 @@ import os
 import json
 import time
 from openai import OpenAI
-from .logger import logger
+from .debug.logger import logger
 
 
 def _sanitize(s: str) -> str:
