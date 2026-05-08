@@ -67,6 +67,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
         modality = serializer.validated_data['modality']
         title = serializer.validated_data['title']
         region = serializer.validated_data['region']
+        engine = serializer.validated_data['engine']
         user_id = request.user['id']
 
         image_files = request.FILES.getlist('images')
@@ -121,13 +122,18 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
             findings = analyze_medical_image(
                 [img_bytes for _, img_bytes in image_data], modality, region,
                 volume_names=volume_names,
+                prompt_steps=2 if engine == 'vlm' else 4,
+                complete_final_steps_with_llm=(engine == 'vlm'),
+                engine=engine,
             )
-            logger.info(f"HF analysis complete. Steps: {list(findings.get('answer_key', {}).keys())}")
+            logger.info(f"Image analysis complete via {engine}. Steps: {list(findings.get('answer_key', {}).keys())}")
 
             if not title or title == 'Untitled Case':
                 title = findings.get('title', f'{modality} Case')
 
             result = create_case_in_supabase(user_id, image_entries, modality, title, findings)
+            result['findings'] = findings
+            result['engine'] = engine
             logger.info(f"Case {result['case']['id']} created, upload_session {result['upload_session']['id']}")
 
             return Response(result, status=status.HTTP_201_CREATED)
@@ -138,6 +144,8 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
                 {'error': 'Lỗi xử lý ảnh', 'message': str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+            
+    
 
     def retrieve(self, request, pk=None):
         """GET /api/v1/uploaded-cases/{id}/ — chi tiết upload_session + case"""
@@ -178,6 +186,89 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
             return Response(
                 {'error': 'Lỗi xóa case', 'message': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+            
+    @action(detail=False, methods=['post'], url_path='analyze-image')
+    def analyze_image(self, request):
+        """
+        POST /api/v1/uploaded-cases/analyze-image/
+        Multipart fields (parallel arrays):
+          case_id        uuid     optional  — nếu đã có case, sẽ phân tích và update case đó thay vì tạo mới
+          images         file     required
+          slice_indexes  int      optional  — slice position within its volume
+          modality, region
+        """
+        serializer = UploadInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        case_id = serializer.validated_data.get('case_id')
+        modality = serializer.validated_data['modality']
+        region = serializer.validated_data['region']
+        user_id = request.user['id']
+
+        image_files = request.FILES.getlist('images')
+        if not image_files:
+            return Response({'error': 'Cần ít nhất một ảnh (field: images)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        for f in image_files:
+            ext = os.path.splitext(getattr(f, 'name', ''))[1].lstrip('.').lower()
+            if ext and ext not in ALLOWED_EXTENSIONS:
+                return Response(
+                    {'error': f'Định dạng {ext} không được hỗ trợ. Chấp nhận: {ALLOWED_EXTENSIONS}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        raw_indexes = request.data.getlist('slice_indexes')
+        raw_volumes = request.data.getlist('volume_names')
+
+        slice_indexes, volume_names = [], []
+        for i in range(len(image_files)):
+            try:
+                slice_indexes.append(int(raw_indexes[i]) if i < len(raw_indexes) else None)
+            except (ValueError, TypeError):
+                slice_indexes.append(None)
+            volume_names.append(raw_volumes[i] if i < len(raw_volumes) else 'Default')
+
+        unique_volumes = list(dict.fromkeys(volume_names))
+        logger.info(
+            f"Upload request from user {user_id} — modality={modality}, "
+            f"{len(image_files)} image(s), {len(unique_volumes)} volume(s): {unique_volumes}"
+        )
+
+        try:
+            image_data = [(f, f.read()) for f in image_files]
+            all_bytes = [b for _, b in image_data]
+
+            # ── Bước 1: Kiểm tra ảnh y tế + consistency trước khi upload storage ──
+            validation = classify_and_validate_images(all_bytes, volume_names, modality)
+            if not validation['valid']:
+                return Response({
+                    'error': 'image_validation_failed',
+                    'error_type': validation['error_type'],
+                    'issues': validation['issues'],
+                    'classifications': validation['classifications'],
+                }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+            findings = analyze_medical_image(
+                [img_bytes for _, img_bytes in image_data], modality, region,
+                volume_names=volume_names,
+                prompt_steps=4,
+            )
+            logger.info(f"HF analysis complete. Steps: {list(findings.get('answer_key', {}).keys())}")
+
+            result = {
+                'case_id': case_id,
+                'modality': modality,
+                'region': region,
+                'findings': findings,
+            }
+            return Response(result, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Upload processing error: {e}", exc_info=True)
+            return Response(
+                {'error': 'Lỗi xử lý ảnh', 'message': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     @action(detail=True, methods=['post'])
