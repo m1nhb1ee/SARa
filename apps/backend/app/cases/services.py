@@ -44,10 +44,10 @@ def _group_images(case: dict) -> dict:
     return case
 
 
-def list_cases(user_id: str, source=None, modality=None, difficulty=None, disease_tag=None, status_filter=None) -> list:
+def list_cases(user_id: str, source=None, modality=None, difficulty=None, disease_tag=None, status_filter=None, is_valid=None) -> list:
     sb = get_supabase()
     query = sb.table('cases').select(
-        'id, title, modality, difficulty, clinical_history, disease_tag, status, source, tags, created_at, uploaded_by, case_images(image_url, slice_index, volume_name)'
+        'id, title, modality, difficulty, clinical_history, disease_tag, status, source, tags, created_at, uploaded_by, is_valid, case_images(image_url, slice_index, volume_name)'
     )
     if source == 'system':
         query = query.eq('source', 'system')
@@ -63,6 +63,8 @@ def list_cases(user_id: str, source=None, modality=None, difficulty=None, diseas
         query = query.eq('difficulty', DIFFICULTY_FILTER_ALIASES.get(difficulty, difficulty))
     if disease_tag:
         query = query.eq('disease_tag', disease_tag)
+    if is_valid is not None:
+        query = query.eq('is_valid', str(is_valid).lower() in ('true', '1', 'yes'))
     result = query.order('created_at', desc=True).execute()
     return [_group_images(c) for c in (result.data or [])]
 
@@ -75,7 +77,7 @@ def get_case(case_id: str) -> dict | None:
     sb = get_supabase()
     try:
         result = sb.table('cases').select(
-            'id, title, modality, difficulty, clinical_history, disease_tag, status, source, tags, created_at, uploaded_by, case_images(image_url, slice_index, volume_name)'
+            'id, title, modality, difficulty, clinical_history, disease_tag, status, source, tags, created_at, uploaded_by, is_valid, case_images(image_url, slice_index, volume_name)'
         ).eq('id', case_id).single().execute()
         return _group_images(result.data)
     except Exception:
