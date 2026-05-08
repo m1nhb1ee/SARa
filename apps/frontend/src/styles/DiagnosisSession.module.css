@@ -1035,6 +1035,49 @@
   line-height: 1.6;
 }
 
+.feedbackSectionLabel {
+  font-family: 'Courier Prime', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.feedbackSectionText {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 13px;
+  color: var(--vj-ink);
+  line-height: 1.7;
+}
+
+.feedbackPositive {
+  padding: 12px 14px;
+  border-radius: 2px;
+  background-color: rgba(125, 155, 118, 0.1);
+  border: 1px solid rgba(125, 155, 118, 0.3);
+  border-left: 4px solid var(--vj-olive);
+  margin-bottom: 12px;
+}
+
+.feedbackCouldAdd {
+  padding: 12px 14px;
+  border-radius: 2px;
+  background-color: rgba(196, 168, 130, 0.12);
+  border: 1px solid var(--vj-sepia);
+  border-left: 4px solid var(--vj-sepia);
+  margin-bottom: 12px;
+}
+
+.feedbackAnswerKey {
+  padding: 12px 14px;
+  border-radius: 2px;
+  background-color: rgba(169, 50, 38, 0.07);
+  border: 1px solid rgba(169, 50, 38, 0.2);
+  border-left: 4px solid var(--vj-terracotta);
+  margin-bottom: 16px;
+}
+
 .continueButton {
   display: flex;
   align-items: center;
