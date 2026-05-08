@@ -359,14 +359,22 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
             return Response({'error': 'Case not found'}, status=status.HTTP_404_NOT_FOUND)
 
         answer_keys = sb.table('answer_keys').select(
-            'step_code, expected_finding, clinical_explanation, key_points'
+            'step_code, step_order, expected_finding, clinical_explanation, key_points'
         ).eq('case_id', case_id).order('step_order').execute()
+
+        from app.core.step_codes import index_by_canonical_step, STEP_CODES
+        canonical = index_by_canonical_step(answer_keys.data or [])
+        normalized_rows = [
+            {**canonical[code], 'step_code': code}
+            for code in STEP_CODES
+            if code in canonical
+        ]
 
         return Response({
             'upload_session_id': upload['id'],
             'modality': upload['modality'],
             'case_id': case_id,
             'case_title': case.get('title'),
-            'answer_key_steps': [r['step_code'] for r in (answer_keys.data or [])],
-            'answer_keys': answer_keys.data or [],
+            'answer_key_steps': [r['step_code'] for r in normalized_rows],
+            'answer_keys': normalized_rows,
         })

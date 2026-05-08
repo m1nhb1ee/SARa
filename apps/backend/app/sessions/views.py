@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from app.core.step_codes import STEP_CODES, index_by_canonical_step, normalize_step_code
 from app.core.supabase_client import get_supabase
 from app.ai_services import MockAIAgent, OpenAIAgent
 import os
@@ -16,8 +17,6 @@ from .serializers import StepAnswerSubmitSerializer
 from .services import get_session, get_rubric_id
 
 logger = logging.getLogger(__name__)
-
-STEP_CODES = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
 
 
 def _now_iso() -> str:
@@ -196,11 +195,11 @@ class SessionViewSet(viewsets.ViewSet):
         passed = ai_feedback['score'] >= 0.6
         response_data = {'attempt': attempt, 'passed': passed}
 
-        if passed and current_step < 5:
+        if passed and current_step < len(STEP_CODES) - 1:
             sb.table('sessions').update({'current_step': current_step + 1}).eq('id', pk).execute()
             response_data['next_step'] = current_step + 1
             response_data['message'] = 'Đáp án số được! Chuyển sang bước tiếp theo.'
-        elif passed and current_step == 5:
+        elif passed and current_step == len(STEP_CODES) - 1:
             all_attempts = sb.table('step_attempts').select(
                 'step_index, score'
             ).eq('session_id', pk).execute()
@@ -285,16 +284,19 @@ class SessionViewSet(viewsets.ViewSet):
             case = {}
 
         rubrics_result = sb.table('step_rubrics').select('*').execute()
-        step_templates = {r['step_code']: r for r in (rubrics_result.data or [])}
+        step_templates = {
+            code: row
+            for code, row in index_by_canonical_step(rubrics_result.data or []).items()
+        }
 
         answer_keys_result = sb.table('answer_keys').select('*').eq('case_id', session['case_id']).order('step_order').execute()
         answers = {
-            r['step_code']: {
+            code: {
                 'expected_finding': r.get('expected_finding'),
                 'clinical_explanation': r.get('clinical_explanation'),
                 'key_points': r.get('key_points'),
             }
-            for r in (answer_keys_result.data or [])
+            for code, r in index_by_canonical_step(answer_keys_result.data or []).items()
         }
 
         return Response({
@@ -323,15 +325,15 @@ class SessionViewSet(viewsets.ViewSet):
             )
 
         answer_keys_result = sb.table('answer_keys').select(
-            'step_code, expected_finding, clinical_explanation, key_points'
+            'step_code, step_order, expected_finding, clinical_explanation, key_points'
         ).eq('case_id', session['case_id']).order('step_order').execute()
         answer_key = {
-            r['step_code']: {
+            code: {
                 'expected_finding': r.get('expected_finding'),
                 'clinical_explanation': r.get('clinical_explanation'),
                 'key_points': r.get('key_points', []),
             }
-            for r in (answer_keys_result.data or [])
+            for code, r in index_by_canonical_step(answer_keys_result.data or []).items()
         }
 
         attempts = sb.table('step_attempts').select(
@@ -342,7 +344,7 @@ class SessionViewSet(viewsets.ViewSet):
             'answer_key': answer_key,
             'your_score': session.get('final_score'),
             'details': [
-                {'step': a['step_code'], 'score': a['score'], 'feedback': a['feedback']}
+                {'step': normalize_step_code(a['step_code']), 'score': a['score'], 'feedback': a['feedback']}
                 for a in attempts.data
             ],
         })
@@ -382,8 +384,9 @@ class StudentPerformanceViewSet(viewsets.ViewSet):
 
             step_scores: dict = {code: [] for code in STEP_CODES}
             for a in (attempts.data or []):
-                if a['step_code'] in step_scores and a['score'] is not None:
-                    step_scores[a['step_code']].append(a['score'])
+                code = normalize_step_code(a.get('step_code'))
+                if code in step_scores and a['score'] is not None:
+                    step_scores[code].append(a['score'])
 
             accuracy_by_step = {
                 code: round(sum(scores) / len(scores), 4)

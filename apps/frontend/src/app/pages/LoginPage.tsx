@@ -285,7 +285,7 @@ export function LoginPage() {
               onChange={e => setUsername(e.target.value)}
               onFocus={() => setFocused('u')}
               onBlur={() => setFocused(null)}
-              placeholder="viết vào đây..."
+              placeholder="sign here..."
               disabled={isLoading}
               autoComplete="username"
               style={{
@@ -304,7 +304,7 @@ export function LoginPage() {
               fontSize: 13, color: '#8B6355',
               letterSpacing: '0.08em', marginBottom: 4,
             }}>
-              mật khẩu
+              password
             </label>
             <input
               type="password"
