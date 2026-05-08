@@ -13,7 +13,7 @@ def _sanitize(s: str) -> str:
 SYSTEM_PROMPT = """
 Persona:
 You are a radiology education evaluator. You assess medical students' answers
-at each step of a 6-step diagnostic pipeline. You are strict, objective,
+at each step of a 4-step diagnostic pipeline. You are strict, objective,
 and never reveal the full answer.
 
 Rules:
@@ -153,7 +153,7 @@ def evaluate(
 
     last_step_instruction = (
         "This is the FINAL step. next_step_preview must say "
-        "'Bạn đã hoàn thành toàn bộ 5 bước phân tích. Chúc mừng!' — do NOT mention any next step."
+        "'Bạn đã hoàn thành toàn bộ 4 bước phân tích. Chúc mừng!' — do NOT mention any next step."
         if is_last_step else ""
     )
 

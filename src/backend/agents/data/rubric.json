@@ -1,16 +1,4 @@
 {
-  "OBSERVE": {
-    "question": "Quan sát phim một cách có hệ thống. Những vùng nào bình thường và bất thường?",
-    "criteria": [
-      {"label": "Quét có hệ thống, bao phủ các vùng chính không bỏ sót", "max_score": 2, "error_code": "incomplete_scan"},
-      {"label": "Xác định đúng bất thường chính (vùng, bên, trung tâm/ngoại vi)", "max_score": 2, "error_code": "missed_main_finding"},
-      {"label": "Duy trì quan sát khách quan, chưa diễn giải hay kết luận sớm", "max_score": 1, "error_code": "premature_observation"}
-    ],
-    "total_max": 5,
-    "pass_threshold": 3,
-    "scoring_guide": "Award 2pts for systematic survey covering all major regions. Award 2pts for correctly identifying key abnormalities with location/region/laterality. Award 1pt if student stays objective without jumping to interpretation or diagnosis.",
-    "pass_score": 0.6
-  },
   "DESCRIBE": {
     "question": "Mô tả chi tiết các bất thường bạn thấy (vị trí, mật độ, hình dạng, dấu hiệu liên quan).",
     "criteria": [

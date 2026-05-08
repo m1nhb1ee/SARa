@@ -27,6 +27,12 @@ export interface FeedbackResult {
   feedback: string;
   errors: string[];
   hint?: string;
+  force_advance?: boolean;
+  positive_feedback?: string;
+  could_add?: string;
+  next_step_preview?: string;
+  answer_key_preview?: string;
+  message?: string;
   next_step?: number;
   session_complete?: boolean;
   attempt?: StepAttempt;

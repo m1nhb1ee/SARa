@@ -15,7 +15,7 @@ from .services import get_session, get_rubric_id
 
 logger = logging.getLogger(__name__)
 
-STEP_CODES = ['OBSERVE', 'REASONING', 'DDx', 'CONCLUSION']
+STEP_CODES = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
 
 
 def _now_iso() -> str:
@@ -215,6 +215,7 @@ class SessionViewSet(viewsets.ViewSet):
         }
 
         if passed or force_advance:
+            response_data['answer_key_preview'] = answer_key.get('expected_finding', '')
             if force_advance:
                 response_data['force_advance'] = True
                 response_data['message'] = f'Đã nhận {hint_count} gợi ý. Chuyển bước tiếp theo.'

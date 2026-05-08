@@ -15,7 +15,7 @@ from . import answer_check, socratic
 
 DATA_DIR = Path(__file__).parent / "data"
 
-STEPS = ["OBSERVE", "DESCRIBE", "REASONING", "DDx", "CONCLUSION"]
+STEPS = ["DESCRIBE", "REASONING", "DDx", "CONCLUSION"]
 
 
 def load_data():

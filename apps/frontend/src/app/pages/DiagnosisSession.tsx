@@ -19,13 +19,16 @@ import styles from "@/styles/DiagnosisSession.module.css";
 import { VolumeSliceViewer } from "@/app/components/shared/VolumeSliceViewer";
 import type { CaseVolume } from "@/types";
 
-const steps = ["OBSERVE", "REASONING", "DDx", "CONCLUSION"];
+const steps = ["DESCRIBE", "REASONING", "DDx", "CONCLUSION"];
+const displaySteps = ["OBSERVE", "DESCRIBE", "REASONING", "DDx", "CONCLUSION"];
+
+const INTRO_MESSAGE = `Chào mừng bạn đến với SaRa - nền tảng giúp học chuẩn đoán hình ảnh hiệu quả theo các bước Observe-Describe-Reasoning-DDx-Conclusion! \nTrước khi bắt đầu, hãy dành thời gian quan sát toàn bộ hình ảnh một cách có hệ thống — không bỏ sót bất kỳ vùng nào. Tìm kiếm các bất thường về mật độ, hình dạng, vị trí và kích thước.\n\nỞ mỗi bước, bạn có tối đa 3 lần trả lời trước khi được chấm điểm và chuyển sang bước tiếp theo.\n Bấm sẵn sàng để bắt đầu nhé !`;
 
 const QUESTION_PROMPTS: Record<number, string> = {
-  0: "Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường và mô tả chi tiết kích thước, hình dạng, vị trí, mật độ.",
-  1: "Bước 2: Lý luận lâm sàng. Diễn giải ý nghĩa của các phát hiện và đề xuất chẩn đoán làm việc chính.",
-  2: "Bước 3: Phân tích các chẩn đoán phân biệt cần loại trừ.",
-  3: "Bước 4: Đưa ra kết luận chẩn đoán cuối cùng.",
+  0: "Mô tả chi tiết các bất thường bạn thấy (vị trí, mật độ, hình dạng, dấu hiệu liên quan).",
+  1: "Dựa trên các dấu hiệu hình ảnh và thông tin lâm sàng, hãy đề xuất các giả thiết chẩn đoán ban đầu và giải thích bằng bằng chứng.",
+  2: "Các chẩn đoán phân biệt có thể là gì?",
+  3: "Kết luận chẩn đoán khả dĩ nhất và giải thích ngắn gọn.",
 };
 
 function buildMessagesFromAttempts(attempts: any[], currentStep: number): Message[] {
@@ -54,7 +57,7 @@ interface Message {
   id: string;
   role: "ai" | "student";
   content: string;
-  type?: "question" | "correct" | "partial" | "incorrect";
+  type?: "intro" | "question" | "correct" | "partial" | "incorrect";
 }
 
 interface FeedbackResult {
@@ -65,17 +68,18 @@ interface FeedbackResult {
     student_answer: string;
     score: number;
     errors: string[];
-    feedback: {
-      type: "error" | "hint" | "correct";
-      content: string;
-    };
+    feedback: string | { type: "error" | "hint" | "correct"; content: string };
     latency_ms: number;
   };
   passed: boolean;
+  force_advance?: boolean;
+  positive_feedback?: string;
+  could_add?: string;
+  answer_key_preview?: string;
   next_step?: number;
   session_complete?: boolean;
   hint?: string;
-  message: string;
+  message?: string;
 }
 
 export function DiagnosisSession() {
@@ -101,6 +105,7 @@ export function DiagnosisSession() {
   const [showExitModal, setShowExitModal] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [introReady, setIntroReady] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [activeTab, setActiveTab] = useState<"image" | "chat">("image");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -130,6 +135,7 @@ export function DiagnosisSession() {
               headers: { 'Content-Type': 'application/json', ...headers },
             });
             setSessionId(detail.id);
+            setIntroReady(true);
             setMessages(buildMessagesFromAttempts(detail.step_attempts ?? [], detail.current_step ?? 0));
             return;
           }
@@ -145,7 +151,7 @@ export function DiagnosisSession() {
       if (createRes.ok) {
         const data = await createRes.json();
         setSessionId(data.id);
-        setMessages([{ id: "1", role: "ai", type: "question", content: QUESTION_PROMPTS[0] }]);
+        setMessages([{ id: "1", role: "ai", type: "intro", content: INTRO_MESSAGE }]);
       }
     };
 
@@ -183,43 +189,53 @@ export function DiagnosisSession() {
     setIsTyping(true);
 
     // Call API to submit answer
-    const result = await submitAnswer(sessionId, input) as FeedbackResult | null;
+    const result = await submitAnswer(sessionId, input) as any;
     setIsTyping(false);
 
-    if (result) {
-      setLastFeedback(result);
+    if (!result) return;
 
-      // Add AI feedback message — backend returns feedback as string, not {type,content}
-      const feedbackContent = typeof result.attempt.feedback === 'string'
-        ? result.attempt.feedback
-        : result.attempt.feedback?.content ?? '';
+    // Socratic response: question/chit-chat intent — no evaluation
+    if (result.type === 'socratic') {
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: "ai",
-        type: result.passed ? "correct" : "partial",
-        content: feedbackContent,
+        type: "question",
+        content: result.message || '',
       };
       setMessages((prev) => [...prev, aiMsg]);
+      return;
+    }
 
-      // Show feedback modal
+    const feedbackResult = result as FeedbackResult;
+    setLastFeedback(feedbackResult);
+
+    if (feedbackResult.passed || feedbackResult.force_advance) {
+      // Pass or force-advance: show score modal and sync session
       setShowFeedback(true);
-
-      // Refetch session to get updated step - wait for it to complete if passed
-      if (result.passed || result.attempt.score >= 0.6) {
-        // Use next_step from response or refetch after delay
-        if (result.next_step !== undefined) {
-          // Backend returned next_step, we can use it immediately
-          console.log(`Backend provided next_step: ${result.next_step}`);
-        }
-        // Still refetch to ensure sync
-        setTimeout(() => refetchSession(), 300);
+      setTimeout(() => refetchSession(), 300);
+    } else {
+      // Fail: show Socratic hint in chat — no score modal yet
+      const hint = feedbackResult.hint || '';
+      if (hint) {
+        const aiMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          type: "question",
+          content: hint,
+        };
+        setMessages((prev) => [...prev, aiMsg]);
       }
     }
   };
 
+  const handleIntroReady = () => {
+    setIntroReady(true);
+    setMessages(prev => [...prev, { id: Date.now().toString(), role: "ai", type: "question", content: QUESTION_PROMPTS[0] }]);
+  };
+
   const handleFeedbackContinue = async () => {
-    // Check if score is too low to advance
-    if (lastFeedback && lastFeedback.attempt.score < 0.6) {
+    // Check if score is too low to advance (force_advance bypasses this)
+    if (lastFeedback && lastFeedback.attempt.score < 0.6 && !lastFeedback.force_advance) {
       return; // Don't allow advancing if score < 60
     }
 
@@ -438,27 +454,30 @@ export function DiagnosisSession() {
             transition={{ duration: 0.5, delay: 0.24 }}
           >
             <div className={styles.stepperTrack}>
-              {steps.map((step, i) => (
-                <div key={step} style={{ display: "flex", alignItems: "center" }}>
-                  <div className={styles.stepItem}>
-                    <div className={
-                      i < currentStep
-                        ? styles.stepCircleDone
-                        : i === currentStep
-                          ? styles.stepCircleActive
-                          : styles.stepCircleIdle
-                    }>
-                      {i < currentStep ? "✓" : i + 1}
+              {displaySteps.map((step, i) => {
+                const activeIdx = introReady ? currentStep + 1 : 0;
+                return (
+                  <div key={step} style={{ display: "flex", alignItems: "center" }}>
+                    <div className={styles.stepItem}>
+                      <div className={
+                        i < activeIdx
+                          ? styles.stepCircleDone
+                          : i === activeIdx
+                            ? styles.stepCircleActive
+                            : styles.stepCircleIdle
+                      }>
+                        {i < activeIdx ? "✓" : i + 1}
+                      </div>
+                      <span className={`${styles.stepLabel} ${i <= activeIdx ? styles.stepLabelActive : styles.stepLabelIdle}`}>
+                        {step}
+                      </span>
                     </div>
-                    <span className={`${styles.stepLabel} ${i <= currentStep ? styles.stepLabelActive : styles.stepLabelIdle}`}>
-                      {step}
-                    </span>
+                    {i < displaySteps.length - 1 && (
+                      <div className={i < activeIdx ? styles.stepConnectorDone : styles.stepConnectorIdle} />
+                    )}
                   </div>
-                  {i < steps.length - 1 && (
-                    <div className={i < currentStep ? styles.stepConnectorDone : styles.stepConnectorIdle} />
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </motion.div>
 
@@ -470,7 +489,9 @@ export function DiagnosisSession() {
             transition={{ duration: 0.5, delay: 0.28 }}
           >
             <span className={styles.stepChipInner}>
-              Bước {currentStep + 1} – {stepName}
+              {introReady
+                ? `Bước ${currentStep + 2} – ${stepName}`
+                : "Bước 1 – OBSERVE"}
             </span>
           </motion.div>
 
@@ -492,10 +513,33 @@ export function DiagnosisSession() {
                 {msg.role === "ai" ? (
                   <div className={`${styles.aiMessage} ${msg.type === "correct" ? styles.aiMessageCorrect : ""}`}>
                     <div className={styles.aiMessageHeader}>
-                      <span className={styles.aiMessageAuthor}>Dr. AI's Notes</span>
+                      <span className={styles.aiMessageAuthor}>
+                        {msg.type === "intro" ? "Dr. AI" : "Dr. AI's Notes"}
+                      </span>
                       {msg.type === "correct" && <span style={{ fontSize: 11 }}>✓</span>}
                     </div>
-                    <p className={styles.aiMessageText}>{msg.content}</p>
+                    <p className={styles.aiMessageText} style={{ whiteSpace: "pre-line" }}>{msg.content}</p>
+                    {msg.type === "intro" && !introReady && (
+                      <button
+                        onClick={handleIntroReady}
+                        style={{
+                          marginTop: 14,
+                          padding: "8px 20px",
+                          background: "var(--vj-terracotta)",
+                          color: "var(--vj-parchment)",
+                          border: "none",
+                          borderRadius: 2,
+                          fontFamily: "'Courier Prime', monospace",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          letterSpacing: "0.06em",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Sẵn sàng →
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className={styles.studentMessage}>
@@ -552,13 +596,14 @@ export function DiagnosisSession() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="Ghi chú quan sát của bạn..."
+                placeholder={introReady ? "Ghi chú quan sát của bạn..." : "Nhấn Sẵn sàng để bắt đầu..."}
+                disabled={!introReady}
                 rows={3}
                 className={styles.textarea}
               />
               <button
                 onClick={handleSend}
-                disabled={isTyping || !sessionId}
+                disabled={isTyping || !sessionId || !introReady}
                 className={styles.sendButton}
               >
                 <Send size={14} />
@@ -630,6 +675,30 @@ export function DiagnosisSession() {
                   <p className={styles.feedbackNoteText}>{typeof lastFeedback.attempt.feedback === 'string' ? lastFeedback.attempt.feedback : lastFeedback.attempt.feedback?.content}</p>
                 </div>
 
+                {/* Positive feedback — force_advance only (pass already shows it in Dr. AI's Notes) */}
+                {lastFeedback.force_advance && lastFeedback.positive_feedback && (
+                  <div className={styles.feedbackPositive}>
+                    <p className={styles.feedbackSectionLabel} style={{ color: 'var(--vj-olive)' }}>Điểm tốt</p>
+                    <p className={styles.feedbackSectionText}>{lastFeedback.positive_feedback}</p>
+                  </div>
+                )}
+
+                {/* Could add */}
+                {lastFeedback.could_add && (
+                  <div className={styles.feedbackCouldAdd}>
+                    <p className={styles.feedbackSectionLabel} style={{ color: 'var(--vj-faded)' }}>Có thể bổ sung</p>
+                    <p className={styles.feedbackSectionText}>{lastFeedback.could_add}</p>
+                  </div>
+                )}
+
+                {/* Answer key */}
+                {lastFeedback.answer_key_preview && (
+                  <div className={styles.feedbackAnswerKey}>
+                    <p className={styles.feedbackSectionLabel} style={{ color: 'var(--vj-terracotta)' }}>Đáp án chuẩn</p>
+                    <p className={styles.feedbackSectionText}>{lastFeedback.answer_key_preview}</p>
+                  </div>
+                )}
+
                 {/* Errors */}
                 {lastFeedback.attempt.errors.length > 0 && (
                   <div className={styles.feedbackErrors}>
@@ -654,30 +723,16 @@ export function DiagnosisSession() {
                   </div>
                 </div>
 
-                {/* Low Score Warning */}
-                {lastFeedback.attempt.score < 0.6 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={styles.feedbackLowScoreWarning}
-                  >
-                    <div className={styles.feedbackLowScoreHeader}>
-                      <AlertTriangle size={14} color="#C0392B" />
-                      <span className={styles.feedbackLowScoreTitle}>Không đủ điểm để tiếp tục</span>
-                    </div>
-                    <p className={styles.feedbackLowScoreText}>
-                      Bạn cần đạt ít nhất <strong>60/100</strong> điểm để chuyển sang bước tiếp theo. Vui lòng cố gắng lại.
-                    </p>
-                  </motion.div>
-                )}
 
                 {/* CTA */}
                 <button
                   onClick={handleFeedbackContinue}
-                  disabled={lastFeedback.attempt.score < 0.6}
-                  className={`${styles.continueButton} ${lastFeedback.attempt.score < 0.6 ? styles.continueButtonDisabled : styles.continueButtonEnabled}`}
+                  disabled={lastFeedback.attempt.score < 0.6 && !lastFeedback.force_advance}
+                  className={`${styles.continueButton} ${lastFeedback.attempt.score < 0.6 && !lastFeedback.force_advance ? styles.continueButtonDisabled : styles.continueButtonEnabled}`}
                 >
-                  {lastFeedback.attempt.score < 0.6 ? (
+                  {lastFeedback.force_advance ? (
+                    <>Chuyển bước tiếp theo <ChevronRight size={15} /></>
+                  ) : lastFeedback.attempt.score < 0.6 ? (
                     <>Cần đạt 60 điểm để tiếp tục</>
                   ) : currentStep < steps.length - 1 ? (
                     <>Tiếp tục → Bước {currentStep + 1}: {steps[currentStep]} <ChevronRight size={15} /></>
