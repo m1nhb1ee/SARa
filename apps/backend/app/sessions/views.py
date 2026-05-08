@@ -95,9 +95,24 @@ class SessionViewSet(viewsets.ViewSet):
 
         try:
             case_result = sb.table('cases').select(
-                'id, title, modality, difficulty, clinical_history, image_urls, tags'
+                'id, title, modality, difficulty, clinical_history, tags, '
+                'case_images(image_url, slice_index, volume_name)'
             ).eq('id', session['case_id']).single().execute()
-            session['case'] = case_result.data
+            case = case_result.data or {}
+            raw_images = case.pop('case_images', None) or []
+            volumes: dict = {}
+            for img in raw_images:
+                vol = img.get('volume_name') or 'Default'
+                volumes.setdefault(vol, []).append({
+                    'image_url': img['image_url'],
+                    'slice_index': img.get('slice_index'),
+                })
+            case['images'] = [
+                {'volume_name': vol, 'slices': slices}
+                for vol, slices in volumes.items()
+            ]
+            case['image_urls'] = [img['image_url'] for img in raw_images]
+            session['case'] = case
         except Exception:
             session['case'] = None
 

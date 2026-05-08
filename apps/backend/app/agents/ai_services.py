@@ -4,25 +4,19 @@ Replaces MockAIAgent / OpenAIAgent with the proper socratic + answer_check agent
 """
 import json
 import logging
-import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Add repo root so `src.backend.agents` is importable from within apps/backend
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
 try:
-    import socratic as _socratic
-    import answer_check as _answer_check
+    from app.agents import socratic as _socratic
+    from app.agents import answer_check as _answer_check
     _AGENTS_AVAILABLE = True
 except ImportError as e:
     logger.error(f"Failed to import SARa agents: {e}")
     _AGENTS_AVAILABLE = False
 
-_RUBRIC_FILE = _REPO_ROOT / "src" / "backend" / "agents" / "data" / "rubric.json"
+_RUBRIC_FILE = Path(__file__).resolve().parent / "data" / "rubric.json"
 
 def _load_rubric() -> dict:
     try:
