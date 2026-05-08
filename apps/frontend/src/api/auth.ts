@@ -6,6 +6,7 @@ export interface User {
   id: string;
   email: string;
   role: string;
+  is_premium: boolean;
 }
 
 export interface AuthState {
