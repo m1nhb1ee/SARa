@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -12,6 +13,11 @@ from rest_framework.response import Response
 from app.core.step_codes import STEP_CODES, index_by_canonical_step
 from app.core.supabase_client import get_supabase
 from app.uploads.services import analyze_medical_image
+
+logger = logging.getLogger(__name__)
+
+SWAP_VLM_MAX_IMAGES = max(1, int(os.getenv('SWAP_VLM_MAX_IMAGES', '12')))
+SWAP_PERSUASION_THRESHOLD = float(os.getenv('SWAP_PERSUASION_THRESHOLD', '0.5'))
 
 MODALITY_TO_UPLOAD = {
     'X-ray': 'XRAY',
@@ -55,6 +61,10 @@ def _get_case_for_user(case_id: str, user_id: str) -> tuple[dict | None, Respons
 def _download_case_images(case: dict) -> tuple[list[bytes], list[int | None], list[str]]:
     raw_images = case.get('case_images') or []
     raw_images.sort(key=lambda img: (img.get('volume_name') or 'Default', img.get('slice_index') or 0))
+
+    # Cap total images sent to the VLM to keep HF request size + latency bounded.
+    if len(raw_images) > SWAP_VLM_MAX_IMAGES:
+        raw_images = raw_images[:SWAP_VLM_MAX_IMAGES]
 
     image_bytes: list[bytes] = []
     slice_indexes: list[int | None] = []
@@ -146,16 +156,15 @@ def _doctor_reply(
 You are roleplaying a radiologist in a medical education debate.
 
 Persona:
-- You are knowledgeable, senior, stubborn, conservative, high-ego, and easily annoyed.
-- You often work too quickly and defend your first impression.
-- You can be convinced only by strong imaging reasoning aligned with the answer key.
+- You are knowledgeable, senior, a bit stubborn and high-ego, but ultimately fair.
+- You defend your first impression but yield when the student raises a reasonable imaging point.
 - Do not mention that you are an AI, a roleplay system, or that you can see a hidden answer key.
 
 Conversation rules:
 - Discuss ONLY the current step: {step_code}.
 - Do not reveal future steps.
-- If the user's argument is weak, push back confidently.
-- If the user's argument clearly matches the target answer for this step, reluctantly concede.
+- If the user's argument is clearly wrong or empty, push back briefly with one counter-question.
+- If the user's argument touches the main expected finding(s) — even partially — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording.
 - Respond in Vietnamese.
 
 Case:
@@ -189,7 +198,10 @@ Return ONLY valid JSON:
         max_tokens=700,
         timeout=45,
     )
-    parsed = _json_from_text(response.choices[0].message.content or '')
+    try:
+        parsed = _json_from_text(response.choices[0].message.content or '')
+    except Exception:
+        parsed = {}
     return {
         'doctor_message': str(parsed.get('doctor_message') or '').strip() or 'Tôi chưa bị thuyết phục.',
         'convinced': bool(parsed.get('convinced', False)),
@@ -215,16 +227,15 @@ def _doctor_text_prompt(
 You are roleplaying a radiologist in a medical education debate.
 
 Persona:
-- You are knowledgeable, senior, stubborn, conservative, high-ego, and easily annoyed.
-- You often work too quickly and defend your first impression.
-- You can be convinced only by strong imaging reasoning aligned with the answer key.
+- You are knowledgeable, senior, a bit stubborn and high-ego, but ultimately fair.
+- You defend your first impression but yield when the student raises a reasonable imaging point.
 - Do not mention that you are an AI, a roleplay system, or that you can see a hidden answer key.
 
 Conversation rules:
 - Discuss ONLY the current step: {step_code}.
 - Do not reveal future steps.
-- If the user's argument is weak, push back confidently.
-- If the user's argument clearly matches the target answer for this step, reluctantly concede.
+- If the user's argument is clearly wrong or empty, push back briefly with one counter-question.
+- If the user's argument touches the main expected finding(s) — even partially — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording.
 - Respond in Vietnamese as the doctor only. Do not return JSON.
 
 Case:
@@ -273,8 +284,16 @@ def _judge_doctor_text(
     prompt = f"""
 You are the hidden grader for a medical roleplay debate.
 
-Decide whether the user's latest argument should convince the stubborn doctor for the current step.
+Decide whether the user's latest argument should convince the doctor for the current step.
 Use the hidden target answer as ground truth. Return ONLY valid JSON.
+
+Scoring rubric (0.0-1.0):
+- 0.0-0.3: argument is irrelevant, wrong, or empty (e.g. only "tiếng việt", off-topic).
+- 0.4-0.5: partially correct — touches one relevant finding/term but misses key points.
+- 0.6-0.8: covers the main expected finding(s) with adequate reasoning, even if wording differs.
+  Reward arguments that hit ANY 1-2 of the target key points clearly. The doctor should concede here.
+- 0.9-1.0: argument is precise, complete, and uses correct radiological terminology.
+Set "convinced": true whenever persuasion_score >= 0.5. Be generous — this is a teaching tool, not an exam.
 
 Current step: {step_code}
 Target expected finding: {target.get('expected_finding', '')}
@@ -301,7 +320,10 @@ Return ONLY valid JSON:
         max_tokens=350,
         timeout=45,
     )
-    parsed = _json_from_text(response.choices[0].message.content or '')
+    try:
+        parsed = _json_from_text(response.choices[0].message.content or '')
+    except Exception:
+        parsed = {}
     return {
         'doctor_message': doctor_message,
         'convinced': bool(parsed.get('convinced', False)),
@@ -488,6 +510,12 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
 
+    # Advance the step when the judge explicitly concedes OR when the persuasion
+    # score is high enough — covers cases where the judge LLM is conservative
+    # with the boolean but still scores the argument well.
+    advance = bool(result.get('convinced')) or result.get('persuasion_score', 0) >= SWAP_PERSUASION_THRESHOLD
+    result['convinced'] = advance
+
     sb.table('swap_messages').insert([
         {
             'swap_session_id': session_id,
@@ -502,22 +530,32 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             'step_index': step_index,
             'content': result['doctor_message'],
             'metadata': {
-                'convinced': result['convinced'],
+                'convinced': advance,
                 'persuasion_score': result['persuasion_score'],
                 'reasoning_for_grader': result['reasoning_for_grader'],
             },
         },
     ]).execute()
 
-    if result['convinced']:
-        sb.table('swap_step_scores').upsert({
-            'swap_session_id': session_id,
-            'step_index': step_index,
-            'step_code': step_code,
-            'persuasion_score': result['persuasion_score'],
-            'convinced': True,
-            'reasoning': result['reasoning_for_grader'],
-        }, on_conflict='swap_session_id,step_index').execute()
+    if advance:
+        try:
+            sb.table('swap_step_scores').upsert({
+                'swap_session_id': session_id,
+                'step_index': step_index,
+                'step_code': step_code,
+                'persuasion_score': result['persuasion_score'],
+                'convinced': True,
+                'reasoning': result['reasoning_for_grader'],
+            }, on_conflict='swap_session_id,step_index').execute()
+        except Exception as exc:
+            logger.exception(
+                "swap: failed to upsert swap_step_scores (session=%s step=%s): %s",
+                session_id, step_index, exc,
+            )
+            return None, Response(
+                {'error': 'Could not save step score', 'message': str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         if step_index >= len(STEP_CODES) - 1:
             full_messages = sb.table('swap_messages').select('*').eq(
@@ -553,23 +591,47 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
                     'reasoning': score['reasoning'],
                 }, on_conflict='swap_session_id,step_index').execute()
             final_score = sum(float(s['persuasion_score']) for s in final_scores) / len(STEP_CODES)
-            sb.table('swap_sessions').update({
-                'status': 'COMPLETED',
-                'final_score': round(final_score, 4),
-                'completed_at': datetime.now(timezone.utc).isoformat(),
-            }).eq('id', session_id).execute()
+            try:
+                sb.table('swap_sessions').update({
+                    'status': 'COMPLETED',
+                    'final_score': round(final_score, 4),
+                    'completed_at': datetime.now(timezone.utc).isoformat(),
+                }).eq('id', session_id).execute()
+                result['session_complete'] = True
+            except Exception as exc:
+                logger.exception("swap: failed to mark session COMPLETED: %s", exc)
+                return None, Response(
+                    {'error': 'Could not finalize session', 'message': str(exc)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
         else:
             next_step = step_index + 1
-            sb.table('swap_sessions').update({'current_step': next_step}).eq('id', session_id).execute()
+            try:
+                sb.table('swap_sessions').update({'current_step': next_step}).eq('id', session_id).execute()
+            except Exception as exc:
+                logger.exception(
+                    "swap: failed to advance current_step (session=%s %s→%s): %s",
+                    session_id, step_index, next_step, exc,
+                )
+                return None, Response(
+                    {'error': 'Could not advance step', 'message': str(exc)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+            result['next_step'] = next_step
             next_message = (session.get('doctor_diagnosis') or {}).get(STEP_CODES[next_step], '')
             if next_message:
-                sb.table('swap_messages').insert({
-                    'swap_session_id': session_id,
-                    'role': 'doctor',
-                    'step_index': next_step,
-                    'content': next_message,
-                    'metadata': {'source': 'initial_vlm'},
-                }).execute()
+                try:
+                    sb.table('swap_messages').insert({
+                        'swap_session_id': session_id,
+                        'role': 'doctor',
+                        'step_index': next_step,
+                        'content': next_message,
+                        'metadata': {'source': 'initial_vlm'},
+                    }).execute()
+                except Exception as exc:
+                    logger.warning(
+                        "swap: could not insert next-step seed message (non-fatal): %s", exc,
+                    )
 
     updated, updated_err = get_swap_session(session_id, user_id)
     if updated_err:
@@ -625,4 +687,5 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
             return
         yield _sse('done', {'session': updated, 'last_result': result})
     except Exception as exc:
-        yield _sse('error', {'error': 'Doctor stream failed', 'message': str(exc)})
+        logger.exception("swap stream failed: %s", exc)
+        yield _sse('error', {'error': f'Doctor stream failed: {exc}', 'message': str(exc)})
