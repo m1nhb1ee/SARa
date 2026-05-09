@@ -3,6 +3,7 @@ import json
 import time
 from openai import OpenAI
 from .debug.logger import logger
+from .config import LLM_PROVIDER, ANSWER_CHECK_MODEL
 
 
 def _sanitize(s: str) -> str:
@@ -184,7 +185,7 @@ Evaluate and return JSON.""")
 
     start = time.time()
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=ANSWER_CHECK_MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user",   "content": user_prompt}
@@ -199,8 +200,8 @@ Evaluate and return JSON.""")
     cost = (usage.prompt_tokens * 0.000005) + (usage.completion_tokens * 0.000015)
 
     logger.log_llm_metric(
-        provider="openai",
-        model="gpt-4o",
+        provider=LLM_PROVIDER,
+        model=ANSWER_CHECK_MODEL,
         prompt_tokens=usage.prompt_tokens,
         completion_tokens=usage.completion_tokens,
         latency_ms=latency_ms,

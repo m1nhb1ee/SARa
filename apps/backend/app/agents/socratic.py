@@ -2,6 +2,7 @@ import os
 import time
 from openai import OpenAI
 from .debug.logger import logger
+from .config import LLM_PROVIDER, SOCRATIC_MODEL
 
 
 def _sanitize(s: str) -> str:
@@ -185,7 +186,7 @@ def get_opening_question(step_name: str, step_index: int) -> str:
     start = time.time()
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=SOCRATIC_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT_OPENING},
                 {"role": "user",   "content": user_prompt}
@@ -197,7 +198,7 @@ def get_opening_question(step_name: str, step_index: int) -> str:
         usage = response.usage
         cost = (usage.prompt_tokens * 0.000005) + (usage.completion_tokens * 0.000015)
 
-        logger.log_llm_metric("openai", "gpt-4o", usage.prompt_tokens,
+        logger.log_llm_metric(LLM_PROVIDER, SOCRATIC_MODEL, usage.prompt_tokens,
                                usage.completion_tokens, latency_ms, cost)
         logger.log_step_latency(step_index, "socratic_opening", "openai", latency_ms)
 
@@ -250,7 +251,7 @@ Generate a targeted hint question.""")
     start = time.time()
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=SOCRATIC_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT_HINT},
                 {"role": "user",   "content": user_prompt}
@@ -262,7 +263,7 @@ Generate a targeted hint question.""")
         usage = response.usage
         cost = (usage.prompt_tokens * 0.000005) + (usage.completion_tokens * 0.000015)
 
-        logger.log_llm_metric("openai", "gpt-4o", usage.prompt_tokens,
+        logger.log_llm_metric(LLM_PROVIDER, SOCRATIC_MODEL, usage.prompt_tokens,
                                usage.completion_tokens, latency_ms, cost)
         logger.log_step_latency(step_index, "socratic_hint", "openai", latency_ms)
 
@@ -307,7 +308,7 @@ Classify intent and generate response.""")
     start = time.time()
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=SOCRATIC_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT_CLASSIFY},
                 {"role": "user",   "content": user_prompt}
@@ -320,7 +321,7 @@ Classify intent and generate response.""")
         usage = response.usage
         cost = (usage.prompt_tokens * 0.000005) + (usage.completion_tokens * 0.000015)
 
-        logger.log_llm_metric("openai", "gpt-4o", usage.prompt_tokens,
+        logger.log_llm_metric(LLM_PROVIDER, SOCRATIC_MODEL, usage.prompt_tokens,
                                usage.completion_tokens, latency_ms, cost)
         logger.log_step_latency(step_index, "classify_intent", "openai", latency_ms)
 
