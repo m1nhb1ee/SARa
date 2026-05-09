@@ -6,9 +6,9 @@ import { BrainLogo } from '@/app/components/shared/BrainLogo';
 function OrnamentalRule() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '12px 0' }}>
-      <div style={{ flex: 1, height: 1, background: 'linear-gradient(to right, transparent, #C4A882)' }} />
-      <span style={{ color: '#C9A84C', fontSize: 16 }}>✦</span>
-      <div style={{ flex: 1, height: 1, background: 'linear-gradient(to left, transparent, #C4A882)' }} />
+      <div style={{ flex: 1, height: 1, background: 'linear-gradient(to right, transparent, var(--border))' }} />
+      <span style={{ color: 'var(--accent-gold)', fontSize: 16 }}>✦</span>
+      <div style={{ flex: 1, height: 1, background: 'linear-gradient(to left, transparent, var(--border))' }} />
     </div>
   );
 }
@@ -19,7 +19,7 @@ const QUICK_LINKS = [
     label: 'My Cases',
     sub: 'Thư viện ca học',
     path: '/',
-    color: '#1B3A5C',
+    color: 'var(--accent-ink)',
     bg: 'rgba(27,58,92,0.08)',
     border: 'rgba(27,58,92,0.25)',
   },
@@ -28,7 +28,7 @@ const QUICK_LINKS = [
     label: 'Upload',
     sub: 'Tải ca mới lên',
     path: '/upload',
-    color: '#C0392B',
+    color: 'var(--accent-clay)',
     bg: 'rgba(192,57,43,0.08)',
     border: 'rgba(192,57,43,0.25)',
   },
@@ -37,7 +37,7 @@ const QUICK_LINKS = [
     label: 'Progress',
     sub: 'Theo dõi tiến độ',
     path: '/performance',
-    color: '#7D9B76',
+    color: 'var(--accent-sage)',
     bg: 'rgba(125,155,118,0.08)',
     border: 'rgba(125,155,118,0.25)',
   },
@@ -46,7 +46,7 @@ const QUICK_LINKS = [
     label: 'Profile',
     sub: 'Hồ sơ cá nhân',
     path: '/performance',
-    color: '#8B6355',
+    color: 'var(--ink-secondary)',
     bg: 'rgba(139,99,85,0.08)',
     border: 'rgba(139,99,85,0.25)',
   },
@@ -66,16 +66,16 @@ export function WelcomePage() {
   const { user } = useAuth();
 
   return (
-    <div style={{ backgroundColor: '#F5EDD6', minHeight: '100%', padding: '32px 40px' }}>
+    <div style={{ backgroundColor: 'var(--bg-page)', minHeight: '100%', padding: '32px 40px' }}>
       {/* Header stamp */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 32 }}>
-        <BrainLogo size={72} color="#C9A84C" filterId="welcome" opacity={0.7} />
+        <BrainLogo size={72} color="var(--accent-gold)" filterId="welcome" opacity={0.7} />
         <div style={{ flex: 1 }}>
           <div style={{
-            fontFamily: "'Special Elite', cursive",
+            fontFamily: "var(--font-typewriter)",
             fontSize: 10,
             letterSpacing: '0.25em',
-            color: '#8B6355',
+            color: 'var(--ink-secondary)',
             marginBottom: 6,
             textTransform: 'uppercase',
           }}>
@@ -85,14 +85,14 @@ export function WelcomePage() {
             fontFamily: "'Playfair Display', serif",
             fontSize: 34,
             fontWeight: 700,
-            color: '#2C1810',
+            color: 'var(--ink)',
             lineHeight: 1.15,
             marginBottom: 4,
           }}>
             Chào mừng,<br />
-            <span style={{ color: '#C9A84C' }}>{user?.username ?? 'Bác sĩ'}</span>
+            <span style={{ color: 'var(--accent-gold)' }}>{user?.username ?? 'Bác sĩ'}</span>
           </h1>
-          <div style={{ height: 1, width: 220, background: 'linear-gradient(to right, #C4A882, transparent)', marginTop: 8 }} />
+          <div style={{ height: 1, width: 220, background: 'linear-gradient(to right, var(--border), transparent)', marginTop: 8 }} />
         </div>
 
         {/* Date stamp */}
@@ -104,13 +104,13 @@ export function WelcomePage() {
           transform: 'rotate(2deg)',
           flexShrink: 0,
         }}>
-          <div style={{ fontFamily: "'Special Elite', cursive", fontSize: 9, color: '#C0392B', letterSpacing: '0.2em' }}>
+          <div style={{ fontFamily: "var(--font-typewriter)", fontSize: 9, color: 'var(--accent-clay)', letterSpacing: '0.2em' }}>
             {new Date().toLocaleDateString('vi-VN', { weekday: 'short' }).toUpperCase()}
           </div>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: '#C0392B', lineHeight: 1 }}>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: 'var(--accent-clay)', lineHeight: 1 }}>
             {new Date().getDate()}
           </div>
-          <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 9, color: '#C0392B', letterSpacing: '0.1em' }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: 'var(--accent-clay)', letterSpacing: '0.1em' }}>
             {new Date().toLocaleDateString('vi-VN', { month: 'short', year: 'numeric' }).toUpperCase()}
           </div>
         </div>
@@ -121,8 +121,8 @@ export function WelcomePage() {
       {/* Mission statement */}
       <div style={{
         background: 'rgba(196,168,130,0.15)',
-        border: '1px solid #C4A882',
-        borderLeft: '3px solid #C9A84C',
+        border: '1px solid var(--border)',
+        borderLeft: '3px solid var(--accent-gold)',
         borderRadius: 2,
         padding: '14px 18px',
         marginBottom: 32,
@@ -143,10 +143,10 @@ export function WelcomePage() {
       {/* Quick nav cards */}
       <div style={{ marginBottom: 36 }}>
         <div style={{
-          fontFamily: "'Special Elite', cursive",
+          fontFamily: "var(--font-typewriter)",
           fontSize: 11,
           letterSpacing: '0.18em',
-          color: '#8B6355',
+          color: 'var(--ink-secondary)',
           marginBottom: 14,
           textTransform: 'uppercase',
         }}>
@@ -177,7 +177,7 @@ export function WelcomePage() {
             >
               <link.icon size={20} color={link.color} style={{ marginBottom: 8 }} />
               <div style={{
-                fontFamily: "'Special Elite', cursive",
+                fontFamily: "var(--font-typewriter)",
                 fontSize: 13,
                 color: link.color,
                 letterSpacing: '0.06em',
@@ -185,7 +185,7 @@ export function WelcomePage() {
               }}>
                 {link.label}
               </div>
-              <div style={{ fontFamily: "'Lora', serif", fontSize: 11, color: '#6B4C3B', fontStyle: 'italic' }}>
+              <div style={{ fontFamily: "'Lora', serif", fontSize: 11, color: 'var(--ink-secondary)', fontStyle: 'italic' }}>
                 {link.sub}
               </div>
             </button>
@@ -198,10 +198,10 @@ export function WelcomePage() {
       {/* 6-step pipeline */}
       <div style={{ marginBottom: 32 }}>
         <div style={{
-          fontFamily: "'Special Elite', cursive",
+          fontFamily: "var(--font-typewriter)",
           fontSize: 11,
           letterSpacing: '0.18em',
-          color: '#8B6355',
+          color: 'var(--ink-secondary)',
           marginBottom: 16,
           textTransform: 'uppercase',
         }}>
@@ -221,7 +221,7 @@ export function WelcomePage() {
                 fontFamily: "'Playfair Display', serif",
                 fontSize: 22,
                 fontWeight: 700,
-                color: i < 3 ? '#C9A84C' : '#C4A882',
+                color: i < 3 ? 'var(--accent-gold)' : 'var(--border)',
                 lineHeight: 1,
                 flexShrink: 0,
                 opacity: 0.7,
@@ -230,15 +230,15 @@ export function WelcomePage() {
               </div>
               <div>
                 <div style={{
-                  fontFamily: "'Special Elite', cursive",
+                  fontFamily: "var(--font-typewriter)",
                   fontSize: 13,
-                  color: '#2C1810',
+                  color: 'var(--ink)',
                   letterSpacing: '0.06em',
                   marginBottom: 3,
                 }}>
                   {step.label}
                 </div>
-                <div style={{ fontFamily: "'Lora', serif", fontSize: 11, color: '#6B4C3B', fontStyle: 'italic', lineHeight: 1.5 }}>
+                <div style={{ fontFamily: "'Lora', serif", fontSize: 11, color: 'var(--ink-secondary)', fontStyle: 'italic', lineHeight: 1.5 }}>
                   {step.desc}
                 </div>
               </div>

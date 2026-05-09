@@ -5,11 +5,20 @@ from rest_framework.response import Response
 from django.http import StreamingHttpResponse
 
 from .serializers import SwapMessageSerializer, SwapSessionCreateSerializer
-from .services import create_swap_session, get_swap_session, stream_swap_message_events, submit_swap_message
+from .services import (
+    create_swap_session,
+    get_swap_session,
+    list_swap_sessions,
+    stream_swap_message_events,
+    submit_swap_message,
+)
 
 
 class SwapSessionViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        return Response({'sessions': list_swap_sessions(request.user['id'])})
 
     def create(self, request):
         serializer = SwapSessionCreateSerializer(data=request.data)

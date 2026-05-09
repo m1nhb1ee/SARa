@@ -145,6 +145,10 @@ class APIClient {
   }
 
   // Swap debate
+  async listSwapSessions() {
+    return this.request<any>('/swap-sessions/');
+  }
+
   async createSwapSession(caseId: string) {
     return this.request<any>('/swap-sessions/', 'POST', { case_id: caseId });
   }

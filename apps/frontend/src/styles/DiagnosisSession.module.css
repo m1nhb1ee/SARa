@@ -4,16 +4,16 @@
 
 /* Vintage color tokens — scoped to .session wrapper */
 .session {
-  --vj-parchment: #F5EDD6;
-  --vj-cream: #EDE0C4;
-  --vj-ink: #2C1810;
-  --vj-faded: #6B4C3B;
-  --vj-terracotta: #C0392B;
-  --vj-terracotta-hover: #A93226;
-  --vj-olive: #7D9B76;
-  --vj-sepia: #C4A882;
-  --vj-leather: #3E1F0D;
-  --vj-sticky: #FFF9C4;
+  --vj-parchment: var(--bg-page);
+  --vj-cream: var(--bg-surface-alt);
+  --vj-ink: var(--ink);
+  --vj-faded: var(--ink-secondary);
+  --vj-terracotta: var(--accent-clay);
+  --vj-terracotta-hover: var(--accent-clay);
+  --vj-olive: var(--accent-sage);
+  --vj-sepia: var(--border);
+  --vj-leather: var(--bg-surface-alt);
+  --vj-sticky: var(--bg-highlight);
   --vj-ruled: rgba(196, 168, 130, 0.18);
   --vj-shadow: rgba(62, 31, 13, 0.12);
 
@@ -45,7 +45,7 @@
 }
 
 .caseTitle {
-  font-family: 'Courier Prime', 'Courier New', monospace;
+  font-family: var(--font-mono), 'Courier New', monospace;
   font-weight: 700;
   font-size: 13px;
   color: var(--vj-ink);
@@ -56,7 +56,7 @@
 .badge {
   padding: 2px 8px;
   border-radius: 2px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
   background-color: rgba(196, 168, 130, 0.25);
@@ -82,7 +82,7 @@
   background-color: transparent;
   color: var(--vj-terracotta-hover);
   cursor: pointer;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -119,7 +119,7 @@
 .mobileTab {
   flex: 1;
   padding: 10px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
   background: none;
@@ -241,7 +241,7 @@
 .caseStampLabel {
   display: inline-block;
   padding: 4px 12px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -307,7 +307,7 @@
 }
 
 .imagePlaceholder {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   color: var(--vj-sepia);
   text-align: center;
   font-size: 13px;
@@ -322,7 +322,7 @@
   flex-shrink: 0;
   margin-top: 16px;
   padding: 12px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 14px;
   color: var(--vj-faded);
   background-color: var(--vj-parchment);
@@ -432,7 +432,7 @@
 .panelHeaderBadge {
   padding: 2px 8px;
   border-radius: 2px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
   background-color: rgba(196, 168, 130, 0.25);
@@ -472,7 +472,7 @@
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   background-color: var(--vj-terracotta);
   color: var(--vj-parchment);
   border: 2px solid var(--vj-terracotta-hover);
@@ -489,7 +489,7 @@
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   background-color: var(--vj-terracotta);
   color: var(--vj-parchment);
   border: 2px solid var(--vj-terracotta-hover);
@@ -506,7 +506,7 @@
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   background-color: transparent;
   color: var(--vj-sepia);
   border: 1px dashed var(--vj-sepia);
@@ -514,7 +514,7 @@
 }
 
 .stepLabel {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -557,7 +557,7 @@
   display: inline-block;
   padding: 3px 12px;
   border-radius: 2px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -681,7 +681,7 @@
 .hintButton {
   padding: 4px 10px;
   border-radius: 2px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
   background: transparent;
@@ -712,7 +712,7 @@
 }
 
 .shortAnswerErrorText {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--vj-terracotta-hover);
   font-weight: 600;
@@ -769,7 +769,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -840,7 +840,7 @@
 .feedbackStepChip {
   padding: 4px 14px;
   border-radius: 2px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -901,7 +901,7 @@
 .scoreValueFailed { color: var(--vj-sepia); }
 
 .scoreUnit {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--vj-faded);
 }
@@ -955,7 +955,7 @@
 }
 
 .feedbackErrorsTitle {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-weight: 700;
   font-size: 12px;
   color: var(--vj-terracotta-hover);
@@ -991,7 +991,7 @@
 }
 
 .feedbackLatencyLabel {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   color: var(--vj-faded);
@@ -999,7 +999,7 @@
 }
 
 .feedbackLatencyValue {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   color: var(--vj-terracotta);
   font-weight: 700;
@@ -1021,7 +1021,7 @@
 }
 
 .feedbackLowScoreTitle {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-weight: 700;
   font-size: 13px;
   color: var(--vj-terracotta);
@@ -1036,7 +1036,7 @@
 }
 
 .feedbackSectionLabel {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-weight: 700;
   font-size: 11px;
   letter-spacing: 0.06em;
@@ -1087,7 +1087,7 @@
   padding: 13px;
   border-radius: 2px;
   border: none;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1206,7 +1206,7 @@
 }
 
 .exitModalInfoLabel {
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
   color: var(--vj-faded);
@@ -1239,7 +1239,7 @@
   border: 1px solid var(--vj-sepia);
   background-color: transparent;
   color: var(--vj-ink);
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -1265,7 +1265,7 @@
   border: none;
   background-color: var(--vj-terracotta);
   color: var(--vj-parchment);
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -1302,7 +1302,7 @@
 .errorState {
   text-align: center;
   padding: 48px;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   color: var(--vj-terracotta-hover);
   font-weight: 700;
   letter-spacing: 0.04em;
