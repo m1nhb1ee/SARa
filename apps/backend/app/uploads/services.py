@@ -15,20 +15,20 @@ from app.config.model_config import (
     OPENAI_IMAGE_VALIDATION_MODEL,
     OPENAI_STEP_COMPLETION_MODEL,
 )
+from app.core.step_codes import STEP_CODES
 from app.core.supabase_client import get_supabase
 from app.prompt.gpt_prompt import build_gpt_four_step_analysis_prompt, build_gpt_final_steps_prompt
 from app.prompt.medgemma_prompt import build_analysis_prompt
 
 logger = logging.getLogger(__name__)
 
-STEP_CODES = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
-ANSWER_KEY_STEP_CODES = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
+ANSWER_KEY_STEP_CODES = STEP_CODES
 
 
 def _expected_step_codes(prompt_steps: int = 4) -> list[str]:
     if prompt_steps == 2:
         return ['DESCRIBE', 'REASONING']
-    return ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
+    return list(STEP_CODES)
 
 STEP_TEMPLATES = {
     "DESCRIBE":   "Quan sát kỹ lưỡng các vùng của ảnh. Xác định vùng bất thường, mô tả chi tiết kích thước, hình dạng, vị trí, mật độ.",

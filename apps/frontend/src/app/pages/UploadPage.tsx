@@ -411,11 +411,7 @@ export function UploadPage() {
         const caseId = data.case?.id;
         if (caseId) {
           setUploadedCaseId(caseId);
-          try {
-            await createSession(caseId);
-          } catch (e) {
-            console.error('Session creation failed:', e);
-          }
+          await createSession(caseId).catch(() => null);
         }
 
         const n = String(Math.floor(Math.random() * 300 + 100)).padStart(4, '0');
@@ -431,8 +427,7 @@ export function UploadPage() {
       } else {
         setDragState('idle');
       }
-    } catch (err) {
-      console.error('Upload failed:', err);
+    } catch {
       if (progressInterval.current) { clearInterval(progressInterval.current); progressInterval.current = null; }
       setDragState('idle');
     }

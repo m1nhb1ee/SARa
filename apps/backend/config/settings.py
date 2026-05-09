@@ -24,6 +24,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'app.core.middleware.SupabaseJWTContextMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

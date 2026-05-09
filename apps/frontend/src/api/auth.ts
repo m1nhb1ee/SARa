@@ -7,6 +7,7 @@ export interface User {
   email: string;
   role: string;
   is_premium: boolean;
+  full_name?: string | null;
 }
 
 export interface AuthState {

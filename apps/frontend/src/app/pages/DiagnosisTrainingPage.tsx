@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { useCaseDetail, useCreateSession, useSessionDetail, useSubmitAnswer, useGetAnswerKey } from '@/api/hooks';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
@@ -95,32 +95,15 @@ export function DiagnosisTrainingPage() {
     // CRITICAL: Use next_step from API response, NOT refetch timing
     if (!feedback) return;
     
-    // Check if score too low
     if (feedback.attempt.score < 0.7) {
-      console.log(`⚠️ Score ${(feedback.attempt.score * 100).toFixed(1)}% < 70%, staying on step ${feedback.attempt.step_index}`);
       setShowFeedback(false);
       setFeedback(null);
       return;
     }
-    
-    // Validate next_step from API
-    let nextStep = feedback.next_step;
-    if (nextStep === undefined) {
-      // Fallback: calculate from current attempt
-      nextStep = feedback.attempt.step_index + 1;
-      console.log(`⚡ Calculated nextStep: ${nextStep} (from step ${feedback.attempt.step_index})`);
-    } else {
-      console.log(`✅ Using next_step from API: ${nextStep}`);
-    }
-    
-    // Close feedback modal
+
     setShowFeedback(false);
     setFeedback(null);
-    
-    // Clear answer for next step
     setStudentAnswer('');
-    
-    console.log(`📍 Step progression: ${feedback.attempt.step_index} → ${nextStep}`);
   };
 
   const currentStep = sessionData?.current_step || 0;

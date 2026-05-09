@@ -1,8 +1,8 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import {
   User, Pencil, Home as HomeIcon, ChevronRight,
-  Flame, CheckCircle2, XCircle, Clock
+  Flame, CheckCircle2, XCircle, Clock, Crown, Sparkles
 } from 'lucide-react';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
 import {
@@ -12,32 +12,13 @@ import {
 } from 'recharts';
 import { useMyStats, useSessions } from '@/api/hooks';
 import { useAuth } from '@/api/authContext';
-import { STEPS } from '@/constants/training';
 
 export function ProfilePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: stats } = useMyStats();
   const { data: sessionsData } = useSessions({ status: 'COMPLETED' });
-  const [userProfile, setUserProfile] = useState<any>(null);
-
-  // Fetch user profile if not available from auth
-  useEffect(() => {
-    if (user?.id) {
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-      const token = localStorage.getItem('sara_token') || '';
-      
-      fetch(`${API_BASE}/auth/me/`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-        .then(res => res.json())
-        .then(data => {
-          console.log('User profile response:', data);
-          setUserProfile(data.user);
-        })
-        .catch(err => console.error('Failed to fetch user profile:', err));
-    }
-  }, [user?.id]);
+  const isPremium = !!user?.is_premium;
 
   const recentSessions = (sessionsData?.results ?? []).slice(0, 6);
 
@@ -51,7 +32,6 @@ export function ProfilePage() {
   const avgScore = stats ? Math.round((stats.average_score ?? 0) * 100) : 0;
   const casesCompleted = stats?.total_cases_completed ?? 0;
 
-  // Real: accuracy by diagnostic step (from stats.accuracy_by_step)
   const accuracyByStep_chart = useMemo(() => {
     const entries = Object.entries(accuracyByStep);
     if (!entries.length) return [
@@ -63,17 +43,11 @@ export function ProfilePage() {
     return entries.map(([step, score]) => ({ modality: step, accuracy: Math.round((score as number) * 100) }));
   }, [accuracyByStep]);
 
-  // Real: monthly trend from completed sessions
   const monthlyTrend = useMemo(() => {
     const completed = (sessionsData?.results ?? []).filter(
       (s: any) => s.status === 'COMPLETED' && s.final_score != null && s.completed_at
     );
-    if (!completed.length) return [
-      { month: 'Oct', accuracy: 65 }, { month: 'Nov', accuracy: 70 },
-      { month: 'Dec', accuracy: 74 }, { month: 'Jan', accuracy: 76 },
-      { month: 'Feb', accuracy: 73 }, { month: 'Mar', accuracy: 78 },
-      { month: 'Apr', accuracy: avgScore || 78 },
-    ];
+    if (!completed.length) return [];
     const byMonth: Record<string, number[]> = {};
     for (const s of completed) {
       const d = new Date(s.completed_at);
@@ -84,29 +58,33 @@ export function ProfilePage() {
       month,
       accuracy: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
     }));
-  }, [sessionsData, avgScore]);
+  }, [sessionsData]);
 
-  const modalityBreakdown = [
-    { name: 'X-Ray',   value: 45, color: '#C0392B' },
-    { name: 'CT Scan', value: 35, color: '#1B3A5C' },
-    { name: 'MRI',     value: 20, color: '#7D9B76' },
-  ];
+  const modalityBreakdown = useMemo(() => {
+    const palette: Record<string, string> = { 'X-Ray': '#C0392B', CT: '#1B3A5C', MRI: '#7D9B76' };
+    const counts: Record<string, number> = {};
+    for (const s of (sessionsData?.results ?? []) as any[]) {
+      const m = s.case_modality || 'Unknown';
+      counts[m] = (counts[m] ?? 0) + 1;
+    }
+    return Object.entries(counts).map(([name, value]) => ({
+      name,
+      value,
+      color: palette[name] ?? '#8B6355',
+    }));
+  }, [sessionsData]);
 
   const weakAreas = weakestStep
     ? [{ category: weakestStep[0], accuracy: Math.round(weakestStep[1] * 100), attempted: 0 }]
-    : [
-        { category: 'Pulmonary Nodule Detection', accuracy: 41, attempted: 12 },
-        { category: 'Vertebral Fractures',        accuracy: 52, attempted: 8  },
-        { category: 'Intracranial Hemorrhage',    accuracy: 58, attempted: 15 },
-      ];
+    : [];
 
   const achievements = [
     { name: 'First Diagnosis', earned: casesCompleted >= 1,   icon: '🏅' },
-    { name: 'X-Ray Expert',    earned: casesCompleted >= 10,  icon: '🎖️' },
-    { name: '7-Day Streak',    earned: false,                  icon: '📅' },
+    { name: '10 Cases',        earned: casesCompleted >= 10,  icon: '🎖️' },
+    { name: '50 Cases',        earned: casesCompleted >= 50,  icon: '📅' },
     { name: '100 Cases',       earned: casesCompleted >= 100, icon: '💯' },
-    { name: 'CT Master',       earned: false,                  icon: '🔬' },
-    { name: 'Perfect Week',    earned: false,                  icon: '⭐' },
+    { name: 'High Avg ≥80',    earned: avgScore >= 80,        icon: '🔬' },
+    { name: 'Premium Member',  earned: isPremium,             icon: '⭐' },
   ];
 
   const cardStyle: React.CSSProperties = {
@@ -120,6 +98,30 @@ export function ProfilePage() {
     const score = (s.final_score ?? 0) * 100;
     return score >= 70 ? 'correct' : 'incorrect';
   };
+
+  const STREAK_DAYS = 28;
+  const studyStreakDays = useMemo(() => {
+    const days = new Set<string>();
+    for (const s of (sessionsData?.results ?? []) as any[]) {
+      if (!s.completed_at) continue;
+      days.add(new Date(s.completed_at).toISOString().slice(0, 10));
+    }
+    const today = new Date();
+    return Array.from({ length: STREAK_DAYS }).map((_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() - (STREAK_DAYS - 1 - i));
+      return days.has(d.toISOString().slice(0, 10));
+    });
+  }, [sessionsData]);
+  const totalStreakDays = studyStreakDays.filter(Boolean).length;
+
+  const tierLabel = casesCompleted < 10
+    ? 'LEVEL 1 — INTERN'
+    : casesCompleted < 50
+      ? 'LEVEL 2 — JUNIOR RESIDENT'
+      : casesCompleted < 100
+        ? 'LEVEL 3 — RESIDENT'
+        : 'LEVEL 4 — SENIOR RESIDENT';
 
   return (
     <div style={{
@@ -153,18 +155,23 @@ export function ProfilePage() {
           <div className="absolute top-0 right-0 w-12 h-12"
             style={{ background: 'linear-gradient(135deg, transparent 50%, #C4A882 50%)' }} />
           <div
-            className="absolute top-4 right-4 w-24 h-24 rounded-full flex items-center justify-center text-center"
+            className="absolute top-4 right-4 w-24 h-24 rounded-full flex flex-col items-center justify-center text-center"
             style={{
-              background: 'radial-gradient(circle, #C0392B 0%, #A93226 100%)',
+              background: isPremium
+                ? 'radial-gradient(circle, #C9A227 0%, #8C6F11 100%)'
+                : 'radial-gradient(circle, #6B4C3B 0%, #3E2A1D 100%)',
               border: '3px solid #C4A882',
               boxShadow: '0 2px 4px rgba(0,0,0,0.2), inset 0 -2px 4px rgba(0,0,0,0.3)',
               fontFamily: "'Special Elite', cursive",
               fontSize: '10px',
               color: '#F5EDD6',
               transform: 'rotate(-5deg)',
+              gap: 2,
             }}
+            title={isPremium ? 'Premium account' : 'Free account'}
           >
-            BRONZE<br />TIER II
+            {isPremium ? <Crown className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+            {isPremium ? 'PREMIUM' : 'FREE TIER'}
           </div>
 
           <div className="flex gap-8">
@@ -176,21 +183,22 @@ export function ProfilePage() {
                 </div>
               </div>
               <div className="mt-3 text-center py-1 px-3 inline-block"
-                style={{ background: '#C0392B', color: '#F5EDD6', fontFamily: "'Special Elite', cursive", fontSize: '11px', transform: 'rotate(-1deg)', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-                RESIDENT · 2ND YEAR
+                style={{ background: '#C0392B', color: '#F5EDD6', fontFamily: "'Special Elite', cursive", fontSize: '11px', transform: 'rotate(-1deg)', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', textTransform: 'uppercase' }}>
+                {user?.role || 'STUDENT'}
               </div>
             </div>
 
             <div className="flex-1 pt-4">
               <div className="mb-1" style={{ color: '#6B4C3B', fontFamily: "'Courier Prime', monospace", fontSize: '12px' }}>Dr.</div>
               <h1 className="mb-2" style={{ fontFamily: "'Playfair Display', serif", fontSize: '2.5rem', color: '#2C1810', fontWeight: 700 }}>
-                {userProfile?.full_name || '—'}
+                {user?.full_name || user?.email || '—'}
               </h1>
               <div className="mb-6 h-0.5" style={{ background: '#6B4C3B', width: '200px', transform: 'skewY(-0.5deg)' }} />
 
               <div className="space-y-3" style={{ fontFamily: "'Courier Prime', monospace", fontSize: '14px' }}>
                 {[
-                  { label: 'SPECIALTY',    value: 'Radiology' },
+                  { label: 'EMAIL',        value: user?.email ?? '—' },
+                  { label: 'TIER',         value: isPremium ? 'PREMIUM' : 'FREE' },
                   { label: 'CASES DONE',   value: String(casesCompleted) },
                   { label: 'AVG SCORE',    value: `${avgScore}/100` },
                   { label: 'WEAKEST STEP', value: weakestStep?.[0] ?? '—' },
@@ -297,22 +305,22 @@ export function ProfilePage() {
               <SketchBorder id="prof-streak" color="#7A6248" opacity={0.7} />
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>Study Streak</h3>
               <div className="grid grid-cols-7 gap-1 mb-4">
-                {Array.from({ length: 28 }).map((_, i) => (
+                {studyStreakDays.map((active, i) => (
                   <div key={i} className="aspect-square border flex items-center justify-center text-xs"
                     style={{
-                      background: i < 14 ? '#1B3A5C' : i === 14 ? '#7D9B76' : 'transparent',
+                      background: active ? '#7D9B76' : 'transparent',
                       borderColor: '#C4A882',
-                      opacity: i < 14 ? 0.7 : i === 14 ? 0.9 : 0.3,
-                      color: i <= 14 ? '#F5EDD6' : '#C4A882',
+                      opacity: active ? 0.9 : 0.3,
+                      color: active ? '#F5EDD6' : '#C4A882',
                     }}
                   >
-                    {i === 14 ? '✓' : ''}
+                    {active ? '✓' : ''}
                   </div>
                 ))}
               </div>
               <div className="text-center text-2xl" style={{ fontFamily: "'Courier Prime', monospace", color: '#2C1810' }}>
                 <Flame className="w-6 h-6 inline mr-2" style={{ color: '#C0392B' }} />
-                Keep it up!
+                {totalStreakDays} / {STREAK_DAYS} ngày
               </div>
             </div>
 
@@ -322,7 +330,7 @@ export function ProfilePage() {
               <h3 className="mb-4" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#2C1810' }}>Residency Rank</h3>
               <div className="inline-block px-4 py-2 mb-4 rounded"
                 style={{ background: '#C0392B', color: '#F5EDD6', fontFamily: "'Special Elite', cursive", fontSize: '14px', transform: 'rotate(-1deg)' }}>
-                {casesCompleted < 10 ? 'LEVEL 1 — INTERN' : casesCompleted < 50 ? 'LEVEL 5 — JUNIOR RESIDENT' : 'LEVEL 12 — SENIOR RESIDENT'}
+                {tierLabel}
               </div>
               <div className="relative h-8 border rounded overflow-hidden mb-2"
                 style={{ borderColor: '#C4A882', background: '#F5EDD6' }}>
@@ -376,6 +384,11 @@ export function ProfilePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {weakAreas.length === 0 && (
+              <div className="md:col-span-3 p-6 text-center" style={{ fontFamily: "'Caveat', cursive", color: '#8B6355', fontSize: '16px' }}>
+                Hoàn thành thêm các session để phát hiện vùng cần luyện thêm.
+              </div>
+            )}
             {weakAreas.map((area, idx) => (
               <div key={idx} className="p-6 border rounded relative hover:-translate-y-1 transition-transform cursor-pointer"
                 style={{ background: 'rgba(192,57,43,0.04)', borderColor: '#C4A882', boxShadow: '0 2px 8px rgba(62,31,13,0.12)' }}>

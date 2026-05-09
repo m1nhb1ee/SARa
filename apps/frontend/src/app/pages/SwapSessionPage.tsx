@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { AlertTriangle, LogOut, Maximize2, Send, Trophy, ZoomIn, ZoomOut } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, LogOut, Maximize2, Send, Trophy, ZoomIn, ZoomOut } from 'lucide-react';
 import { apiClient } from '@/api/client';
 import { VolumeSliceViewer } from '@/app/components/shared/VolumeSliceViewer';
 import { STEPS } from '@/constants/training';
@@ -20,6 +20,8 @@ export function SwapSessionPage() {
   const [activeTab, setActiveTab] = useState<MobileTab>('image');
   const [pendingUserMessage, setPendingUserMessage] = useState('');
   const [streamingDoctorText, setStreamingDoctorText] = useState('');
+  const [showCompletion, setShowCompletion] = useState(false);
+  const completionShownRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const loadSession = async () => {
@@ -38,6 +40,13 @@ export function SwapSessionPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session?.messages?.length, streamingDoctorText, pendingUserMessage]);
+
+  useEffect(() => {
+    if (session?.status === 'COMPLETED' && !completionShownRef.current) {
+      completionShownRef.current = true;
+      setShowCompletion(true);
+    }
+  }, [session?.status]);
 
   const sendMessage = async () => {
     const message = input.trim();
@@ -320,6 +329,68 @@ export function SwapSessionPage() {
           </div>
         </div>
       </div>
+
+      {showCompletion && (
+        <div className={styles.exitModalOverlay}>
+          <div className={styles.exitModalCard} onClick={e => e.stopPropagation()}>
+            <div className={styles.exitModalHeader}>
+              <div className={styles.exitModalHeaderRow}>
+                <div className={styles.exitModalIcon} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid #7D9B76' }}>
+                  <CheckCircle2 size={20} color="#7D9B76" />
+                </div>
+                <div>
+                  <h3 className={styles.exitModalTitle}>Hoàn thành tranh luận!</h3>
+                  <p className={styles.exitModalSubtitle}>{caseData?.title}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.exitModalBody}>
+              <div className={styles.exitModalNote} style={{ textAlign: 'center', padding: '20px 12px', transform: 'rotate(0deg)' }}>
+                <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--vj-faded)', marginBottom: 8 }}>
+                  Mức độ thuyết phục
+                </div>
+                <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 48, fontWeight: 700, color: 'var(--vj-ink)', lineHeight: 1 }}>
+                  {scorePct ?? '—'}
+                </div>
+                <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 12, color: 'var(--vj-faded)', marginTop: 4 }}>
+                  / 100
+                </div>
+              </div>
+
+              <div className={styles.exitModalInfo} style={{ marginTop: 14 }}>
+                <div className={styles.exitModalInfoLabel}>Điểm theo bước</div>
+                <div className={styles.exitModalInfoDetails}>
+                  {STEPS.map((step, i) => {
+                    const score = session.scores?.find((s: any) => s.step_index === i);
+                    const pct = Math.round((score?.persuasion_score ?? 0) * 100);
+                    return (
+                      <span key={step} style={{ display: 'inline-block', marginRight: 8 }}>
+                        <span style={{ color: 'var(--vj-terracotta)' }}>✓</span> {step} {pct}%{i < STEPS.length - 1 ? ' ·' : ''}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.exitModalFooter}>
+              <button
+                onClick={() => { setShowCompletion(false); navigate('/'); }}
+                className={styles.exitModalCancelBtn}
+              >
+                Về trang chính
+              </button>
+              <button
+                onClick={() => { setShowCompletion(false); navigate('/swap'); }}
+                className={styles.exitModalConfirmBtn}
+              >
+                Thử case khác
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
