@@ -17,7 +17,7 @@
   gap: 2px;
   padding: 4px 6px;
   background: rgba(237, 224, 196, 0.92);
-  border-bottom: 1px solid #C4A882;
+  border-bottom: 1px solid var(--border);
   z-index: 4;
   overflow-x: auto;
   flex-wrap: nowrap;
@@ -30,14 +30,14 @@
 
 .volumeTab {
   flex-shrink: 0;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 3px 8px;
-  border: 1px dashed #C4A882;
+  border: 1px dashed var(--border);
   background: transparent;
-  color: #6B4C3B;
+  color: var(--ink-secondary);
   cursor: pointer;
   text-transform: uppercase;
   transition: all 0.15s;
@@ -45,9 +45,9 @@
 }
 
 .volumeTabActive {
-  border: 1px solid #C0392B;
+  border: 1px solid var(--accent-clay);
   background: rgba(192, 57, 43, 0.12);
-  color: #C0392B;
+  color: var(--accent-clay);
 }
 
 /* Slice counter badge — bottom-left overlay */
@@ -56,10 +56,10 @@
   bottom: 48px;
   left: 8px;
   z-index: 4;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
-  color: #F5EDD6;
+  color: var(--bg-page);
   background: rgba(44, 24, 16, 0.7);
   padding: 3px 8px;
   letter-spacing: 0.06em;
@@ -73,10 +73,10 @@
   top: 8px;
   right: 8px;
   z-index: 5;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
-  color: #F5EDD6;
+  color: var(--bg-page);
   background: rgba(44, 24, 16, 0.72);
   padding: 4px 8px 5px;
   letter-spacing: 0.05em;
@@ -102,7 +102,7 @@
 
 .cacheProgressFill {
   height: 100%;
-  background: #7D9B76;
+  background: var(--accent-sage);
   border-radius: 1px;
   transition: width 0.15s ease;
 }
@@ -113,9 +113,9 @@
   bottom: 72px;
   left: 8px;
   z-index: 4;
-  font-family: 'Courier Prime', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: #F5EDD6;
+  color: var(--bg-page);
   background: rgba(44, 24, 16, 0.55);
   padding: 2px 7px;
   letter-spacing: 0.04em;

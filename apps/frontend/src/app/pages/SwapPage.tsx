@@ -26,23 +26,23 @@ function SwapLoadingModal({ progress, caseTitle }: { progress: number; caseTitle
       <div className="relative w-full max-w-[520px]" style={{ fontFamily: "'Lora', serif" }}>
         <div
           style={{
-            background: '#D4C4A0',
-            borderLeft: '2px solid #C4A882',
-            borderRight: '2px solid #C4A882',
-            borderTop: '2px solid #C4A882',
+            background: 'var(--bg-surface-alt)',
+            borderLeft: '2px solid var(--border)',
+            borderRight: '2px solid var(--border)',
+            borderTop: '2px solid var(--border)',
             clipPath: 'polygon(0 0, 100% 0, 100% 76%, 94% 100%, 88% 73%, 80% 100%, 72% 73%, 64% 100%, 56% 73%, 50% 100%, 44% 73%, 36% 100%, 28% 73%, 20% 100%, 12% 73%, 5% 100%, 0 76%)',
             padding: '16px 24px 34px',
           }}
         >
-          <div style={{ fontFamily: "'Special Elite', cursive", fontSize: 12, color: '#1B5C4A', letterSpacing: '0.12em' }}>
+          <div style={{ fontFamily: "var(--font-typewriter)", fontSize: 12, color: 'var(--accent-sage)', letterSpacing: '0.12em' }}>
             SWAP DEBATE INTAKE
           </div>
         </div>
 
         <div
           style={{
-            background: '#EDE0C4',
-            border: '2px solid #C4A882',
+            background: 'var(--bg-surface-alt)',
+            border: '2px solid var(--border)',
             borderTop: 'none',
             padding: '24px 30px 28px',
             boxShadow: '0 12px 40px rgba(44,24,16,0.3)',
@@ -61,52 +61,52 @@ function SwapLoadingModal({ progress, caseTitle }: { progress: number; caseTitle
           <div className="relative z-10 flex flex-col items-center">
             <div className="swap-doctor-animation" aria-hidden="true">
               <svg width="128" height="118" viewBox="0 0 128 118" fill="none">
-                <rect x="13" y="23" width="45" height="64" rx="4" fill="#FAF3E3" stroke="#2C1810" strokeWidth="1.5" />
-                <rect x="20" y="31" width="31" height="40" fill="#2F3A42" stroke="#1B3A5C" strokeWidth="1.5" />
-                <path className="swap-scan-line" d="M22 43H49" stroke="#7D9B76" strokeWidth="2" strokeLinecap="round" />
-                <path d="M25 59C30 51 34 64 39 55C42 50 45 57 48 53" stroke="#C4A882" strokeWidth="1.4" fill="none" />
-                <circle cx="85" cy="32" r="16" fill="#E7C7A3" stroke="#2C1810" strokeWidth="1.5" />
-                <path d="M70 30C73 18 84 13 95 19C100 22 102 28 101 34C93 27 82 30 70 30Z" fill="#5C3D2E" stroke="#2C1810" strokeWidth="1" />
-                <circle cx="80" cy="34" r="1.6" fill="#2C1810" />
-                <circle cx="92" cy="34" r="1.6" fill="#2C1810" />
-                <path d="M81 43C86 46 91 45 95 42" stroke="#2C1810" strokeWidth="1.4" strokeLinecap="round" />
-                <path d="M62 111C64 73 71 56 85 56C99 56 107 73 110 111H62Z" fill="#FAF3E3" stroke="#2C1810" strokeWidth="1.5" />
-                <path d="M84 57L78 111M88 57L95 111" stroke="#C4A882" strokeWidth="1.2" />
+                <rect x="13" y="23" width="45" height="64" rx="4" fill="var(--bg-page)" stroke="var(--ink)" strokeWidth="1.5" />
+                <rect x="20" y="31" width="31" height="40" fill="#2F3A42" stroke="var(--accent-ink)" strokeWidth="1.5" />
+                <path className="swap-scan-line" d="M22 43H49" stroke="var(--accent-sage)" strokeWidth="2" strokeLinecap="round" />
+                <path d="M25 59C30 51 34 64 39 55C42 50 45 57 48 53" stroke="var(--border)" strokeWidth="1.4" fill="none" />
+                <circle cx="85" cy="32" r="16" fill="#E7C7A3" stroke="var(--ink)" strokeWidth="1.5" />
+                <path d="M70 30C73 18 84 13 95 19C100 22 102 28 101 34C93 27 82 30 70 30Z" fill="#5C3D2E" stroke="var(--ink)" strokeWidth="1" />
+                <circle cx="80" cy="34" r="1.6" fill="var(--ink)" />
+                <circle cx="92" cy="34" r="1.6" fill="var(--ink)" />
+                <path d="M81 43C86 46 91 45 95 42" stroke="var(--ink)" strokeWidth="1.4" strokeLinecap="round" />
+                <path d="M62 111C64 73 71 56 85 56C99 56 107 73 110 111H62Z" fill="var(--bg-page)" stroke="var(--ink)" strokeWidth="1.5" />
+                <path d="M84 57L78 111M88 57L95 111" stroke="var(--border)" strokeWidth="1.2" />
                 <path d="M73 67C68 77 72 88 82 88C93 88 98 77 92 67" stroke="#1B5C4A" strokeWidth="2" strokeLinecap="round" />
-                <circle className="swap-stethoscope" cx="82" cy="89" r="4" fill="#1B5C4A" stroke="#2C1810" strokeWidth="1" />
-                <path d="M111 42L118 36M111 52H122M108 61L117 68" stroke="#C0392B" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+                <circle className="swap-stethoscope" cx="82" cy="89" r="4" fill="#1B5C4A" stroke="var(--ink)" strokeWidth="1" />
+                <path d="M111 42L118 36M111 52H122M108 61L117 68" stroke="var(--accent-clay)" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
               </svg>
             </div>
 
-            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 23, color: '#2C1810', margin: '8px 0 4px', textAlign: 'center' }}>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 23, color: 'var(--ink)', margin: '8px 0 4px', textAlign: 'center' }}>
               Calling the stubborn doctor
             </h2>
-            <p style={{ fontFamily: "'Caveat', cursive", fontSize: 17, color: '#6B4C3B', fontStyle: 'italic', textAlign: 'center', marginBottom: 14 }}>
+            <p style={{ fontFamily: "'Caveat', cursive", fontSize: 17, color: 'var(--ink-secondary)', fontStyle: 'italic', textAlign: 'center', marginBottom: 14 }}>
               {caseTitle ? `Preparing debate for ${caseTitle}` : 'Preparing debate room and first opinion'}
             </p>
 
             <div className="relative w-full max-w-sm">
               <svg viewBox="0 0 300 24" style={{ width: '100%', height: 24 }}>
                 <path d="M2,12 C2,6 4,2 10,2 L290,2 C296,2 298,6 298,12 C298,18 296,22 290,22 L10,22 C4,22 2,18 2,12 Z"
-                  fill="none" stroke="#C4A882" strokeWidth="1.5" />
-                <rect x="4" y="4" width="292" height="16" rx="4" fill="#FAF3E3" />
+                  fill="none" stroke="var(--border)" strokeWidth="1.5" />
+                <rect x="4" y="4" width="292" height="16" rx="4" fill="var(--bg-page)" />
                 <rect
                   x="4"
                   y="4"
                   width={`${(Math.min(progress, 100) / 100) * 292}`}
                   height="16"
                   rx="4"
-                  fill="#7D9B76"
+                  fill="var(--accent-sage)"
                   opacity="0.78"
                   style={{ transition: 'width 0.16s ease' }}
                 />
               </svg>
             </div>
 
-            <div style={{ marginTop: 8, fontFamily: "'Courier Prime', monospace", fontSize: 20, color: '#2C1810', fontWeight: 700 }}>
+            <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 20, color: 'var(--ink)', fontWeight: 700 }}>
               {Math.round(progress)}%
             </div>
-            <div style={{ marginTop: 6, fontFamily: "'Special Elite', cursive", fontSize: 10, color: '#1B5C4A', letterSpacing: '0.1em' }}>
+            <div style={{ marginTop: 6, fontFamily: "var(--font-typewriter)", fontSize: 10, color: 'var(--accent-sage)', letterSpacing: '0.1em' }}>
               MEDGEMMA FIRST PASS + DOCTOR PERSONA
             </div>
           </div>
@@ -204,7 +204,7 @@ export function SwapPage() {
     <div
       style={{
         minHeight: '100%',
-        backgroundColor: '#F5EDD6',
+        backgroundColor: 'var(--bg-page)',
         backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, rgba(196,168,130,0.18) 31px, rgba(196,168,130,0.18) 32px)',
         backgroundSize: '100% 32px',
         padding: '32px',
@@ -219,20 +219,20 @@ export function SwapPage() {
 
       <div style={{ maxWidth: 1180, margin: '0 auto' }}>
         <div style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#1B5C4A', fontFamily: "'Special Elite', cursive", fontSize: 12, letterSpacing: '0.12em' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--accent-sage)', fontFamily: "var(--font-typewriter)", fontSize: 12, letterSpacing: '0.12em' }}>
             <MessageSquare size={18} />
             SWAP DEBATE
           </div>
-          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, color: '#2C1810', margin: '8px 0 4px' }}>
+          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, color: 'var(--ink)', margin: '8px 0 4px' }}>
             Debate a difficult doctor
           </h1>
-          <p style={{ fontFamily: "'Lora', serif", color: '#6B4C3B', fontSize: 14 }}>
+          <p style={{ fontFamily: "'Lora', serif", color: 'var(--ink-secondary)', fontSize: 14 }}>
             Pick a case, challenge the doctor's first impression, and persuade each diagnostic step.
           </p>
         </div>
 
         {(error || startError) && (
-          <div style={{ border: '1px solid #C0392B', color: '#A93226', background: 'rgba(192,57,43,0.06)', padding: 12, marginBottom: 18, fontFamily: "'Lora', serif", fontSize: 13 }}>
+          <div style={{ border: '1px solid var(--accent-clay)', color: 'var(--accent-clay)', background: 'rgba(192,57,43,0.06)', padding: 12, marginBottom: 18, fontFamily: "'Lora', serif", fontSize: 13 }}>
             {error || startError}
           </div>
         )}
@@ -240,7 +240,7 @@ export function SwapPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 18 }}>
           {loading ? (
             [1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} style={{ height: 220, background: '#EDE0C4', border: '1px solid #C4A882', opacity: 0.7 }} />
+              <div key={i} style={{ height: 220, background: 'var(--bg-surface-alt)', border: '1px solid var(--border)', opacity: 0.7 }} />
             ))
           ) : (
             cases.map((c: any, idx: number) => {
@@ -264,22 +264,22 @@ export function SwapPage() {
                   style={{
                     position: 'relative',
                     textAlign: 'left',
-                    background: isDone ? 'rgba(125,155,118,0.18)' : '#EDE0C4',
-                    border: isDone ? '1px solid #7D9B76' : '1px solid #C4A882',
+                    background: isDone ? 'rgba(125,155,118,0.18)' : 'var(--bg-surface-alt)',
+                    border: isDone ? '1px solid var(--accent-sage)' : '1px solid var(--border)',
                     padding: 14,
                     minHeight: 250,
                     cursor: startingCaseId ? 'wait' : 'pointer',
                     boxShadow: '0 3px 12px rgba(62,31,13,0.12)',
                   }}
                 >
-                  <SketchBorder id={`swap-case-${c.id}`} color={isDone ? '#7D9B76' : '#7A6248'} opacity={0.45} />
+                  <SketchBorder id={`swap-case-${c.id}`} color={isDone ? 'var(--accent-sage)' : 'var(--ink-secondary)'} opacity={0.45} />
                   {isDone && (
                     <div style={{
                       position: 'absolute', top: 10, right: 10, zIndex: 2,
                       display: 'flex', alignItems: 'center', gap: 4,
-                      background: '#7D9B76', color: '#FAF3E3',
+                      background: 'var(--accent-sage)', color: 'var(--bg-page)',
                       padding: '3px 8px',
-                      fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: '0.08em',
+                      fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: '0.08em',
                     }}>
                       <CheckCircle2 size={12} />
                       {scorePct != null ? `${scorePct}%` : 'DONE'}
@@ -289,18 +289,18 @@ export function SwapPage() {
                     {thumb ? (
                       <img src={thumb} alt={c.title} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'sepia(20%) contrast(1.05)' }} />
                     ) : (
-                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F5EDD6' }}>
+                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--bg-page)' }}>
                         <Stethoscope size={28} />
                       </div>
                     )}
                   </div>
-                  <div style={{ fontFamily: "'Special Elite', cursive", fontSize: 10, color: isDone ? '#3F6E54' : '#1B5C4A', letterSpacing: '0.1em', marginBottom: 5 }}>
+                  <div style={{ fontFamily: "var(--font-typewriter)", fontSize: 10, color: isDone ? 'var(--accent-sage)' : 'var(--accent-sage)', letterSpacing: '0.1em', marginBottom: 5 }}>
                     CASE #{String(idx + 1).padStart(3, '0')} / {c.modality}
                   </div>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, color: '#2C1810', lineHeight: 1.25 }}>
+                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, color: 'var(--ink)', lineHeight: 1.25 }}>
                     {c.title}
                   </div>
-                  <div style={{ marginTop: 10, fontFamily: "'Lora', serif", fontSize: 12, color: '#6B4C3B', lineHeight: 1.45 }}>
+                  <div style={{ marginTop: 10, fontFamily: "'Lora', serif", fontSize: 12, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
                     {isStarting ? 'Preparing doctor...' : isDone ? 'Đã hoàn thành — bấm để xem lại' : 'Start debate'}
                   </div>
                 </button>
@@ -323,24 +323,24 @@ export function SwapPage() {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#EDE0C4', border: '2px solid #7D9B76',
+              background: 'var(--bg-surface-alt)', border: '2px solid var(--accent-sage)',
               padding: '22px 26px', maxWidth: 460, width: '100%',
               boxShadow: '0 12px 40px rgba(44,24,16,0.3)',
               fontFamily: "'Lora', serif",
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <Trophy size={20} color="#7D9B76" />
-              <h3 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: 22, color: '#2C1810' }}>
+              <Trophy size={20} color="var(--accent-sage)" />
+              <h3 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: 22, color: 'var(--ink)' }}>
                 Case đã hoàn thành
               </h3>
             </div>
-            <p style={{ margin: '0 0 6px', color: '#6B4C3B', fontSize: 14 }}>
+            <p style={{ margin: '0 0 6px', color: 'var(--ink-secondary)', fontSize: 14 }}>
               {activeCase.title}
             </p>
             <div style={{
-              fontFamily: "'Courier Prime', monospace", fontSize: 11,
-              color: '#3F6E54', letterSpacing: '0.1em', marginBottom: 18,
+              fontFamily: "var(--font-mono)", fontSize: 11,
+              color: 'var(--accent-sage)', letterSpacing: '0.1em', marginBottom: 18,
             }}>
               MỨC ĐỘ THUYẾT PHỤC: {activeBest.final_score != null ? Math.round(activeBest.final_score * 100) : '—'}%
             </div>
@@ -350,8 +350,8 @@ export function SwapPage() {
                 onClick={() => setActiveCaseId(null)}
                 style={{
                   padding: '8px 14px', background: 'transparent',
-                  border: '1px solid #C4A882', color: '#6B4C3B',
-                  fontFamily: "'Special Elite', cursive", fontSize: 12, letterSpacing: '0.1em',
+                  border: '1px solid var(--border)', color: 'var(--ink-secondary)',
+                  fontFamily: "var(--font-typewriter)", fontSize: 12, letterSpacing: '0.1em',
                   cursor: 'pointer',
                 }}
               >
@@ -360,9 +360,9 @@ export function SwapPage() {
               <button
                 onClick={() => navigate(`/swap/session/${activeBest.id}`)}
                 style={{
-                  padding: '8px 14px', background: '#FAF3E3',
-                  border: '1px solid #7D9B76', color: '#1B5C4A',
-                  fontFamily: "'Special Elite', cursive", fontSize: 12, letterSpacing: '0.1em',
+                  padding: '8px 14px', background: 'var(--bg-page)',
+                  border: '1px solid var(--accent-sage)', color: 'var(--accent-sage)',
+                  fontFamily: "var(--font-typewriter)", fontSize: 12, letterSpacing: '0.1em',
                   cursor: 'pointer',
                 }}
               >
@@ -375,9 +375,9 @@ export function SwapPage() {
                   startSwap(id);
                 }}
                 style={{
-                  padding: '8px 14px', background: '#7D9B76', color: '#FAF3E3',
+                  padding: '8px 14px', background: 'var(--accent-sage)', color: 'var(--bg-page)',
                   border: '1px solid #5C7A5A',
-                  fontFamily: "'Special Elite', cursive", fontSize: 12, letterSpacing: '0.1em',
+                  fontFamily: "var(--font-typewriter)", fontSize: 12, letterSpacing: '0.1em',
                   cursor: 'pointer',
                 }}
               >

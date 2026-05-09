@@ -86,7 +86,7 @@ export function SwapSessionPage() {
   if (!session) {
     return (
       <div className={styles.session}>
-        <div className="flex items-center justify-center h-full" style={{ color: '#A93226' }}>
+        <div className="flex items-center justify-center h-full" style={{ color: 'var(--accent-clay)' }}>
           {error || 'Swap session not found'}
         </div>
       </div>
@@ -183,7 +183,7 @@ export function SwapSessionPage() {
               <span className={styles.panelHeaderBadge}>GPT-4o</span>
             </div>
             {isComplete && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#7D9B76' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent-sage)' }}>
                 <Trophy size={15} />
                 <span className={styles.panelHeaderBadge}>{scorePct}% persuaded</span>
               </div>
@@ -234,14 +234,14 @@ export function SwapSessionPage() {
                     {!isUser && (
                       <div className={styles.aiMessageHeader}>
                         <span className={styles.aiMessageAuthor}>Dr. Swap</span>
-                        {message.metadata?.convinced && <span style={{ color: '#7D9B76', fontSize: 11 }}>✓</span>}
+                        {message.metadata?.convinced && <span style={{ color: 'var(--accent-sage)', fontSize: 11 }}>✓</span>}
                       </div>
                     )}
                     <p className={isUser ? styles.studentMessageText : styles.aiMessageText}>
                       {message.content}
                     </p>
                     {message.metadata?.convinced && (
-                      <div style={{ marginTop: 6, fontFamily: "'Courier Prime', monospace", fontSize: 10, color: '#7D9B76' }}>
+                      <div style={{ marginTop: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: 'var(--accent-sage)' }}>
                         CONVINCED / {Math.round((message.metadata.persuasion_score ?? 0) * 100)}%
                       </div>
                     )}
@@ -282,7 +282,7 @@ export function SwapSessionPage() {
           <div className={styles.inputArea}>
             {error && (
               <div className={styles.shortAnswerError}>
-                <AlertTriangle size={13} color="#A93226" />
+                <AlertTriangle size={13} color="var(--accent-clay)" />
                 <span className={styles.shortAnswerErrorText}>{error}</span>
               </div>
             )}
@@ -293,7 +293,7 @@ export function SwapSessionPage() {
                   const score = session.scores?.find((s: any) => s.step_index === i);
                   return (
                     <div key={step} style={{ border: '1px solid var(--vj-sepia)', background: 'var(--vj-parchment)', padding: 8 }}>
-                      <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, color: 'var(--vj-faded)' }}>{step}</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: 'var(--vj-faded)' }}>{step}</div>
                       <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: 'var(--vj-olive)' }}>
                         {Math.round((score?.persuasion_score ?? 0) * 100)}%
                       </div>
@@ -335,8 +335,8 @@ export function SwapSessionPage() {
           <div className={styles.exitModalCard} onClick={e => e.stopPropagation()}>
             <div className={styles.exitModalHeader}>
               <div className={styles.exitModalHeaderRow}>
-                <div className={styles.exitModalIcon} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid #7D9B76' }}>
-                  <CheckCircle2 size={20} color="#7D9B76" />
+                <div className={styles.exitModalIcon} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid var(--accent-sage)' }}>
+                  <CheckCircle2 size={20} color="var(--accent-sage)" />
                 </div>
                 <div>
                   <h3 className={styles.exitModalTitle}>Hoàn thành tranh luận!</h3>
@@ -347,13 +347,13 @@ export function SwapSessionPage() {
 
             <div className={styles.exitModalBody}>
               <div className={styles.exitModalNote} style={{ textAlign: 'center', padding: '20px 12px', transform: 'rotate(0deg)' }}>
-                <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--vj-faded)', marginBottom: 8 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--vj-faded)', marginBottom: 8 }}>
                   Mức độ thuyết phục
                 </div>
                 <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 48, fontWeight: 700, color: 'var(--vj-ink)', lineHeight: 1 }}>
                   {scorePct ?? '—'}
                 </div>
-                <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 12, color: 'var(--vj-faded)', marginTop: 4 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: 'var(--vj-faded)', marginTop: 4 }}>
                   / 100
                 </div>
               </div>

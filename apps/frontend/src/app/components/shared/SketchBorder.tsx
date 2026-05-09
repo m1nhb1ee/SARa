@@ -6,7 +6,7 @@ interface Props {
   opacity?: number;
 }
 
-export function SketchBorder({ id, color = '#7A6248', opacity = 1 }: Props) {
+export function SketchBorder({ id, color = 'var(--ink-secondary)', opacity = 1 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const fId = `skb-${id}`;

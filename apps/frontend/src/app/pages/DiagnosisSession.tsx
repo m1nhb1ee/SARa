@@ -512,7 +512,7 @@ export function DiagnosisSession() {
                           color: "var(--vj-parchment)",
                           border: "none",
                           borderRadius: 2,
-                          fontFamily: "'Courier Prime', monospace",
+                          fontFamily: "var(--font-mono)",
                           fontSize: 12,
                           fontWeight: 700,
                           letterSpacing: "0.06em",
@@ -569,7 +569,7 @@ export function DiagnosisSession() {
                 animate={{ opacity: 1, y: 0 }}
                 className={styles.shortAnswerError}
               >
-                <AlertTriangle size={13} color="#A93226" />
+                <AlertTriangle size={13} color="var(--accent-clay)" />
                 <span className={styles.shortAnswerErrorText}>{shortAnswerError}</span>
               </motion.div>
             )}
@@ -625,10 +625,10 @@ export function DiagnosisSession() {
                 <div className={styles.scoreRingWrapper}>
                   <div className={styles.scoreRingInner}>
                     <svg width="100" height="100" className={styles.scoreRingSvg}>
-                      <circle cx="50" cy="50" r="42" fill="none" stroke="#C4A882" strokeWidth="6" />
+                      <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border)" strokeWidth="6" />
                       <circle
                         cx="50" cy="50" r="42" fill="none"
-                        stroke={lastFeedback.passed ? "#C0392B" : "#C4A882"}
+                        stroke={lastFeedback.passed ? "var(--accent-clay)" : "var(--border)"}
                         strokeWidth="6"
                         strokeDasharray={`${lastFeedback.attempt.score * 264} 264`}
                         strokeLinecap="round"
@@ -648,8 +648,8 @@ export function DiagnosisSession() {
                 <div className={`${styles.feedbackStickyNote} ${lastFeedback.passed ? styles.feedbackStickyNotePassed : styles.feedbackStickyNoteFailed}`}>
                   <div className={styles.feedbackNoteHeader}>
                     {lastFeedback.passed
-                      ? <CheckCircle2 size={14} color="#7D9B76" />
-                      : <AlertTriangle size={14} color="#C4A882" />
+                      ? <CheckCircle2 size={14} color="var(--accent-sage)" />
+                      : <AlertTriangle size={14} color="var(--border)" />
                     }
                     <span className={`${styles.feedbackNoteTitle} ${lastFeedback.passed ? styles.feedbackNoteTitlePassed : styles.feedbackNoteTitleFailed}`}>
                       {lastFeedback.passed ? "Dr. AI's Notes — Correct!" : "Dr. AI's Notes — Need Improvement"}
@@ -686,7 +686,7 @@ export function DiagnosisSession() {
                 {lastFeedback.attempt.errors.length > 0 && (
                   <div className={styles.feedbackErrors}>
                     <div className={styles.feedbackErrorsHeader}>
-                      <AlertTriangle size={13} color="#A93226" />
+                      <AlertTriangle size={13} color="var(--accent-clay)" />
                       <span className={styles.feedbackErrorsTitle}>Errors</span>
                     </div>
                     <div className={styles.feedbackErrorTags}>
@@ -699,7 +699,7 @@ export function DiagnosisSession() {
 
                 {/* Latency */}
                 <div className={styles.feedbackLatency}>
-                  <Clock size={13} color="#6B4C3B" />
+                  <Clock size={13} color="var(--ink-secondary)" />
                   <div>
                     <p className={styles.feedbackLatencyLabel}>Thời gian xử lý OpenAI API</p>
                     <p className={styles.feedbackLatencyValue}>{lastFeedback.attempt.latency_ms}ms</p>
@@ -749,8 +749,8 @@ export function DiagnosisSession() {
               {/* Header */}
               <div className={styles.exitModalHeader}>
                 <div className={styles.exitModalHeaderRow}>
-                  <div className={`${styles.exitModalIcon}`} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid #7D9B76' }}>
-                    <CheckCircle2 size={20} color="#7D9B76" />
+                  <div className={`${styles.exitModalIcon}`} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid var(--accent-sage)' }}>
+                    <CheckCircle2 size={20} color="var(--accent-sage)" />
                   </div>
                   <div>
                     <h3 className={styles.exitModalTitle}>Hoàn thành!</h3>
@@ -762,7 +762,7 @@ export function DiagnosisSession() {
               {/* Body — score */}
               <div className={styles.exitModalBody}>
                 <div className={styles.exitModalNote} style={{ textAlign: 'center', padding: '20px 12px', transform: 'rotate(0deg)' }}>
-                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--vj-faded)', marginBottom: 8 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--vj-faded)', marginBottom: 8 }}>
                     Điểm trung bình
                   </div>
                   <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 48, fontWeight: 700, color: 'var(--vj-ink)', lineHeight: 1 }}>
@@ -770,7 +770,7 @@ export function DiagnosisSession() {
                       ? Math.round(sessionData.final_score * 100)
                       : '—'}
                   </div>
-                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 12, color: 'var(--vj-faded)', marginTop: 4 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: 'var(--vj-faded)', marginTop: 4 }}>
                     / 100
                   </div>
                 </div>
@@ -828,7 +828,7 @@ export function DiagnosisSession() {
               <div className={styles.exitModalHeader}>
                 <div className={styles.exitModalHeaderRow}>
                   <div className={styles.exitModalIcon}>
-                    <LogOut size={20} color="#A93226" />
+                    <LogOut size={20} color="var(--accent-clay)" />
                   </div>
                   <div>
                     <h3 className={styles.exitModalTitle}>Thoát khỏi session?</h3>
@@ -878,7 +878,7 @@ export function DiagnosisSession() {
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity }}
-                        style={{ width: 14, height: 14, borderRadius: "50%", borderTop: "2px solid #F5EDD6", borderRight: "2px solid #F5EDD6", borderBottom: "2px solid transparent", borderLeft: "2px solid transparent" }}
+                        style={{ width: 14, height: 14, borderRadius: "50%", borderTop: "2px solid var(--bg-page)", borderRight: "2px solid var(--bg-page)", borderBottom: "2px solid transparent", borderLeft: "2px solid transparent" }}
                       />
                       Đang lưu...
                     </>

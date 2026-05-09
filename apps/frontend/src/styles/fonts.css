@@ -1,2 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Courier+Prime:wght@400;700&family=Caveat:wght@400;600;700&display=swap');
+/* ──────────────────────────────────────────────────────────────
+   SARa — Font stack
+   - Inter:           UI controls hiện đại (button toàn app, nav, badge)
+   - Playfair Display:page title, case title, hero
+   - Lora:            body paragraph, hint, italic meta
+   - Caveat:          handwriting (sticky note, filterCount)
+   - Special Elite:   typewriter (filter buttons, washi tape, stamps trong My Cases)
+   - Courier Prime:   monospace tài liệu (breadcrumb, caseNum, meta tags trong My Cases)
+   ────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Caveat:wght@400;600;700&family=Special+Elite&family=Courier+Prime:wght@400;700&display=swap');
