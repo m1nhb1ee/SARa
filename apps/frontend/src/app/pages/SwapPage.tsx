@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { MessageSquare, Stethoscope } from 'lucide-react';
+import { CheckCircle2, MessageSquare, Stethoscope, Trophy } from 'lucide-react';
 import { apiClient } from '@/api/client';
 import { useCases } from '@/api/hooks';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
+
+type SwapSessionRow = {
+  id: string;
+  case_id: string;
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
+  final_score: number | null;
+  completed_at: string | null;
+};
 
 function firstImageUrl(caseItem: any): string {
   return caseItem?.images?.[0]?.slices?.[0]?.image_url ?? caseItem?.image_urls?.[0] ?? '';
@@ -142,8 +150,29 @@ export function SwapPage() {
   const [startingCaseId, setStartingCaseId] = useState<string | null>(null);
   const [startProgress, setStartProgress] = useState(0);
   const [startError, setStartError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SwapSessionRow[]>([]);
+  const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const cases = data?.cases ?? [];
   const startingCase = cases.find((c: any) => c.id === startingCaseId);
+
+  const loadSessions = async () => {
+    const res = await apiClient.listSwapSessions();
+    if (!res.error && res.data?.sessions) setSessions(res.data.sessions);
+  };
+
+  useEffect(() => { loadSessions(); }, []);
+
+  // Best (highest score) completed session per case
+  const bestByCase = new Map<string, SwapSessionRow>();
+  for (const s of sessions) {
+    if (s.status !== 'COMPLETED') continue;
+    const existing = bestByCase.get(s.case_id);
+    if (!existing || (s.final_score ?? 0) > (existing.final_score ?? 0)) {
+      bestByCase.set(s.case_id, s);
+    }
+  }
+  const activeBest = activeCaseId ? bestByCase.get(activeCaseId) : null;
+  const activeCase = activeCaseId ? cases.find((c: any) => c.id === activeCaseId) : null;
 
   useEffect(() => {
     if (!startingCaseId) return;
@@ -217,23 +246,45 @@ export function SwapPage() {
             cases.map((c: any, idx: number) => {
               const thumb = firstImageUrl(c);
               const isStarting = startingCaseId === c.id;
+              const best = bestByCase.get(c.id);
+              const isDone = !!best;
+              const scorePct = best?.final_score != null ? Math.round(best.final_score * 100) : null;
               return (
                 <button
                   key={c.id}
-                  onClick={() => startSwap(c.id)}
+                  onClick={() => {
+                    if (startingCaseId) return;
+                    if (isDone) {
+                      setActiveCaseId(c.id);
+                    } else {
+                      startSwap(c.id);
+                    }
+                  }}
                   disabled={!!startingCaseId}
                   style={{
                     position: 'relative',
                     textAlign: 'left',
-                    background: '#EDE0C4',
-                    border: '1px solid #C4A882',
+                    background: isDone ? 'rgba(125,155,118,0.18)' : '#EDE0C4',
+                    border: isDone ? '1px solid #7D9B76' : '1px solid #C4A882',
                     padding: 14,
                     minHeight: 250,
                     cursor: startingCaseId ? 'wait' : 'pointer',
                     boxShadow: '0 3px 12px rgba(62,31,13,0.12)',
                   }}
                 >
-                  <SketchBorder id={`swap-case-${c.id}`} color="#7A6248" opacity={0.45} />
+                  <SketchBorder id={`swap-case-${c.id}`} color={isDone ? '#7D9B76' : '#7A6248'} opacity={0.45} />
+                  {isDone && (
+                    <div style={{
+                      position: 'absolute', top: 10, right: 10, zIndex: 2,
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      background: '#7D9B76', color: '#FAF3E3',
+                      padding: '3px 8px',
+                      fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: '0.08em',
+                    }}>
+                      <CheckCircle2 size={12} />
+                      {scorePct != null ? `${scorePct}%` : 'DONE'}
+                    </div>
+                  )}
                   <div style={{ aspectRatio: '4/3', background: '#2f3a42', marginBottom: 12, overflow: 'hidden', border: '1px solid rgba(62,31,13,0.35)' }}>
                     {thumb ? (
                       <img src={thumb} alt={c.title} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'sepia(20%) contrast(1.05)' }} />
@@ -243,14 +294,14 @@ export function SwapPage() {
                       </div>
                     )}
                   </div>
-                  <div style={{ fontFamily: "'Special Elite', cursive", fontSize: 10, color: '#1B5C4A', letterSpacing: '0.1em', marginBottom: 5 }}>
+                  <div style={{ fontFamily: "'Special Elite', cursive", fontSize: 10, color: isDone ? '#3F6E54' : '#1B5C4A', letterSpacing: '0.1em', marginBottom: 5 }}>
                     CASE #{String(idx + 1).padStart(3, '0')} / {c.modality}
                   </div>
                   <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, color: '#2C1810', lineHeight: 1.25 }}>
                     {c.title}
                   </div>
                   <div style={{ marginTop: 10, fontFamily: "'Lora', serif", fontSize: 12, color: '#6B4C3B', lineHeight: 1.45 }}>
-                    {isStarting ? 'Preparing doctor...' : 'Start debate'}
+                    {isStarting ? 'Preparing doctor...' : isDone ? 'Đã hoàn thành — bấm để xem lại' : 'Start debate'}
                   </div>
                 </button>
               );
@@ -258,6 +309,84 @@ export function SwapPage() {
           )}
         </div>
       </div>
+
+      {activeCase && activeBest && (
+        <div
+          onClick={() => setActiveCaseId(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(44,24,16,0.65)',
+            backdropFilter: 'blur(2px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 60, padding: 16,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#EDE0C4', border: '2px solid #7D9B76',
+              padding: '22px 26px', maxWidth: 460, width: '100%',
+              boxShadow: '0 12px 40px rgba(44,24,16,0.3)',
+              fontFamily: "'Lora', serif",
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <Trophy size={20} color="#7D9B76" />
+              <h3 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: 22, color: '#2C1810' }}>
+                Case đã hoàn thành
+              </h3>
+            </div>
+            <p style={{ margin: '0 0 6px', color: '#6B4C3B', fontSize: 14 }}>
+              {activeCase.title}
+            </p>
+            <div style={{
+              fontFamily: "'Courier Prime', monospace", fontSize: 11,
+              color: '#3F6E54', letterSpacing: '0.1em', marginBottom: 18,
+            }}>
+              MỨC ĐỘ THUYẾT PHỤC: {activeBest.final_score != null ? Math.round(activeBest.final_score * 100) : '—'}%
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setActiveCaseId(null)}
+                style={{
+                  padding: '8px 14px', background: 'transparent',
+                  border: '1px solid #C4A882', color: '#6B4C3B',
+                  fontFamily: "'Special Elite', cursive", fontSize: 12, letterSpacing: '0.1em',
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => navigate(`/swap/session/${activeBest.id}`)}
+                style={{
+                  padding: '8px 14px', background: '#FAF3E3',
+                  border: '1px solid #7D9B76', color: '#1B5C4A',
+                  fontFamily: "'Special Elite', cursive", fontSize: 12, letterSpacing: '0.1em',
+                  cursor: 'pointer',
+                }}
+              >
+                Xem kết quả
+              </button>
+              <button
+                onClick={() => {
+                  const id = activeCaseId!;
+                  setActiveCaseId(null);
+                  startSwap(id);
+                }}
+                style={{
+                  padding: '8px 14px', background: '#7D9B76', color: '#FAF3E3',
+                  border: '1px solid #5C7A5A',
+                  fontFamily: "'Special Elite', cursive", fontSize: 12, letterSpacing: '0.1em',
+                  cursor: 'pointer',
+                }}
+              >
+                Làm lại
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

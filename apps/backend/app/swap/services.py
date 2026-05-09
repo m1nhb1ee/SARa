@@ -430,6 +430,14 @@ def _serialize_session(session: dict) -> dict:
     }
 
 
+def list_swap_sessions(user_id: str) -> list[dict]:
+    sb = get_supabase()
+    rows = sb.table('swap_sessions').select(
+        'id, case_id, status, final_score, current_step, started_at, completed_at'
+    ).eq('user_id', user_id).order('started_at', desc=True).execute().data or []
+    return rows
+
+
 def create_swap_session(case_id: str, user_id: str) -> tuple[dict | None, Response | None]:
     case, err = _get_case_for_user(case_id, user_id)
     if err:

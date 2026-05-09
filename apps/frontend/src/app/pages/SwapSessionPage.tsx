@@ -372,14 +372,28 @@ export function SwapSessionPage() {
                   })}
                 </div>
               </div>
+
+              {(() => {
+                const dx = session.doctor_diagnosis ?? {};
+                const conclusion = dx.CONCLUSION || dx.REASONING || dx.DESCRIBE;
+                if (!conclusion) return null;
+                return (
+                  <div className={styles.exitModalInfo} style={{ marginTop: 14 }}>
+                    <div className={styles.exitModalInfoLabel}>Tổng kết chẩn đoán</div>
+                    <div className={styles.exitModalInfoDetails} style={{ whiteSpace: 'pre-wrap' }}>
+                      {conclusion}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className={styles.exitModalFooter}>
               <button
-                onClick={() => { setShowCompletion(false); navigate('/'); }}
+                onClick={() => { setShowCompletion(false); navigate('/swap'); }}
                 className={styles.exitModalCancelBtn}
               >
-                Về trang chính
+                Lưu & Thoát
               </button>
               <button
                 onClick={() => { setShowCompletion(false); navigate('/swap'); }}
