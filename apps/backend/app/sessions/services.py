@@ -40,9 +40,9 @@ def get_rubric_id(sb, step_code: str) -> str | None:
     candidates = [step_code, *_LEGACY_RUBRIC_FALLBACKS.get(step_code, [])]
     for code in candidates:
         try:
-            r = sb.table('step_rubrics').select('id').eq('step_code', code).single().execute()
+            r = sb.table('step_rubrics').select('id').eq('step_code', code).limit(1).execute()
             if r.data:
-                return r.data['id']
+                return r.data[0]['id']
         except Exception:
             continue
     return None

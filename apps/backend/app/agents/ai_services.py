@@ -2,9 +2,7 @@
 SARa Agents — Django wrapper for src.backend.agents
 Replaces MockAIAgent / OpenAIAgent with the proper socratic + answer_check agents.
 """
-import json
 import logging
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -16,17 +14,49 @@ except ImportError as e:
     logger.error(f"Failed to import SARa agents: {e}")
     _AGENTS_AVAILABLE = False
 
-_RUBRIC_FILE = Path(__file__).resolve().parent / "data" / "rubric.json"
+_RUBRIC_CACHE: dict | None = None
 
-def _load_rubric() -> dict:
+
+def _get_rubric() -> dict:
+    """Fetch rubric from Supabase, cached for the lifetime of the process."""
+    global _RUBRIC_CACHE
+    if _RUBRIC_CACHE is not None:
+        return _RUBRIC_CACHE
     try:
-        with open(_RUBRIC_FILE, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to load rubric.json: {e}")
-        return {}
+        from app.core.supabase_client import get_supabase
+        sb = get_supabase()
+        rows = sb.table('step_rubrics').select(
+            'step_code, question, criterion_label, max_score, error_code, pass_score, scoring_guide'
+        ).execute()
 
-_RUBRIC = _load_rubric()
+        rubric: dict = {}
+        for row in (rows.data or []):
+            step = row['step_code']
+            if step not in rubric:
+                rubric[step] = {
+                    'question':      row.get('question', ''),
+                    'pass_score':    row.get('pass_score') or 0.6,
+                    'criteria':      [],
+                    'scoring_guide': '',
+                }
+            rubric[step]['criteria'].append({
+                'label':      row.get('criterion_label', ''),
+                'max_score':  row.get('max_score', 1),
+                'error_code': row.get('error_code', ''),
+            })
+            if row.get('scoring_guide'):
+                rubric[step]['scoring_guide'] += row['scoring_guide'] + ' '
+
+        for step_data in rubric.values():
+            step_data['total_max'] = sum(c['max_score'] for c in step_data['criteria'])
+            step_data['scoring_guide'] = step_data['scoring_guide'].strip()
+
+        _RUBRIC_CACHE = rubric
+        logger.info(f"Rubric loaded from Supabase: {list(rubric.keys())}")
+        return rubric
+    except Exception as e:
+        logger.error(f"Failed to load rubric from Supabase: {e}")
+        return {}
 
 
 def classify_intent(
@@ -64,10 +94,9 @@ def evaluate_answer(
     is_last_step: bool = False,
 ) -> dict:
     """
-    Evaluate student answer using the SARa rubric and answer_check agent.
-    rubric is loaded from rubric.json — no DB lookup needed.
+    Evaluate student answer using the SARa rubric loaded from Supabase.
     """
-    rubric = _RUBRIC.get(step_code, {})
+    rubric = _get_rubric().get(step_code, {})
     if not _AGENTS_AVAILABLE or not rubric:
         logger.warning(f"evaluate_answer fallback: agents={_AGENTS_AVAILABLE}, rubric_found={bool(rubric)}")
         return {
