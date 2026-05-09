@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useCaseDetail, useSessionDetail, useSubmitAnswer, useExitSession } from "@/api/hooks";
+import { apiClient } from "@/api/client";
 import styles from "@/styles/DiagnosisSession.module.css";
 import { VolumeSliceViewer } from "@/app/components/shared/VolumeSliceViewer";
 import type { CaseVolume } from "@/types";
@@ -113,44 +114,26 @@ export function DiagnosisSession() {
   // Create or resume session on mount
   useEffect(() => {
     if (!caseId || sessionId) return;
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-    const token = localStorage.getItem('sara_token') || '';
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     const initSession = async () => {
-      // Check for an existing resumable session (PAUSED or IN_PROGRESS) for this case
-      const listRes = await fetch(`${API_BASE}/sessions/?case=${caseId}`, { headers });
-      if (listRes.ok) {
-        const listData = await listRes.json();
-        const resumable = (listData.results as any[] ?? []).find(
-          (s: any) => s.status === 'ABANDONED' || s.status === 'IN_PROGRESS'
-        );
-        if (resumable) {
-          const detailRes = await fetch(`${API_BASE}/sessions/${resumable.id}/`, { headers });
-          if (detailRes.ok) {
-            const detail = await detailRes.json();
-            // Reactivate ABANDONED session (no-op if already IN_PROGRESS)
-            await fetch(`${API_BASE}/sessions/${resumable.id}/resume/`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...headers },
-            });
-            setSessionId(detail.id);
-            setIntroReady(true);
-            setMessages(buildMessagesFromAttempts(detail.step_attempts ?? [], detail.current_step ?? 0));
-            return;
-          }
+      const listRes = await apiClient.getSessions({ case: caseId });
+      const resumable = (listRes.data?.results as any[] ?? []).find(
+        (s: any) => s.status === 'ABANDONED' || s.status === 'IN_PROGRESS'
+      );
+      if (resumable) {
+        const detailRes = await apiClient.getSessionDetail(resumable.id);
+        if (detailRes.data) {
+          await apiClient.resumeSession(resumable.id);
+          setSessionId(detailRes.data.id);
+          setIntroReady(true);
+          setMessages(buildMessagesFromAttempts(detailRes.data.step_attempts ?? [], detailRes.data.current_step ?? 0));
+          return;
         }
       }
 
-      // No resumable session — create a new one
-      const createRes = await fetch(`${API_BASE}/sessions/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ case_id: caseId }),
-      });
-      if (createRes.ok) {
-        const data = await createRes.json();
-        setSessionId(data.id);
+      const createRes = await apiClient.createSession(caseId);
+      if (createRes.data) {
+        setSessionId(createRes.data.id);
         setMessages([{ id: "1", role: "ai", type: "intro", content: INTRO_MESSAGE }]);
       }
     };

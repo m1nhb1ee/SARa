@@ -5,12 +5,13 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Upload, PlayCircle, X, Clock, CheckCircle2, RefreshCw, Lightbulb,
   BookOpen, AlertCircle, AlertTriangle, ZoomIn, ZoomOut, Maximize2, Send, ChevronRight,
 } from 'lucide-react';
 import { useCaseDetail, useCreateSession, useSessionDetail, useSubmitAnswer } from '@/api/hooks';
+import { apiClient } from '@/api/client';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -135,16 +136,10 @@ export function PracticePage() {
       formData.append('title', uploadTitle);
       formData.append('modality', uploadModality);
 
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-      const token = localStorage.getItem('sara_token') || '';
-      const response = await fetch(`${API_BASE}/uploaded-cases/`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
+      const uploadRes = await apiClient.uploadCase(formData);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (uploadRes.data) {
+        const data = uploadRes.data;
         setUploading(false);
         setUploadProcessing(true);
 
@@ -159,17 +154,11 @@ export function PracticePage() {
 
         // Create session — lưu vào state riêng + ref để tránh stale closure
         if (data.case?.id) {
-          try {
-            const sessionRes = await createSession(data.case.id);
-            if (sessionRes) {
-              setSessionId(sessionRes.id);
-              sessionIdRef.current = sessionRes.id;
-              setUploadedCaseData((prev: any) => ({ ...prev, session_id: sessionRes.id }));
-            } else {
-              console.error('Failed to create session - no response');
-            }
-          } catch (createErr) {
-            console.error('Error creating session:', createErr);
+          const sessionRes = await createSession(data.case.id).catch(() => null);
+          if (sessionRes) {
+            setSessionId(sessionRes.id);
+            sessionIdRef.current = sessionRes.id;
+            setUploadedCaseData((prev: any) => ({ ...prev, session_id: sessionRes.id }));
           }
         }
 
@@ -187,8 +176,7 @@ export function PracticePage() {
           setShowAnswerPreview(true);  // ✅ Hiện popup chọn: Xem đáp án / Thực hành
         }, 500);
       }
-    } catch (err) {
-      console.error('Upload failed:', err);
+    } catch {
       setUploadProcessing(false);
     } finally {
       setUploading(false);
@@ -198,35 +186,20 @@ export function PracticePage() {
   const fetchStepAnswers = async (sid: number) => {
     if (!sid) return;
     setLoadingAnswers(true);
-    try {
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-      const token = localStorage.getItem('sara_token') || '';
-      const response = await fetch(`${API_BASE}/sessions/${sid}/step_answers/`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStepAnswers(data);
-        setShowAnswerDetails(true);
-      } else {
-        console.error('Failed to fetch step answers:', response.statusText);
-      }
-    } catch (err) {
-      console.error('Error fetching step answers:', err);
-    } finally {
-      setLoadingAnswers(false);
+    const res = await apiClient.getStepAnswers(sid);
+    setLoadingAnswers(false);
+    if (res.data) {
+      setStepAnswers(res.data);
+      setShowAnswerDetails(true);
     }
   };
 
   const handleShowAnswers = async () => {
     setShowAnswerPreview(false);
     setCurrentAnswerStep(0);
-    // Dùng ref để đảm bảo luôn có giá trị mới nhất, tránh stale closure
     const sid = sessionIdRef.current ?? sessionId ?? uploadedCaseData?.session_id;
     if (sid) {
       await fetchStepAnswers(sid);
-    } else {
-      console.error('handleShowAnswers: không tìm thấy session_id');
     }
   };
 

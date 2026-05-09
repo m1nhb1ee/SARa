@@ -60,37 +60,6 @@ class APIClient {
     }
   }
 
-  private async requestForm<T>(
-    endpoint: string,
-    formData: FormData
-  ): Promise<ApiResponse<T>> {
-    try {
-      const url = `${this.baseURL}${endpoint}`;
-      const token = localStorage.getItem('sara_token') || '';
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        return {
-          status: response.status,
-          error: errorData.error || `HTTP ${response.status}`,
-        };
-      }
-
-      const data = await response.json();
-      return { data, status: response.status };
-    } catch (error) {
-      return {
-        status: 0,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
   // Cases
   async getCases(params?: { modality?: string; difficulty?: string; search?: string; page?: number; is_valid?: string }) {
     const queryString = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null) as [string, string][]).toString() : '';
@@ -106,9 +75,13 @@ class APIClient {
   }
 
   // Sessions
-  async getSessions(params?: { status?: string; page?: number }) {
+  async getSessions(params?: { status?: string; page?: number; case?: string }) {
     const queryString = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null) as [string, string][]).toString() : '';
     return this.request<any>(`/sessions/${queryString ? '?' + queryString : ''}`);
+  }
+
+  async resumeSession(sessionId: string) {
+    return this.request<any>(`/sessions/${sessionId}/resume/`, 'POST');
   }
 
   async createSession(caseId: string) {
@@ -127,6 +100,10 @@ class APIClient {
     return this.request<any>(`/sessions/${sessionId}/answer_key/`);
   }
 
+  async getStepAnswers(sessionId: string | number) {
+    return this.request<any>(`/sessions/${sessionId}/step_answers/`);
+  }
+
   async exitSession(sessionId: string) {
     return this.request<any>(`/sessions/${sessionId}/exit_session/`, 'POST');
   }
@@ -138,6 +115,25 @@ class APIClient {
   // Uploaded cases
   async getUploadedCases() {
     return this.request<any>('/uploaded-cases/');
+  }
+
+  async uploadCase(formData: FormData): Promise<ApiResponse<any>> {
+    try {
+      const token = localStorage.getItem('sara_token') || '';
+      const response = await fetch(`${this.baseURL}/uploaded-cases/`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return { status: response.status, error: errorData.error || `HTTP ${response.status}` };
+      }
+      const data = await response.json();
+      return { data, status: response.status };
+    } catch (error) {
+      return { status: 0, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   }
 
   async deleteUploadedCase(uploadSessionId: string) {
@@ -209,10 +205,6 @@ class APIClient {
     }
 
     return { error: 'Stream ended before completion', status: 0 };
-  }
-
-  async vlmAnswer(formData: FormData) {
-    return this.requestForm<any>('/vlm-answer/', formData);
   }
 
   // Performance

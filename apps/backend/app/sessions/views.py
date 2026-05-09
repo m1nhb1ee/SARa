@@ -16,8 +16,6 @@ from .services import get_session, get_rubric_id
 
 logger = logging.getLogger(__name__)
 
-STEP_CODES = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION']
-
 
 def _now_iso() -> str:
     return datetime.now(dt_timezone.utc).isoformat()
@@ -138,7 +136,12 @@ class SessionViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         student_answer = serializer.validated_data['student_answer']
         current_step = session['current_step']
-        step_code = STEP_CODES[current_step] if current_step < len(STEP_CODES) else 'UNKNOWN'
+        if not isinstance(current_step, int) or current_step < 0 or current_step >= len(STEP_CODES):
+            return Response(
+                {'error': f'Session current_step ({current_step}) ngoài phạm vi'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        step_code = STEP_CODES[current_step]
         is_last = current_step == len(STEP_CODES) - 1
 
         # ── 1. Classify intent — handle question/chit-chat without evaluating ──
