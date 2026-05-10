@@ -97,7 +97,7 @@ Observe → Describe → Interpret → DDx → Conclusion.
 
 ---
 
-### Sprint 1 — 07/04 → 11/04/2026
+### Sprint 1 - 07/04 → 11/04/2026
 
 | Task | Người làm | Deadline | Trạng thái |
 |---|---|---|---|
@@ -135,7 +135,7 @@ Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 
 ---
 
-### Sprint 2 — 14/04 → 18/04/2026
+### Sprint 2 - 14/04 → 18/04/2026
 
 | Task | Người làm | Deadline | Trạng thái |
 |---|---|---|---|
@@ -153,7 +153,7 @@ Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 
 ---
 
-### Sprint 3 — 19/04 → 25/04/2026
+### Sprint 3 - 19/04 → 25/04/2026
 
 | Task | Người làm | Deadline | Trạng thái |
 |---|---|---|---|
@@ -191,6 +191,51 @@ Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 | Fix VLM lỗi GPU task abort / NameError (VRAM limit với ảnh nhiều) | Tiến | ongoing | 🔄 Đang làm |
 | Tìm thêm case mẫu để mở rộng thư viện | Khôi | ongoing | 🔄 Đang làm |
 | Viết test cases cho giai đoạn testing | Cả nhóm | ongoing | 🔄 Đang làm |
+
+---
+
+### [ADR-7] Engine routing theo account tier — 08/05/2026
+
+**Bối cảnh:** Hệ thống có hai model phân tích ảnh (GPT-5.4-mini và MedGemma). Cần phân luồng người dùng vào đúng model theo gói tài khoản, và đảm bảo mapping có thể thay đổi mà không cần sửa business logic.
+
+**Các lựa chọn đã xem xét:**
+- **Hardcode trong UploadPage:** Đơn giản nhưng mapping nằm rải rác trong UI, khó thay đổi khi cần đổi model theo tier.
+- **Config tập trung:** Tạo `engineConfig.ts` với `ENGINE_BY_TIER: { free: 'vlm', premium: 'gpt' }` và helper `engineForUser(isPremium)`. Logic routing chỉ đọc từ một nơi.
+
+**Quyết định:** Config tập trung tại `src/constants/engineConfig.ts`. Backend trả về `is_premium` từ bảng `users` khi login và `GET /auth/me/`. Frontend đọc `user.is_premium` từ auth context và gọi `engineForUser()` khi submit upload.
+
+**Hệ quả:** Thay đổi model theo tier chỉ cần sửa một chỗ trong `ENGINE_BY_TIER`. `is_premium` phải được đồng bộ giữa Supabase `users` table và auth response — nếu lệch sẽ gây sai luồng engine.
+
+---
+
+### [ADR-8] LLM layer chuẩn hóa output thô của VLM (debate flow) — 09/05/2026
+
+**Bối cảnh:** MedGemma trả về output không nhất quán — có khi là JSON, có khi là FINDINGS/IMPRESSION/REASONING block, có khi là free text. Cần chuẩn hóa về DESCRIBE/REASONING/DDx/CONCLUSION trước khi lưu và hiển thị.
+
+**Các lựa chọn đã xem xét:**
+- **Regex/rule-based parser:** Dễ implement nhưng brittle, vỡ khi VLM đổi format output.
+- **GPT làm LLM layer:** Gửi raw VLM output cho GPT, yêu cầu extract và chuẩn hóa thành 4 bước. GPT hiểu ngữ nghĩa nên không phụ thuộc format cụ thể.
+
+**Quyết định:** Thêm `_complete_final_steps_with_llm()` làm post-processing sau VLM. Nhận `raw_findings` (toàn bộ text thô), gọi `build_gpt_final_steps_prompt()` trong `app/prompt/gpt_prompt.py`. Prompt hướng dẫn GPT phát hiện format bất kỳ và trả về JSON chuẩn 4 bước với tất cả values là plain string. Fallback về kết quả VLM gốc nếu GPT không available.
+
+**Hệ quả:** Latency tăng thêm 1 API call. Code thêm `_normalize_ddx()` để catch trường hợp LLM vẫn trả array thay vì string. VLM output format linh hoạt hơn vì không cần đúng chuẩn.
+
+---
+
+### Sprint 5 - 05/05 → 10/05/2026
+
+| Task | Người làm | Deadline | Trạng thái |
+|---|---|---|---|
+| Rút gọn pipeline từ 6 bước xuống 4 bước (DESCRIBE/REASONING/DDx/CONCLUSION) | Tiến | 06/05 | Xong |
+| Implement engine routing theo tier (free → VLM, premium → GPT) | Tiến | 07/05 | Xong | |
+| Implement LLM debate layer (`_complete_final_steps_with_llm`) | Minh | 08/05 | Xong |
+| Cải thiện Socratic Q&A agent flow | Khôi | 08/05 | Xong |
+| Deploy hệ thống lên Railway | Minh | 09/05 | Xong |
+| Viết evaluation script so sánh GPT-5.4-mini và MedGemma (4 metrics) | Tiến | 09/05 | Xong |
+| Refactor và hoàn thiện codebase | Cả nhóm | ongoing | Đang làm |
+| Set up CI/CD | Minh | ongoing | Đang làm |
+| Fix các bug còn lại và hoàn thiện frontend | Minh | ongoing | 🔄 Đang làm |
+| Thêm data case mẫu | Khôi | ongoing | Đang làm |
 
 ---
 
