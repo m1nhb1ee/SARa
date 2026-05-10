@@ -126,7 +126,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
             all_bytes = [b for _, b in image_data]
 
             # ── Bước 1: Kiểm tra ảnh y tế + consistency trước khi upload storage ──
-            validation = classify_and_validate_images(all_bytes, volume_names, modality)
+            validation = classify_and_validate_images(all_bytes, volume_names, modality, region)
             if not validation['valid']:
                 return Response({
                     'error': 'image_validation_failed',
@@ -262,7 +262,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
             all_bytes = [b for _, b in image_data]
 
             # ── Bước 1: Kiểm tra ảnh y tế + consistency trước khi upload storage ──
-            validation = classify_and_validate_images(all_bytes, volume_names, modality)
+            validation = classify_and_validate_images(all_bytes, volume_names, modality, declared_region=region)
             if not validation['valid']:
                 return Response({
                     'error': 'image_validation_failed',

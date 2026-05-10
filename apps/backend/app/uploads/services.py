@@ -17,7 +17,11 @@ from app.config.model_config import (
 )
 from app.core.step_codes import STEP_CODES
 from app.core.supabase_client import get_supabase
-from app.prompt.gpt_prompt import build_gpt_four_step_analysis_prompt, build_gpt_final_steps_prompt
+from app.prompt.gpt_prompt import (
+    build_gpt_four_step_analysis_prompt,
+    build_gpt_final_steps_prompt,
+    build_image_validation_prompt,
+)
 from app.prompt.medgemma_prompt import build_analysis_prompt
 
 logger = logging.getLogger(__name__)
@@ -272,10 +276,35 @@ def _to_temp_file(image_file) -> tuple:
     raise ValueError(f"Không đọc được ảnh từ kiểu: {type(image_file)}")
 
 
+def _base_modality(type_str: str) -> str:
+    """Collapse a detailed type string into one of: XRAY | CT | MRI | OTHER."""
+    t = type_str.lower()
+    if any(k in t for k in ('x-ray', 'xray', 'radiograph', 'plain film')):
+        return 'XRAY'
+    if 'ct' in t or 'computed tomography' in t:
+        return 'CT'
+    if 'mri' in t or 'magnetic resonance' in t or any(k in t for k in ('t1', 't2', 'flair', 'dwi', 'adc', 'gre', 'stir')):
+        return 'MRI'
+    return 'OTHER'
+
+
+def _has_mixed_region_in_volume(classifications: list, volume_names: list) -> bool:
+    """Return True if any volume group contains images from different anatomical regions."""
+    vol_regions: dict[str, set] = {}
+    for c in classifications:
+        idx = c.get('index')
+        region = (c.get('region') or '').strip().lower()
+        if idx is None or not region or idx >= len(volume_names):
+            continue
+        vol_regions.setdefault(volume_names[idx], set()).add(region)
+    return any(len(regions) > 1 for regions in vol_regions.values())
+
+
 def classify_and_validate_images(
     image_bytes_list: list,
     volume_names: list,
     declared_modality: str,
+    declared_region: str = '',
 ) -> dict:
     """
     Gọi GPT-4o Vision để:
@@ -285,9 +314,10 @@ def classify_and_validate_images(
     Returns:
         {
             'valid': bool,
-            'error_type': None | 'not_medical' | 'inconsistent_volume',
+            'error_type': None | 'not_medical' | 'modality_mismatch' | 'mixed_modality' |
+                          'mixed_region' | 'region_mismatch' | 'inconsistent_volume',
             'issues': [str],   # tiếng Việt, hiển thị thẳng cho user
-            'classifications': [{'index': int, 'volume': str, 'is_medical': bool, 'type': str}]
+            'classifications': [{'index': int, 'volume': str, 'is_medical': bool, 'type': str, 'region': str}]
         }
 
     Nếu không có OPENAI_API_KEY hoặc GPT-4o call thất bại: trả về valid=True (skip validation).
@@ -323,32 +353,7 @@ def classify_and_validate_images(
         f'Image {idx} → volume="{volume_names[idx]}"' for idx in sample_indices
     )
 
-    prompt = f"""Classify each image shown.
-
-Context: a radiology education platform is validating user-uploaded files.
-Declared scan type: {declared_modality}
-Image index → volume group: {volume_info}
-
-Task — for each image:
-1. Identify the imaging technique shown (e.g. "X-ray", "CT axial", "MRI T2", "MRI T1", "Ultrasound", "Pathology slide").
-   If the image is NOT a medical/radiological scan (e.g. a regular photo, screenshot, diagram), set is_medical=false.
-2. Note which volume group it belongs to (given above).
-
-After classifying all images, check: within each volume group, do all images show the same imaging technique and sequence?
-
-Return ONLY valid JSON, no markdown:
-{{
-  "images": [
-    {{"index": 0, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}},
-    {{"index": 1, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}}
-  ],
-  "issues": []
-}}
-
-Populate "issues" (in Vietnamese) only when:
-- An image is not a medical scan: "Ảnh số {{n}} (volume: '{{vol}}') không phải ảnh y tế. Vui lòng chỉ upload ảnh chẩn đoán hình ảnh."
-- A volume group contains images of different types: "Volume '{{vol}}' chứa ảnh không nhất quán: {{types found}}. Vui lòng upload cùng 1 loại ảnh trong 1 volume."
-"""
+    prompt = build_image_validation_prompt(declared_modality, declared_region, volume_info)
 
     try:
         client = OpenAI(api_key=api_key)
@@ -382,10 +387,26 @@ Populate "issues" (in Vietnamese) only when:
         classifications = parsed.get('images', [])
         issues = [s.strip() for s in parsed.get('issues', []) if s.strip()]
 
-        has_non_medical = any(not c.get('is_medical', True) for c in classifications)
+        has_non_medical       = any(not c.get('is_medical', True) for c in classifications)
+        has_modality_mismatch = any(not c.get('matches_declared_modality', True) for c in classifications)
+        has_mixed_modality    = len({_base_modality(c.get('type', '')) for c in classifications if c.get('is_medical')}) > 1
+        has_mixed_region      = _has_mixed_region_in_volume(classifications, volume_names)
+        has_region_mismatch   = (
+            bool(declared_region) and
+            any(not c.get('matches_declared_region', True) for c in classifications)
+        )
+
         error_type = None
         if has_non_medical:
             error_type = 'not_medical'
+        elif has_region_mismatch:
+            error_type = 'region_mismatch'
+        elif has_modality_mismatch:
+            error_type = 'modality_mismatch'
+        elif has_mixed_modality:
+            error_type = 'mixed_modality'
+        elif has_mixed_region:
+            error_type = 'mixed_region'
         elif issues:
             error_type = 'inconsistent_volume'
 
