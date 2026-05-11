@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+import logging
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -57,10 +58,11 @@ class RegisterView(APIView):
             else:
                 # Email confirmation required
                 return Response({
-                    'message': 'Đăng ký thành công! Vui lòng kiểm tra email để xác nhận tài khoản.',
+                    'message': 'Đăng ký thành công! Vui lòng check email',
                     'requires_confirmation': True,
                 }, status=status.HTTP_201_CREATED)
         except Exception as e:
+            logging.exception('RegisterView: error during sign_up')
             err = str(e).lower()
             if 'already registered' in err or 'already been registered' in err:
                 return Response(
@@ -107,7 +109,14 @@ class LoginView(APIView):
                 'refresh_token': session.refresh_token,
                 'expires_at': session.expires_at,
             })
-        except Exception:
+        except Exception as e:
+            logging.exception('LoginView: error during sign_in_with_password')
+            err = str(e).lower()
+            if 'email not confirmed' in err or 'not confirmed' in err:
+                return Response(
+                    {'error': 'Email chưa được xác nhận', 'requires_confirmation': True},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
             return Response(
                 {'error': 'Email hoặc mật khẩu không đúng'},
                 status=status.HTTP_401_UNAUTHORIZED,
