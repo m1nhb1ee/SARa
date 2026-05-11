@@ -22,6 +22,9 @@ Rules:
 - Score must be between 0.0 and 1.0.
 - errors[] must only use the exact error_codes provided in the rubric for this step. No other codes allowed.
 - feedback must be in Vietnamese, 1-2 sentences, hint direction only.
+- partial_answer_by_error must be filled when the student fails. Return one
+  short, non-leaking fragment for each error_code in errors[]. Each fragment
+  must align with that specific rubric error.
 - positive_feedback must always be filled — explicitly reference what the student
   said correctly, including referencing their previous steps if relevant.
   If nothing was correct, write an encouraging note on what direction to focus.
@@ -48,6 +51,9 @@ Return pure JSON, no markdown:
   "passed": <bool>,
   "errors": [<use only the error_codes defined in the rubric criteria for this step>],
   "feedback": "<Vietnamese, 1-2 sentences when failed, no answer leak>",
+  "partial_answer_by_error": [
+    {"error_code": "<one error code>", "fragment": "<short non-leaking fragment>"}
+  ],
   "positive_feedback": "<Vietnamese, what student got right — only when passed>",
   "could_add": "<Vietnamese, 1-2 things to make answer more complete — only when passed>",
   "next_step_preview": "<Vietnamese, 1 sentence preview of next step — only when passed>"
@@ -220,11 +226,13 @@ Evaluate and return JSON.""")
 
     passed = raw["score"] >= 0.6   # never trust LLM's passed field — compute from score
     errors = [] if passed else raw.get("errors", [])   # errors must be empty when passed
+    partial_answer_by_error = [] if passed else raw.get("partial_answer_by_error", [])
     return {
         "score":             raw["score"],
         "passed":            passed,
         "errors":            errors,
         "feedback":          "" if passed else raw.get("feedback", ""),
+        "partial_answer_by_error": partial_answer_by_error,
         "positive_feedback": raw.get("positive_feedback", ""),
         "could_add":         raw.get("could_add", ""),
         "next_step_preview": raw.get("next_step_preview", ""),

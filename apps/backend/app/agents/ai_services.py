@@ -3,6 +3,7 @@ SARa Agents — Django wrapper for src.backend.agents
 Replaces MockAIAgent / OpenAIAgent with the proper socratic + answer_check agents.
 """
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,36 @@ except ImportError as e:
     _AGENTS_AVAILABLE = False
 
 _RUBRIC_CACHE: dict | None = None
+
+
+_HINT_REQUEST_RE = re.compile(
+    r"(?i)\b("
+    r"khong\s*biet|không\s*biết|khong\s*ro|không\s*rõ|"
+    r"khong\s*nho|không\s*nhớ|khong\s*chac|không\s*chắc|"
+    r"em\s*chiu|chịu|bo\s*tay|bó\s*tay|"
+    r"goi\s*y|gợi\s*ý|hint|help"
+    r")\b"
+)
+
+
+def _is_explicit_hint_request(user_input: str) -> bool:
+    """
+    Detect explicit "I don't know / give me a hint" messages before LLM classification.
+    This keeps hint behavior stable even when the model would otherwise label the text as an answer.
+    """
+    text = " ".join((user_input or "").strip().split())
+    if not text:
+        return False
+    if len(text) <= 40 and _HINT_REQUEST_RE.search(text):
+        return True
+    return text.lower() in {
+        "khong biet", "không biết",
+        "khong ro", "không rõ",
+        "khong nho", "không nhớ",
+        "khong chac", "không chắc",
+        "chịu", "em chịu", "bo tay", "bó tay",
+        "gợi ý", "goi y", "hint",
+    }
 
 
 def _get_rubric() -> dict:
@@ -59,6 +90,11 @@ def _get_rubric() -> dict:
         return {}
 
 
+def get_step_rubric(step_code: str) -> dict:
+    """Return the cached rubric for a step, or an empty dict if unavailable."""
+    return _get_rubric().get(step_code, {})
+
+
 def classify_intent(
     user_input: str,
     step_code: str,
@@ -67,10 +103,12 @@ def classify_intent(
 ) -> dict:
     """
     Classify student intent before evaluation.
-    Returns {'intent': 'answer'|'revise'|'question'|'chit-chat', 'response': str}
+    Returns {'intent': 'answer'|'revise'|'question'|'chit-chat'|'need_hint', 'response': str}
     """
     if not _AGENTS_AVAILABLE:
         return {"intent": "answer", "response": ""}
+    if _is_explicit_hint_request(user_input):
+        return {"intent": "need_hint", "response": ""}
     try:
         return _socratic.classify_and_respond(
             user_input=user_input,
@@ -123,6 +161,11 @@ def get_socratic_hint(
     step_index: int,
     errors: list,
     hint_count: int,
+    prior_errors: list | None = None,
+    partial_answer: str | None = None,
+    focus_error_code: str | None = None,
+    repeat_focus: bool = False,
+    repeat_depth: int = 0,
     step_attempts: list | None = None,
 ) -> str:
     """
@@ -137,6 +180,11 @@ def get_socratic_hint(
             step_index=step_index,
             errors=errors,
             hint_count=hint_count,
+            prior_errors=prior_errors,
+            partial_answer=partial_answer,
+            focus_error_code=focus_error_code,
+            repeat_focus=repeat_focus,
+            repeat_depth=repeat_depth,
             step_attempts=step_attempts,
         )
     except Exception as e:

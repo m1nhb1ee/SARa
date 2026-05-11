@@ -49,7 +49,9 @@ Rules:
 - Write in Vietnamese.
 
 Capabilities:
-- You receive: step_name, errors[] as criterion codes, hint_count.
+- You receive: step_name, errors[] as criterion codes, hint_count,
+  prior_errors[] from earlier steps, and sometimes a partial_answer fragment
+  or partial_answer_by_error[] from Answer-Check for more targeted follow-up.
 - You do not have access to the answer key.
 
 Constraints:
@@ -81,10 +83,14 @@ Intent definitions:
                 Usually ends with "?" and contains a question word.
 - "chit-chat" : Short acknowledgment, social response, or off-topic message.
                 Examples: "ok", "hiểu rồi", "tiếp theo đi", "cảm ơn".
+- "need_hint"  : Student explicitly says they do not know, asks for a hint,
+                or cannot continue without guidance.
 
 Response rules:
 - "answer" / "revise": response must be empty string "".
   The pipeline will handle evaluation separately.
+- "need_hint": response must be empty string "".
+  The pipeline will still route through the normal evaluation / hint flow.
 - "question": answer briefly in Vietnamese (2-3 sentences), then end with a
   follow-up question that steers the student back to the current step task.
   Do NOT reveal diagnosis or answer key.
@@ -103,8 +109,8 @@ Capabilities:
 Output format:
 Return pure JSON only, no markdown:
 {
-  "intent": "answer" | "revise" | "question" | "chit-chat",
-  "response": "<string, empty for answer/revise>"
+  "intent": "answer" | "revise" | "question" | "chit-chat" | "need_hint",
+  "response": "<string, empty for answer/revise/need_hint>"
 }
 """
 
@@ -217,6 +223,11 @@ def get_hint(
     step_index: int,
     errors: list,
     hint_count: int,
+    prior_errors: list | None = None,
+    partial_answer: str | None = None,
+    focus_error_code: str | None = None,
+    repeat_focus: bool = False,
+    repeat_depth: int = 0,
     step_attempts: list | None = None,
 ) -> str:
     """
@@ -236,16 +247,53 @@ def get_hint(
             f"not on anything the student has already addressed.\n"
         )
 
+    prior_errors_context = ""
+    if prior_errors:
+        prior_lines = "\n".join(
+            f"  Step {i+1}: {item}" for i, item in enumerate(prior_errors)
+        )
+        prior_errors_context = (
+            f"\nPrior step errors in this session (context only):\n"
+            f"{prior_lines}\n"
+            f"Use this to avoid repeating already-targeted mistakes from earlier steps.\n"
+        )
+
+    partial_answer_context = ""
+    if partial_answer:
+        rendered = str(partial_answer)
+        partial_answer_context = (
+            "\nAnswer-check partial answer fragment matched to the chosen rubric error "
+            "(use only as extra specificity, do not quote verbatim if it would leak too much):\n"
+            f"{rendered}\n"
+        )
+
+    focus_context = ""
+    if focus_error_code:
+        focus_context = (
+            f"\nCurrent hint focus error code: {focus_error_code}\n"
+            f"{'This error has repeated across attempts; increase specificity on the same missing element.' if repeat_focus else 'Treat this as the most important current missing element.'}\n"
+            f"Repeat depth: {repeat_depth}\n"
+        )
+
     user_prompt = _sanitize(f"""Current step: {step_name}
 Missing criteria (error codes): {errors}
 Hint count: {hint_count}
-{attempts_context}
+{prior_errors_context}{focus_context}{partial_answer_context}{attempts_context}
 Generate a targeted hint question.""")
 
     logger.log_event("TOOL_CALL", {
         "step": step_index,
         "tool": "get_hint",
-        "input": {"step_name": step_name, "errors": errors, "hint_count": hint_count}
+        "input": {
+            "step_name": step_name,
+            "errors": errors,
+            "hint_count": hint_count,
+            "prior_errors_count": len(prior_errors or []),
+            "has_partial_answer": bool(partial_answer),
+            "focus_error_code": focus_error_code,
+            "repeat_focus": repeat_focus,
+            "repeat_depth": repeat_depth,
+        }
     })
 
     start = time.time()
@@ -286,8 +334,8 @@ def classify_and_respond(
     """
     Classify user intent và generate response nếu cần.
     Returns: { intent: str, response: str }
-    intent: "answer" | "revise" | "question" | "chit-chat"
-    response: empty string khi intent là answer/revise.
+intent: "answer" | "revise" | "question" | "chit-chat"
+    response: empty string khi intent là answer/revise/need_hint.
     """
     import json as _json
 
