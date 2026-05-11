@@ -1,0 +1,60 @@
+{"timestamp": "2026-05-11T08:34:20.339450", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 2}}}
+{"timestamp": "2026-05-11T08:34:23.003033", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 492, "completion_tokens": 47, "total_tokens": 539, "latency_ms": 2662, "cost_estimate": 0.0031650000000000003}}
+{"timestamp": "2026-05-11T08:34:23.003956", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 2662}}
+{"timestamp": "2026-05-11T08:34:23.003956", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:34:29.619286", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 4}}}
+{"timestamp": "2026-05-11T08:34:31.055823", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 488, "completion_tokens": 50, "total_tokens": 538, "latency_ms": 1436, "cost_estimate": 0.00319}}
+{"timestamp": "2026-05-11T08:34:31.056823", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 1436}}
+{"timestamp": "2026-05-11T08:34:31.056823", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:34:35.473628", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 3}}}
+{"timestamp": "2026-05-11T08:34:37.225311", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 489, "completion_tokens": 48, "total_tokens": 537, "latency_ms": 1751, "cost_estimate": 0.0031650000000000003}}
+{"timestamp": "2026-05-11T08:34:37.226236", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 1751}}
+{"timestamp": "2026-05-11T08:34:37.226236", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:34:43.431106", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 3}}}
+{"timestamp": "2026-05-11T08:34:45.014797", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 487, "completion_tokens": 51, "total_tokens": 538, "latency_ms": 1583, "cost_estimate": 0.0032}}
+{"timestamp": "2026-05-11T08:34:45.015796", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 1583}}
+{"timestamp": "2026-05-11T08:34:45.015796", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:34:50.176748", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 3}}}
+{"timestamp": "2026-05-11T08:34:51.907478", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 487, "completion_tokens": 68, "total_tokens": 555, "latency_ms": 1730, "cost_estimate": 0.003455}}
+{"timestamp": "2026-05-11T08:34:51.907478", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 1730}}
+{"timestamp": "2026-05-11T08:34:51.908991", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:40:00.155155", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 6}}}
+{"timestamp": "2026-05-11T08:40:02.430874", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 490, "completion_tokens": 69, "total_tokens": 559, "latency_ms": 2274, "cost_estimate": 0.0034850000000000003}}
+{"timestamp": "2026-05-11T08:40:02.430874", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 2274}}
+{"timestamp": "2026-05-11T08:40:02.430874", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=question"}}
+{"timestamp": "2026-05-11T08:40:05.484153", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 6}}}
+{"timestamp": "2026-05-11T08:40:06.997752", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 490, "completion_tokens": 47, "total_tokens": 537, "latency_ms": 1513, "cost_estimate": 0.0031550000000000003}}
+{"timestamp": "2026-05-11T08:40:06.997752", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 1513}}
+{"timestamp": "2026-05-11T08:40:06.999290", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:40:08.161111", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 6}}}
+{"timestamp": "2026-05-11T08:40:09.581900", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 490, "completion_tokens": 47, "total_tokens": 537, "latency_ms": 1419, "cost_estimate": 0.0031550000000000003}}
+{"timestamp": "2026-05-11T08:40:09.582904", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 1419}}
+{"timestamp": "2026-05-11T08:40:09.582904", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:40:10.879012", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 6}}}
+{"timestamp": "2026-05-11T08:40:12.735783", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 490, "completion_tokens": 72, "total_tokens": 562, "latency_ms": 1855, "cost_estimate": 0.00353}}
+{"timestamp": "2026-05-11T08:40:12.736791", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 1855}}
+{"timestamp": "2026-05-11T08:40:12.736791", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=question"}}
+{"timestamp": "2026-05-11T08:40:15.216767", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 6}}}
+{"timestamp": "2026-05-11T08:40:17.305779", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 490, "completion_tokens": 75, "total_tokens": 565, "latency_ms": 2088, "cost_estimate": 0.0035750000000000005}}
+{"timestamp": "2026-05-11T08:40:17.305779", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 2088}}
+{"timestamp": "2026-05-11T08:40:17.306310", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=question"}}
+{"timestamp": "2026-05-11T08:43:43.919287", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 4}}}
+{"timestamp": "2026-05-11T08:43:46.386339", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 488, "completion_tokens": 51, "total_tokens": 539, "latency_ms": 2465, "cost_estimate": 0.0032050000000000004}}
+{"timestamp": "2026-05-11T08:43:46.386339", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 2465}}
+{"timestamp": "2026-05-11T08:43:46.386339", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:43:55.640931", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 4}}}
+{"timestamp": "2026-05-11T08:43:58.068252", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 488, "completion_tokens": 59, "total_tokens": 547, "latency_ms": 2427, "cost_estimate": 0.0033250000000000003}}
+{"timestamp": "2026-05-11T08:43:58.069261", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 2427}}
+{"timestamp": "2026-05-11T08:43:58.069261", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:43:59.696793", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 4}}}
+{"timestamp": "2026-05-11T08:44:01.714757", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 488, "completion_tokens": 52, "total_tokens": 540, "latency_ms": 2016, "cost_estimate": 0.00322}}
+{"timestamp": "2026-05-11T08:44:01.714757", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 2016}}
+{"timestamp": "2026-05-11T08:44:01.714757", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:44:02.971600", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 4}}}
+{"timestamp": "2026-05-11T08:44:04.850419", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 488, "completion_tokens": 71, "total_tokens": 559, "latency_ms": 1877, "cost_estimate": 0.0035050000000000003}}
+{"timestamp": "2026-05-11T08:44:04.851419", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 1877}}
+{"timestamp": "2026-05-11T08:44:04.851419", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}
+{"timestamp": "2026-05-11T08:44:06.130185", "event": "TOOL_CALL", "data": {"step": 0, "tool": "classify_and_respond", "input": {"step_name": "DESCRIBE", "message_length": 4}}}
+{"timestamp": "2026-05-11T08:44:07.658132", "event": "LLM_METRIC", "data": {"provider": "openai", "model": "gpt-4o", "prompt_tokens": 488, "completion_tokens": 62, "total_tokens": 550, "latency_ms": 1527, "cost_estimate": 0.0033700000000000006}}
+{"timestamp": "2026-05-11T08:44:07.659145", "event": "STEP_LATENCY", "data": {"step": 0, "phase": "classify_intent", "provider": "openai", "latency_ms": 1527}}
+{"timestamp": "2026-05-11T08:44:07.659145", "event": "TOOL_RESULT", "data": {"step": 0, "tool": "classify_and_respond", "success": true, "result_preview": "intent=chit-chat"}}

@@ -33,22 +33,22 @@ const QUESTION_PROMPTS: Record<number, string> = {
 };
 
 function buildMessagesFromAttempts(attempts: any[], currentStep: number): Message[] {
-  const byStep: Record<number, any> = {};
-  for (const a of attempts) {
-    const idx = a.step_index;
-    if (!byStep[idx] || a.attempt_number > byStep[idx].attempt_number) {
-      byStep[idx] = a;
-    }
-  }
-
   const msgs: Message[] = [];
   for (let i = 0; i <= currentStep; i++) {
     msgs.push({ id: `resume-q-${i}`, role: "ai", type: "question", content: QUESTION_PROMPTS[i] ?? `Bước ${i + 1}: Tiếp tục.` });
-    const attempt = byStep[i];
-    if (attempt && i < currentStep) {
-      msgs.push({ id: `resume-a-${i}`, role: "student", content: attempt.student_answer });
+    const stepAttempts = attempts
+      .filter((a) => a.step_index === i)
+      .sort((a, b) => (a.attempt_number ?? 0) - (b.attempt_number ?? 0));
+
+    for (const attempt of stepAttempts) {
+      msgs.push({ id: `resume-a-${i}-${attempt.attempt_number ?? 0}`, role: "student", content: attempt.student_answer });
       const feedbackContent = typeof attempt.feedback === "string" ? attempt.feedback : attempt.feedback?.content ?? "";
-      msgs.push({ id: `resume-f-${i}`, role: "ai", type: attempt.score >= 0.6 ? "correct" : "partial", content: feedbackContent });
+      msgs.push({
+        id: `resume-f-${i}-${attempt.attempt_number ?? 0}`,
+        role: "ai",
+        type: attempt.score >= 0.6 ? "correct" : "partial",
+        content: feedbackContent,
+      });
     }
   }
   return msgs;
