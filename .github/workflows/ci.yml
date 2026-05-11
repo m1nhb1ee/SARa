@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Run tests
+        run: npm test --if-present -- --watchAll=false
+
+  backend-check:
+    name: Backend Check
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/backend
+
+    env:
+      # Django
+      SECRET_KEY: "ci-secret-key-not-used-in-production"
+      DEBUG: "False"
+      ALLOWED_HOSTS: "localhost,127.0.0.1"
+
+      # Supabase (dummy cho CI)
+      SUPABASE_URL: "https://example.supabase.co"
+      SUPABASE_SERVICE_KEY: "ci-service-key"
+
+      # AI APIs (tắt hết trong CI)
+      USE_OPENAI: "false"
+      OPENAI_API_KEY: "ci-openai-key"
+      HUGGINGFACE_API_KEY: "ci-hf-key"
+      HF_MODEL_ID: "microsoft/git-large"
+      HF_TOKEN: "ci-hf-token"
+
+      # CORS
+      CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5173"
+
+      # Upload limits
+      VLM_MAX_GRADIO_IMAGES: "20"
+      UPLOAD_MAX_IMAGES: "20"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: apps/backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Django system check
+        run: python manage.py check
+
+      - name: Run tests
+        run: python manage.py test app.test.test_api_endpoints --verbosity=2
