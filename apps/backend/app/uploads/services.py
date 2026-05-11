@@ -3,7 +3,6 @@ Upload services — Supabase Storage + HuggingFace image analysis.
 Ported from huggingface_services.py; không còn dependency vào Django ORM.
 """
 import os
-import io
 import uuid
 import tempfile
 import logging

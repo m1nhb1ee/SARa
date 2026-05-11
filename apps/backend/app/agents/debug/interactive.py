@@ -6,14 +6,13 @@ import json
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-
+from .. import socratic
 from .. import answer_check
 
 sys.stdout.reconfigure(encoding="utf-8")
 
 load_dotenv(Path(__file__).parents[3] / ".env")
 
-from .. import socratic
 
 DATA_DIR = Path(__file__).parent / "data"
 

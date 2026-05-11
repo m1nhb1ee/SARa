@@ -1,4 +1,4 @@
-import os
+
 from rest_framework import serializers
 
 ALLOWED_EXTENSIONS = ('jpg', 'jpeg', 'png', 'bmp', 'gif')
