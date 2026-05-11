@@ -58,7 +58,7 @@ class RegisterView(APIView):
             else:
                 # Email confirmation required
                 return Response({
-                    'message': 'Đăng ký thành công! Vui lòng kiểm tra email để xác nhận tài khoản.',
+                    'message': 'Đăng ký thành công! Vui lòng check email',
                     'requires_confirmation': True,
                 }, status=status.HTTP_201_CREATED)
         except Exception as e:

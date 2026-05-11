@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { CheckCircle2 } from 'lucide-react';
 import { BrainLogo } from '@/app/components/shared/BrainLogo';
+import { SketchBorder } from '@/app/components/shared/SketchBorder';
 
 const NOTES = [
   { id: 1, style: { top: '6%', left: '2%', width: 178, rotate: -7 }, tone: 'var(--bg-highlight)', border: '#E6D96A',
@@ -47,22 +48,6 @@ function MedNote({ n }: { n: typeof NOTES[0] }) {
         <div key={i} style={{ fontFamily: "'Caveat', cursive", fontSize: 13, color: 'var(--ink)', lineHeight: 1.55, opacity: 0.88 }}>{line || ' '}</div>
       ))}
     </div>
-  );
-}
-
-function SketchRect({ w, h }: { w: number; h: number }) {
-  const o = 4;
-  return (
-    <svg width={w + 20} height={h + 20} style={{ position: 'absolute', top: -10, left: -10, pointerEvents: 'none', overflow: 'visible' }}>
-      <filter id="pencil2">
-        <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="5" seed="3" result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" xChannelSelector="R" yChannelSelector="G" />
-      </filter>
-      <g filter="url(#pencil2)">
-        <rect x={10} y={10} width={w} height={h} fill="none" stroke="var(--ink-secondary)" strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
-        <rect x={10 + o} y={10 + o} width={w - o * 2} height={h - o * 2} fill="none" stroke="var(--ink-secondary)" strokeWidth="0.8" strokeLinecap="round" strokeDasharray="6 3 12 4 8 6" opacity="0.35" />
-      </g>
-    </svg>
   );
 }
 
@@ -141,7 +126,7 @@ export function RegisterPage() {
         backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, rgba(196,168,130,0.25) 31px, rgba(196,168,130,0.25) 32px)',
         backgroundSize: '100% 32px',
       }}>
-        <SketchRect w={W} h={H} />
+        <SketchBorder id="register-sheet" color="var(--ink-secondary)" opacity={0.6} />
         <div style={{ position: 'absolute', left: 28, top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(192,57,43,0.2)', pointerEvents: 'none' }} />
 
         {/* Header */}
