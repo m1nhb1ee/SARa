@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from app.core.step_codes import STEP_CODES, index_by_canonical_step, normalize_step_code
 from app.core.supabase_client import get_supabase
-from app.agents.ai_services import classify_intent, evaluate_answer, get_socratic_hint
+from app.agents.ai_services import classify_intent, evaluate_answer, get_socratic_hint, get_step_rubric
 
 from .serializers import StepAnswerSubmitSerializer
 from .services import get_session, get_rubric_id
@@ -19,6 +19,60 @@ logger = logging.getLogger(__name__)
 
 def _now_iso() -> str:
     return datetime.now(dt_timezone.utc).isoformat()
+
+
+def _pick_hint_error_fragment(
+    rubric: dict,
+    result: dict,
+    hint_number: int,
+    previous_failed_error_counts: dict[str, int] | None = None,
+) -> tuple[str | None, str | None, bool, int]:
+    """
+    Pick exactly one fragment for the current hint.
+    Priority: higher rubric max_score first. If equal, keep rubric order.
+    If an error repeats from the previous failed attempt, keep focus on that
+    repeated error rather than switching to a different one.
+    """
+    if hint_number < 2:
+        return None, None, False, 0
+
+    errors = result.get('errors') or []
+    fragments = result.get('partial_answer_by_error') or []
+    if not errors or not fragments:
+        return None, None, False, 0
+
+    rubric_criteria = rubric.get('criteria') or []
+    rank_map: dict[str, tuple[float, int]] = {}
+    for idx, criterion in enumerate(rubric_criteria):
+        code = criterion.get('error_code')
+        if code and code not in rank_map:
+            rank_map[code] = (float(criterion.get('max_score') or 0), idx)
+
+    fragment_map = {
+        item.get('error_code'): item.get('fragment', '')
+        for item in fragments
+        if isinstance(item, dict) and item.get('error_code')
+    }
+
+    current_errors = [
+        code for code in errors
+        if code in fragment_map
+    ]
+    if not current_errors:
+        return None, None, False
+
+    previous_failed_error_counts = previous_failed_error_counts or {}
+
+    def sort_key(code: str) -> tuple[int, float, int]:
+        repeat_count = previous_failed_error_counts.get(code, 0)
+        weight, idx = rank_map.get(code, (0.0, 10**9))
+        return (-repeat_count, -weight, idx)
+
+    current_errors.sort(key=sort_key)
+    chosen_code = current_errors[0]
+    repeat_depth = previous_failed_error_counts.get(chosen_code, 0) + 1
+    repeat_focus = repeat_depth > 1
+    return fragment_map.get(chosen_code) or None, chosen_code, repeat_focus, repeat_depth
 
 
 class SessionViewSet(viewsets.ViewSet):
@@ -161,24 +215,43 @@ class SessionViewSet(viewsets.ViewSet):
 
         # ── 3. Build context from DB ──────────────────────────────────────────
         prev_rows = sb.table('step_attempts').select(
-            'step_index, step_code, student_answer, score'
+            'step_index, step_code, student_answer, score, errors'
         ).eq('session_id', pk).lt('step_index', current_step).order('step_index').execute()
 
         best_prev: dict = {}
         for a in (prev_rows.data or []):
             idx = a['step_index']
             if idx not in best_prev or (a['score'] or 0) > (best_prev[idx].get('_score') or 0):
-                best_prev[idx] = {'step': a['step_code'], 'answer': a['student_answer'], '_score': a['score']}
+                best_prev[idx] = {
+                    'step': a['step_code'],
+                    'answer': a['student_answer'],
+                    'errors': a.get('errors') or [],
+                    '_score': a['score'],
+                }
         previous_steps = [
             {'step': v['step'], 'answer': v['answer']}
             for v in (best_prev[i] for i in sorted(best_prev))
         ]
+        prior_errors = [
+            {
+                'step': v['step'],
+                'errors': v['errors'],
+            }
+            for v in (best_prev[i] for i in sorted(best_prev))
+            if v.get('errors')
+        ]
 
         cur_rows = sb.table('step_attempts').select(
-            'student_answer, score'
+            'student_answer, score, errors'
         ).eq('session_id', pk).eq('step_index', current_step).order('attempt_number').execute()
         step_attempts_texts = [a['student_answer'] for a in (cur_rows.data or [])]
         hint_count = sum(1 for a in (cur_rows.data or []) if a['score'] is not None and a['score'] < 0.6)
+        previous_failed_error_counts: dict[str, int] = {}
+        for a in reversed(cur_rows.data or []):
+            if a.get('score') is not None and a['score'] < 0.6:
+                for code in a.get('errors') or []:
+                    previous_failed_error_counts[code] = previous_failed_error_counts.get(code, 0) + 1
+        step_rubric = get_step_rubric(step_code)
 
         # ── 4. Evaluate ───────────────────────────────────────────────────────
         result = evaluate_answer(
@@ -226,6 +299,7 @@ class SessionViewSet(viewsets.ViewSet):
 
         passed = result['passed']
         force_advance = not passed and hint_count >= 3
+        next_hint_number = hint_count + 1
         response_data = {
             'attempt': attempt,
             'passed': passed,
@@ -268,10 +342,21 @@ class SessionViewSet(viewsets.ViewSet):
                 if not force_advance:
                     response_data['message'] = 'Bạn đã hoàn thành toàn bộ 5 bước phân tích. Chúc mừng!'
         else:
+            partial_answer, focus_error_code, repeat_focus, repeat_depth = _pick_hint_error_fragment(
+                step_rubric,
+                result,
+                next_hint_number,
+                previous_failed_error_counts=previous_failed_error_counts,
+            )
             hint = get_socratic_hint(
                 step_code, current_step,
                 result['errors'], hint_count + 1,
-                step_attempts_texts + [student_answer],
+                prior_errors=prior_errors,
+                partial_answer=partial_answer,
+                focus_error_code=focus_error_code,
+                repeat_focus=repeat_focus,
+                repeat_depth=repeat_depth,
+                step_attempts=step_attempts_texts + [student_answer],
             )
             response_data['hint'] = hint
             response_data['message'] = 'Chưa đủ. Hãy xem gợi ý và thử lại.'
