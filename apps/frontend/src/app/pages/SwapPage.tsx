@@ -13,6 +13,13 @@ type SwapSessionRow = {
   completed_at: string | null;
 };
 
+function scoreTone(scorePct: number | null): { bg: string; fg: string; border: string } {
+  if (scorePct == null) return { bg: 'var(--accent-sage)', fg: 'var(--bg-page)', border: '#5C7A5A' };
+  if (scorePct < 40) return { bg: '#B5423C', fg: '#FFF4EF', border: '#8F332E' };
+  if (scorePct < 60) return { bg: '#C98B2B', fg: '#FFF8E8', border: '#9E6C21' };
+  return { bg: 'var(--accent-sage)', fg: 'var(--bg-page)', border: '#5C7A5A' };
+}
+
 function firstImageUrl(caseItem: any): string {
   return caseItem?.images?.[0]?.slices?.[0]?.image_url ?? caseItem?.image_urls?.[0] ?? '';
 }
@@ -182,9 +189,6 @@ export function SwapPage() {
     setStartProgress(0);
     setStartError(null);
 
-    // Mock 30s loading
-    await new Promise(r => setTimeout(r, 30000));
-
     const res = await apiClient.createSwapSession(caseId);
     if (res.error || !res.data?.id) {
       setStartingCaseId(null);
@@ -245,6 +249,7 @@ export function SwapPage() {
               const completed = completedByCase.get(c.id);
               const isDone = !!completed;
               const scorePct = completed?.final_score != null ? Math.round(completed.final_score * 100) : null;
+              const tone = scoreTone(scorePct);
               return (
                 <button
                   key={c.id}
@@ -278,7 +283,7 @@ export function SwapPage() {
                     <div style={{
                       position: 'absolute', top: 10, right: 10, zIndex: 2,
                       display: 'flex', alignItems: 'center', gap: 4,
-                      background: 'var(--accent-sage)', color: 'var(--bg-page)',
+                      background: tone.bg, color: tone.fg, border: `1px solid ${tone.border}`,
                       padding: '3px 8px',
                       fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: '0.08em',
                     }}>
@@ -341,7 +346,8 @@ export function SwapPage() {
             </p>
             <div style={{
               fontFamily: "var(--font-mono)", fontSize: 11,
-              color: 'var(--accent-sage)', letterSpacing: '0.1em', marginBottom: 18,
+              color: scoreTone(activeCompleted.final_score != null ? Math.round(activeCompleted.final_score * 100) : null).bg,
+              letterSpacing: '0.1em', marginBottom: 18,
             }}>
               MỨC ĐỘ THUYẾT PHỤC: {activeCompleted.final_score != null ? Math.round(activeCompleted.final_score * 100) : '—'}%
             </div>

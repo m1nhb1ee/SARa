@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Iterator
@@ -148,6 +149,35 @@ def _is_confirmation_message(message: str) -> bool:
     return any(word in text for word in confirm_words)
 
 
+def _normalize_signal_text(text: str) -> str:
+    normalized = unicodedata.normalize('NFKD', text or '')
+    ascii_text = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return " ".join(ascii_text.lower().split())
+
+
+def _doctor_message_blocks_convinced(doctor_message: str) -> bool:
+    text = _normalize_signal_text(doctor_message)
+    if not text:
+        return False
+    rejection_signals = (
+        'toi van chua',
+        'van chua thay',
+        'chua thay dau hieu',
+        'chua thay ro',
+        'chua bi thuyet phuc',
+        'chua du thuyet phuc',
+        'khong du thuyet phuc',
+        'neu co bang chung',
+        'can bang chung',
+        'can them bang chung',
+        'can ban chi ra',
+        'hay chi ra',
+        'hay neu chi tiet',
+        'neu ban khang dinh',
+    )
+    return any(signal in text for signal in rejection_signals)
+
+
 def _step_state_map(states: list[dict] | None) -> dict[int, dict]:
     return {int(state['step_index']): state for state in (states or [])}
 
@@ -236,6 +266,41 @@ def _clamp_score(value: Any) -> float:
     if score > 1:
         score = score / 100.0
     return max(0.0, min(score, 1.0))
+
+
+def _strict_online_component_scores(step_code: str, parsed: dict[str, Any], persuasion_score: float) -> tuple[float, float]:
+    debate_score = _clamp_score(parsed.get('debate_score', persuasion_score))
+    knowledge_score = _clamp_score(parsed.get('knowledge_score', persuasion_score))
+
+    # Convinced is a progression gate, not a high-score guarantee.
+    if step_code == 'DESCRIBE':
+        if persuasion_score < 0.77:
+            debate_score = min(debate_score, 0.70)
+            knowledge_score = min(knowledge_score, 0.72)
+    else:
+        if persuasion_score < 0.80:
+            debate_score = min(debate_score, 0.68)
+            knowledge_score = min(knowledge_score, 0.70)
+        debate_score = min(debate_score, persuasion_score + 0.05)
+        knowledge_score = min(knowledge_score, persuasion_score + 0.05)
+
+    return _clamp_score(debate_score), _clamp_score(knowledge_score)
+
+
+def _strict_final_component_scores(score: dict[str, Any]) -> tuple[float, float, float]:
+    fallback = score.get('persuasion_score', 0)
+    debate_score = _clamp_score(score.get('debate_score', fallback))
+    knowledge_score = _clamp_score(score.get('knowledge_score', fallback))
+    accuracy_score = _clamp_score(score.get('accuracy_score', fallback))
+
+    if accuracy_score < 0.5:
+        debate_score = min(debate_score, 0.60)
+        knowledge_score = min(knowledge_score, 0.55)
+    elif accuracy_score < 0.75:
+        debate_score = min(debate_score, 0.75)
+        knowledge_score = min(knowledge_score, 0.72)
+
+    return debate_score, knowledge_score, accuracy_score
 
 
 def _sanitize_consensus_summary(text: str) -> str:
@@ -396,6 +461,62 @@ Return JSON:
     return str(parsed.get('agreed_answer') or '').strip()
 
 
+def _next_step_opening_message(
+    session: dict,
+    states: list[dict] | None,
+    next_step: int,
+    just_agreed_answer: str,
+) -> str:
+    next_code = STEP_CODES[next_step]
+    doctor_diagnosis = session.get('doctor_diagnosis') or {}
+    vlm_stance = str(doctor_diagnosis.get(next_code) or '').strip()
+    previous_agreed = _previous_agreed_answers(states or [], next_step)
+    if just_agreed_answer:
+        current_code = STEP_CODES[next_step - 1]
+        previous_agreed = [
+            *[item for item in previous_agreed if item.get('step_code') != current_code],
+            {'step_code': current_code, 'agreed_answer': just_agreed_answer},
+        ]
+
+    prompt = f"""
+Write the doctor's opening message for the next step in a Vietnamese radiology teaching debate.
+
+Rules:
+- The agreed answers are authoritative clinical context.
+- The VLM/current stance is only a secondary hint. Use it only if it fits the agreed observations.
+- If the VLM/current stance conflicts with the agreed observations, revise it so the next-step reasoning follows the agreed observations.
+- Do not mention VLM, model, answer key, or hidden reference.
+- Discuss ONLY the next step: {next_code}.
+- Keep the stubborn senior radiologist persona, but do not reopen already agreed observations.
+- Respond in Vietnamese as the doctor only. Do not return JSON.
+
+Previous agreed observations/answers:
+{json.dumps(previous_agreed, ensure_ascii=False)}
+
+Secondary VLM/current stance for {next_code}:
+{vlm_stance}
+"""
+    try:
+        response = _get_openai_client().chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.35,
+            max_tokens=350,
+            timeout=45,
+        )
+        message = (response.choices[0].message.content or '').strip()
+        if message:
+            return message
+    except Exception as exc:
+        logger.warning("swap: failed to generate next-step opening from agreed answer: %s", exc)
+
+    if just_agreed_answer and vlm_stance:
+        return f"Dựa trên phần đã thống nhất: {just_agreed_answer}\n\nỞ bước {next_code}, quan điểm ban đầu của tôi là: {vlm_stance}"
+    if just_agreed_answer:
+        return f"Dựa trên phần đã thống nhất: {just_agreed_answer}\n\nBây giờ chuyển sang bước {next_code}. Hãy trình bày lập luận của bạn."
+    return vlm_stance
+
+
 def _doctor_reply(
     session: dict,
     case: dict,
@@ -409,6 +530,11 @@ def _doctor_reply(
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
     doctor_step = doctor_diagnosis.get(step_code, '')
     previous_agreed = _previous_agreed_answers(states or [], step_index)
+    describe_reference = json.dumps({
+        'expected_finding': describe_key.get('expected_finding', ''),
+        'clinical_explanation': describe_key.get('clinical_explanation', ''),
+        'key_points': describe_key.get('key_points', []),
+    }, ensure_ascii=False) if step_code == 'DESCRIBE' else '{}'
     step_mode = (
         'Observation reconciliation. Validate image description; do not debate subjective reasoning.'
         if step_code == 'DESCRIBE'
@@ -429,12 +555,17 @@ Conversation rules:
 - Do not reveal future steps.
 - Current mode: {step_mode}
 - If current step is DESCRIBE: discuss imaging findings only. Do not mention diagnosis, differential diagnosis, etiology, or treatment.
+- DESCRIBE is observation, not a debate. If the user's latest answer correctly identifies even one concrete observation that matches the DESCRIBE reference, acknowledge it as correct and concede that observation. Do not demand the full answer before conceding.
+- For DESCRIBE, if the user is partly correct, say what part is correct and briefly ask for the missing visible detail if needed. Do not reject the whole answer just because it is incomplete.
+- For DESCRIBE, push back only when the user's observation is absent from or contradicts the DESCRIBE reference.
 - If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
 - You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
-- If the user's argument is weak, push back confidently.
+- Be harder to convince than a normal tutor. If the user's argument is weak, vague, unsupported, or only repeats keywords, push back confidently.
+- For REASONING, DDx, CONCLUSION: concede only when the user gives a coherent medical argument with specific evidence, correct terminology, and a clear link from findings to conclusion.
+- If the user's answer is partly correct but lacks reasoning or specialist detail, acknowledge the useful part but do not concede yet.
 - If the user's argument touches the main expected finding(s) and good reasoning — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording.
 - Respond in Vietnamese.
 
@@ -448,6 +579,9 @@ Your current stance for this step:
 
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
+
+DESCRIBE reference for observation validation only:
+{describe_reference}
 
 Current-step conversation:
 {_current_step_visible_history(messages, step_index, user_message)}
@@ -463,7 +597,7 @@ Return ONLY valid JSON:
   "reasoning_for_grader": "short private grading reason"
 }}
 
-Note: Set "convinced": true ONLY IF persuasion_score >= 0.7. If less than 0.7, set "convinced": false.
+Note: Set "convinced": true ONLY IF persuasion_score reaches the current step threshold. If below threshold, set "convinced": false.
 Note: For DESCRIBE, semantic overlap on core visible findings is enough to concede; do not force hidden-key style strictness.
 Note: Leave "pending_summary" empty. The system will build the user-visible agreed answer from the visible conversation only.
 """
@@ -500,6 +634,11 @@ def _doctor_text_prompt(
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
     doctor_step = doctor_diagnosis.get(step_code, '')
     previous_agreed = _previous_agreed_answers(states or [], step_index)
+    describe_reference = json.dumps({
+        'expected_finding': describe_key.get('expected_finding', ''),
+        'clinical_explanation': describe_key.get('clinical_explanation', ''),
+        'key_points': describe_key.get('key_points', []),
+    }, ensure_ascii=False) if step_code == 'DESCRIBE' else '{}'
     step_mode = (
         'Observation reconciliation. Validate image description; do not debate subjective reasoning.'
         if step_code == 'DESCRIBE'
@@ -520,12 +659,17 @@ Conversation rules:
 - Do not reveal future steps.
 - Current mode: {step_mode}
 - If current step is DESCRIBE: discuss imaging findings only. Do not mention diagnosis, differential diagnosis, etiology, or treatment.
+- DESCRIBE is observation, not a debate. If the user's latest answer correctly identifies even one concrete observation that matches the DESCRIBE reference, acknowledge it as correct and concede that observation. Do not demand the full answer before conceding.
+- For DESCRIBE, if the user is partly correct, say what part is correct and briefly ask for the missing visible detail if needed. Do not reject the whole answer just because it is incomplete.
+- For DESCRIBE, push back only when the user's observation is absent from or contradicts the DESCRIBE reference.
 - If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
 - You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
-- If the user's argument is weak, push back confidently.
+- Be harder to convince than a normal tutor. If the user's argument is weak, vague, unsupported, or only repeats keywords, push back confidently.
+- For REASONING, DDx, CONCLUSION: concede only when the user gives a coherent medical argument with specific evidence, correct terminology, and a clear link from findings to conclusion.
+- If the user's answer is partly correct but lacks reasoning or specialist detail, acknowledge the useful part but do not concede yet.
 - If the user's argument touches the main expected finding(s) and good reasoning — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording but also do not let the user get away with weak arguments.
 - Weak arguments might be vague or off-topic. Strong arguments clearly reference specific imaging findings with coherent logic.
 - Respond in Vietnamese as the doctor only. Do not return JSON.
@@ -543,6 +687,9 @@ Your current stance for this step:
 
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
+
+DESCRIBE reference for observation validation only:
+{describe_reference}
 
 Current-step conversation:
 {_current_step_visible_history(messages, step_index, user_message)}
@@ -575,7 +722,7 @@ def _judge_doctor_text(
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
     describe_convinced_threshold = 0.62
-    default_convinced_threshold = 0.70
+    default_convinced_threshold = 0.72
     previous_agreed = _previous_agreed_answers(states or [], step_index)
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
     doctor_step_seed = doctor_diagnosis.get(step_code, '')
@@ -586,21 +733,35 @@ You are the online self-judge for a medical roleplay debate.
 Decide whether the user's latest argument should convince the doctor for the current step.
 Use only visible conversation context. Return ONLY valid JSON.
 
+Score strictly. Do not inflate scores because the tone is confident.
 Scoring rubric (0.0-1.0):
-- 0.0-0.3: argument is irrelevant, wrong, or empty (e.g. only "tiếng việt", off-topic).
-- 0.4-0.5: partially correct — touches one relevant finding/term but misses points.
-- 0.6-0.8: covers the main arguments with adequate reasoning, even if wording differs.
-- 0.9-1.0: argument is precise, complete, and uses correct radiological terminology.
-Set "convinced": true whenever persuasion_score >= 0.7.
+- 0.0-0.3: irrelevant, wrong, empty, or unsafe reasoning.
+- 0.4-0.5: mentions a relevant keyword/finding but is vague, unsupported, or has important errors.
+- 0.6-0.69: partly correct with some logic, but incomplete or missing specialist detail.
+- 0.70-0.79: mostly correct with specific evidence and reasonable logic, but not fully rigorous.
+- 0.80-0.89: strong medical argument with clear rebuttal, imaging evidence, and correct terminology.
+- 0.90-1.0: excellent, precise, complete, specialist-level reasoning.
+
+Score dimensions:
+- persuasion_score: whether the latest answer is enough to let the conversation progress now. This is not the final grade.
+- debate_score: quality of rebuttal, specificity, handling of the doctor's objection, and argument structure.
+- knowledge_score: medical/radiology correctness, terminology, and match to ground truth.
+
+Caps:
+- If the user gives only a conclusion without evidence, cap debate_score at 0.55.
+- If terminology is wrong or anatomy/location is imprecise, cap knowledge_score at 0.65.
+- If the answer is partly correct but misses a major required element, cap debate_score/knowledge_score strictly even if persuasion_score passes the convinced threshold.
+- For REASONING, DDx, CONCLUSION, a merely plausible answer without explicit link to agreed findings cannot exceed 0.69.
+Set "convinced": true only when the doctor's streamed reply explicitly accepts, concedes, or revises toward the user's position.
+If the doctor still asks for proof, says they still do not see the finding, or requests more specific evidence, set "convinced": false even when persuasion_score is high.
 
 Special rule for DESCRIBE:
-- This is an agreement gate, not a strict answer-key grader.
-- If the user agrees with, accepts, or gives a description semantically close to the doctor's current stance, set convinced=true because there is no remaining debate.
-- If the user gives a different observation than the doctor, set convinced=true only when BOTH are true:
-  1) the user's argument is persuasive enough to make the doctor revise the stance;
-  2) the user's direction has at least 0.20 semantic overlap with the DESCRIBE answer key.
-- If the user gives a different direction with less than 0.20 overlap with the DESCRIBE answer key, keep convinced=false even if the prose sounds confident.
-- Do not require perfect wording or complete checklist coverage in DESCRIBE.
+- DESCRIBE is observation, not diagnostic debate.
+- If the user correctly identifies even one concrete observation matching the DESCRIBE answer key, set convinced=true and persuasion_score >= 0.62.
+- Do not require the user to list every expected finding, use perfect wording, or prove the observation as a debate argument.
+- If the user is partly correct, grade the matched observation as enough to concede for DESCRIBE, but keep debate_score/knowledge_score modest unless the description is precise, localized, and uses correct imaging terms.
+- For DESCRIBE, one correct but incomplete observation should usually score around 0.70-0.76, not 0.90.
+- Keep convinced=false only when the latest user answer is off-topic, too vague to map to a visible finding, or contradicts the DESCRIBE answer key.
 
 Current step: {step_code}
 Doctor's initial stance for this step:
@@ -622,7 +783,7 @@ Doctor's streamed reply:
 
 Return ONLY valid JSON:
 {{
-  "convinced": true,
+  "convinced": false,
   "persuasion_score": 0.0,
   "debate_score": 0.0,
   "knowledge_score": 0.0,
@@ -656,15 +817,18 @@ Important: Leave "pending_summary" empty.
         if agreement_with_doctor and persuasion_score >= describe_convinced_threshold:
             convinced = True
         elif user_challenges_doctor:
-            convinced = bool(parsed.get('convinced', False)) and persuasion_score >= default_convinced_threshold and answer_key_overlap >= 0.20
-        elif not convinced and answer_key_overlap >= 0.20 and persuasion_score >= default_convinced_threshold:
+            convinced = bool(parsed.get('convinced', False)) and persuasion_score >= describe_convinced_threshold and answer_key_overlap >= 0.20
+        elif not convinced and answer_key_overlap >= 0.20 and persuasion_score >= describe_convinced_threshold:
             convinced = True
+    if _doctor_message_blocks_convinced(doctor_message):
+        convinced = False
+    debate_score, knowledge_score = _strict_online_component_scores(step_code, parsed, persuasion_score)
     return {
         'doctor_message': doctor_message,
         'convinced': convinced,
         'persuasion_score': persuasion_score,
-        'debate_score': _clamp_score(parsed.get('debate_score', persuasion_score)),
-        'knowledge_score': _clamp_score(parsed.get('knowledge_score', persuasion_score)),
+        'debate_score': debate_score,
+        'knowledge_score': knowledge_score,
         'pending_summary': str(parsed.get('pending_summary') or '').strip(),
         'reasoning_for_grader': str(parsed.get('reasoning_for_grader') or '').strip(),
     }
@@ -687,10 +851,25 @@ def _final_grade(case: dict, answer_key: dict[str, dict[str, Any]], messages: li
 You are grading a medical debate training session.
 
 Read the full transcript and score the user for each diagnostic step.
-Score 0.0-1.0:
-- debate_score: argumentative quality and rebuttal quality.
-- knowledge_score: medical correctness against ground truth.
-- accuracy_score: step-level exactness score.
+Score strictly from 0.0-1.0. Penalize vague, lucky, or unsupported answers even if the final conclusion is correct.
+Being marked convinced during the chat is only evidence that the flow progressed; it must not inflate the final score.
+- debate_score: quality of debate, rebuttal, evidence use, argument structure, and whether the user addressed Dr. Swap's objections.
+- knowledge_score: medical/radiology correctness, anatomy, terminology, causal reasoning, and match to ground truth.
+- accuracy_score: step-level exactness score against the expected answer.
+Strict grading scale:
+- 0.0-0.3: wrong, irrelevant, unsafe, or empty.
+- 0.4-0.5: mentions something relevant but is vague, unsupported, or materially incomplete.
+- 0.6-0.69: partly correct with basic reasoning but missing major elements or specialist precision.
+- 0.70-0.79: mostly correct and defensible, with some specific evidence, but still incomplete.
+- 0.80-0.89: strong, well-supported, medically precise answer.
+- 0.90-1.0: exceptional, complete, specialist-level answer with excellent rebuttal.
+Caps:
+- Conclusion without supporting imaging evidence: debate_score <= 0.55.
+- Correct diagnosis but weak explanation: knowledge_score <= 0.70.
+- Missing anatomy/location/modality-specific detail: knowledge_score <= 0.75.
+- Does not address the doctor's objection: debate_score <= 0.65.
+- DESCRIBE: one correct observation but incomplete description should usually be 0.70-0.76, not 0.90.
+- A conceded answer that was only barely sufficient should usually remain below 0.75 for debate_score and knowledge_score.
 Accuracy scoring rule (semantic exactness, not string match):
 - 1.0: meaning is essentially equivalent to ground truth for that step.
 - 0.5: partially correct meaning, but missing or incorrect important elements.
@@ -730,9 +909,9 @@ Return ONLY valid JSON:
         {
             'step_index': idx,
             'step_code': code,
-            'debate_score': _clamp_score(by_code.get(code, {}).get('debate_score', by_code.get(code, {}).get('persuasion_score', 0))),
-            'knowledge_score': _clamp_score(by_code.get(code, {}).get('knowledge_score', by_code.get(code, {}).get('persuasion_score', 0))),
-            'accuracy_score': _clamp_score(by_code.get(code, {}).get('accuracy_score', by_code.get(code, {}).get('persuasion_score', 0))),
+            'debate_score': _strict_final_component_scores(by_code.get(code, {}))[0],
+            'knowledge_score': _strict_final_component_scores(by_code.get(code, {}))[1],
+            'accuracy_score': _strict_final_component_scores(by_code.get(code, {}))[2],
             'reasoning': str(by_code.get(code, {}).get('reasoning') or '').strip(),
         }
         for idx, code in enumerate(STEP_CODES)
@@ -925,10 +1104,8 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
     step_code = STEP_CODES[step_index]
     combined_score = _combined_score(result)
 
-    # Advance the step when the judge explicitly concedes.
-    # We rely on the LLM's 'convinced' boolean to ensure the system state
-    # matches the textual message (e.g. avoiding advancing when the doctor's text was a rejection).
-    advance = bool(result.get('convinced'))
+    # Advance only when the judge concedes and the visible doctor text is not still rejecting.
+    advance = bool(result.get('convinced')) and not _doctor_message_blocks_convinced(result.get('doctor_message') or '')
     result['convinced'] = advance
     if advance:
         try:
@@ -1097,7 +1274,12 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
             result['next_step'] = next_step
-            next_message = (session.get('doctor_diagnosis') or {}).get(STEP_CODES[next_step], '')
+            next_message = _next_step_opening_message(
+                session,
+                data.get('step_states'),
+                next_step,
+                result.get('pending_summary') or '',
+            )
             if next_message:
                 try:
                     sb.table('swap_messages').insert({
@@ -1105,7 +1287,7 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
                         'role': 'doctor',
                         'step_index': next_step,
                         'content': next_message,
-                        'metadata': {'source': 'initial_vlm'},
+                        'metadata': {'source': 'agreed_context_plus_vlm'},
                     }).execute()
                 except Exception as exc:
                     logger.warning(
@@ -1229,14 +1411,19 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
         next_step = step_index + 1
         sb.table('swap_sessions').update({'current_step': next_step}).eq('id', session_id).execute()
         result['next_step'] = next_step
-        next_message = (session.get('doctor_diagnosis') or {}).get(STEP_CODES[next_step], '')
+        next_message = _next_step_opening_message(
+            session,
+            data.get('step_states'),
+            next_step,
+            agreed_answer,
+        )
         if next_message:
             sb.table('swap_messages').insert({
                 'swap_session_id': session_id,
                 'role': 'doctor',
                 'step_index': next_step,
                 'content': next_message,
-                'metadata': {'source': 'initial_vlm'},
+                'metadata': {'source': 'agreed_context_plus_vlm'},
             }).execute()
 
     updated, updated_err = get_swap_session(session_id, user_id)

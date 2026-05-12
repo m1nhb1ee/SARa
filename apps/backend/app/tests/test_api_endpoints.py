@@ -7,6 +7,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from app.auth.views import LoginView, LogoutView, MeView, RegisterView
 from app.cases.views import CaseTagViewSet, CaseViewSet
 from app.sessions.views import SessionViewSet, StudentPerformanceViewSet
+from app.swap.services import _doctor_message_blocks_convinced
 from app.swap.views import SwapSessionViewSet
 from app.uploads.views import UserUploadedCaseViewSet
 
@@ -684,3 +685,16 @@ class SwapEndpointTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('text/event-stream', response['Content-Type'])
+
+    def test_doctor_rejection_text_blocks_convinced(self):
+        message = (
+            'Nếu bạn khẳng định có gián đoạn vỏ xương, tôi cần bạn chỉ ra rõ ràng. '
+            'Trên X-quang, tôi vẫn chưa thấy dấu hiệu rõ ràng.'
+        )
+
+        self.assertTrue(_doctor_message_blocks_convinced(message))
+
+    def test_doctor_acceptance_text_allows_convinced(self):
+        message = 'Tôi đồng ý với lập luận của bạn và chấp nhận mô tả gãy cành tươi ở đoạn giữa.'
+
+        self.assertFalse(_doctor_message_blocks_convinced(message))
