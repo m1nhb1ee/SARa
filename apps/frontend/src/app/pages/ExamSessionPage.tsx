@@ -54,6 +54,7 @@ export function ExamSessionPage() {
   const isComplete = session?.status === 'COMPLETED';
   const secondsSpent = Math.min(STEP_SECONDS, (currentAttempt?.time_spent_seconds ?? 0) + elapsed);
   const secondsLeft = Math.max(0, STEP_SECONDS - secondsSpent);
+  const timeLeftPct = Math.max(0, Math.min(100, (secondsLeft / STEP_SECONDS) * 100));
   const currentLocked = isComplete || currentAttempt?.locked || secondsLeft <= 0;
   const allSubmitted = STEPS.every((_, idx) => {
     const attempt = attemptsByStep.get(idx);
@@ -183,8 +184,14 @@ export function ExamSessionPage() {
           <span className={pageStyles.chip}>Exam</span>
         </div>
         {!isComplete && (
-          <div className={`${pageStyles.timer} ${secondsLeft <= 30 ? pageStyles.timerDanger : ''}`}>
-            <Clock3 size={15} /> {formatTime(secondsLeft)}
+          <div className={`${pageStyles.timerRail} ${secondsLeft <= 30 ? pageStyles.timerRailDanger : ''}`}>
+            <div className={pageStyles.timerHead}>
+              <span className={pageStyles.timerText}><Clock3 size={15} /> {formatTime(secondsLeft)}</span>
+              <span className={pageStyles.timerStep}>Step timer</span>
+            </div>
+            <div className={pageStyles.timerTrack} role="progressbar" aria-valuemin={0} aria-valuemax={STEP_SECONDS} aria-valuenow={secondsLeft} aria-label="Time remaining">
+              <div className={pageStyles.timerFill} style={{ width: `${timeLeftPct}%` }} />
+            </div>
           </div>
         )}
         <div className={pageStyles.topbarRight}>
