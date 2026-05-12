@@ -73,6 +73,16 @@ export function useSessions(params?: { status?: string; page?: number }) {
   return { ...state, refetch };
 }
 
+export function useSwapSessions() {
+  const [state, patch] = useQueryState<any>();
+
+  const refetch = useCallback(() => resolveQuery(() => apiClient.listSwapSessions(), patch), []);
+
+  useEffect(() => { refetch(); }, []);
+
+  return { ...state, refetch };
+}
+
 export function useSessionDetail(sessionId: string | null) {
   const [state, patch] = useQueryState<any>();
 

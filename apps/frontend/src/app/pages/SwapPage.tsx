@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { CheckCircle2, MessageSquare, Stethoscope, Trophy } from 'lucide-react';
 import { apiClient } from '@/api/client';
-import { useCases } from '@/api/hooks';
+import { useCases, useSwapSessions } from '@/api/hooks';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
 
 type SwapSessionRow = {
@@ -147,31 +147,22 @@ function SwapLoadingModal({ progress, caseTitle }: { progress: number; caseTitle
 export function SwapPage() {
   const navigate = useNavigate();
   const { data, loading, error } = useCases({ is_valid: 'true' });
+  const { data: sessionsData, loading: sessionsLoading, error: sessionsError } = useSwapSessions();
   const [startingCaseId, setStartingCaseId] = useState<string | null>(null);
   const [startProgress, setStartProgress] = useState(0);
   const [startError, setStartError] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<SwapSessionRow[]>([]);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const cases = data?.cases ?? [];
+  const sessions = sessionsData?.results ?? sessionsData?.sessions ?? [];
   const startingCase = cases.find((c: any) => c.id === startingCaseId);
 
-  const loadSessions = async () => {
-    const res = await apiClient.listSwapSessions();
-    if (!res.error && res.data?.sessions) setSessions(res.data.sessions);
-  };
-
-  useEffect(() => { loadSessions(); }, []);
-
-  // Best (highest score) completed session per case
-  const bestByCase = new Map<string, SwapSessionRow>();
+  const completedByCase = new Map<string, SwapSessionRow>();
   for (const s of sessions) {
     if (s.status !== 'COMPLETED') continue;
-    const existing = bestByCase.get(s.case_id);
-    if (!existing || (s.final_score ?? 0) > (existing.final_score ?? 0)) {
-      bestByCase.set(s.case_id, s);
-    }
+    const caseId = s.case_id ?? s.case;
+    if (caseId && !completedByCase.has(caseId)) completedByCase.set(caseId, s);
   }
-  const activeBest = activeCaseId ? bestByCase.get(activeCaseId) : null;
+  const activeCompleted = activeCaseId ? completedByCase.get(activeCaseId) : null;
   const activeCase = activeCaseId ? cases.find((c: any) => c.id === activeCaseId) : null;
 
   useEffect(() => {
@@ -236,14 +227,14 @@ export function SwapPage() {
           </p>
         </div>
 
-        {(error || startError) && (
+        {(error || sessionsError || startError) && (
           <div style={{ border: '1px solid var(--accent-clay)', color: 'var(--accent-clay)', background: 'rgba(192,57,43,0.06)', padding: 12, marginBottom: 18, fontFamily: "'Lora', serif", fontSize: 13 }}>
-            {error || startError}
+            {error || sessionsError || startError}
           </div>
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 18 }}>
-          {loading ? (
+          {loading || sessionsLoading ? (
             [1, 2, 3, 4, 5, 6].map(i => (
               <div key={i} style={{ height: 220, background: 'var(--bg-surface-alt)', border: '1px solid var(--border)', opacity: 0.7 }} />
             ))
@@ -251,9 +242,9 @@ export function SwapPage() {
             cases.map((c: any, idx: number) => {
               const thumb = firstImageUrl(c);
               const isStarting = startingCaseId === c.id;
-              const best = bestByCase.get(c.id);
-              const isDone = !!best;
-              const scorePct = best?.final_score != null ? Math.round(best.final_score * 100) : null;
+              const completed = completedByCase.get(c.id);
+              const isDone = !!completed;
+              const scorePct = completed?.final_score != null ? Math.round(completed.final_score * 100) : null;
               return (
                 <button
                   key={c.id}
@@ -315,7 +306,7 @@ export function SwapPage() {
         </div>
       </div>
 
-      {activeCase && activeBest && (
+      {activeCase && activeCompleted && (
         <div
           onClick={() => setActiveCaseId(null)}
           style={{
@@ -347,7 +338,7 @@ export function SwapPage() {
               fontFamily: "var(--font-mono)", fontSize: 11,
               color: 'var(--accent-sage)', letterSpacing: '0.1em', marginBottom: 18,
             }}>
-              MỨC ĐỘ THUYẾT PHỤC: {activeBest.final_score != null ? Math.round(activeBest.final_score * 100) : '—'}%
+              MỨC ĐỘ THUYẾT PHỤC: {activeCompleted.final_score != null ? Math.round(activeCompleted.final_score * 100) : '—'}%
             </div>
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
@@ -363,7 +354,7 @@ export function SwapPage() {
                 Hủy
               </button>
               <button
-                onClick={() => navigate(`/swap/session/${activeBest.id}`)}
+                onClick={() => navigate(`/swap/session/${activeCompleted.id}`)}
                 style={{
                   padding: '8px 14px', background: 'var(--bg-page)',
                   border: '1px solid var(--accent-sage)', color: 'var(--accent-sage)',
