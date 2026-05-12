@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { CheckCircle2, Clock3, FileText, Lock, LogOut, Send, Trophy, ZoomIn, ZoomOut } from 'lucide-react';
+import { CheckCircle2, Clock3, FileText, Loader2, Lock, LogOut, Send, Trophy, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { apiClient } from '@/api/client';
 import { VolumeSliceViewer } from '@/app/components/shared/VolumeSliceViewer';
 import { STEPS } from '@/constants/training';
@@ -27,6 +27,9 @@ export function ExamSessionPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [review, setReview] = useState<any>(null);
+  const [selectedStep, setSelectedStep] = useState<number>(0);
+  const [statusNote, setStatusNote] = useState<string | null>(null);
+  const [showResultModal, setShowResultModal] = useState(false);
 
   const resolveNextStepIndex = (sessionData: any) => {
     const attempts = sessionData?.step_attempts ?? [];
@@ -46,9 +49,7 @@ export function ExamSessionPage() {
     return byStep;
   }, [session]);
 
-  const currentStep = session?.status === 'COMPLETED'
-    ? (session?.current_step ?? 0)
-    : Math.max(session?.current_step ?? 0, resolveNextStepIndex(session));
+  const currentStep = Math.max(0, Math.min(STEPS.length - 1, selectedStep));
   const currentAttempt = attemptsByStep.get(currentStep);
   const isComplete = session?.status === 'COMPLETED';
   const secondsSpent = Math.min(STEP_SECONDS, (currentAttempt?.time_spent_seconds ?? 0) + elapsed);
@@ -70,7 +71,9 @@ export function ExamSessionPage() {
     }
     const normalized = { ...res.data, current_step: resolveNextStepIndex(res.data) };
     setSession(normalized);
-    const stepAttempt = (normalized?.step_attempts ?? []).find((a: any) => a.step_index === (normalized?.current_step ?? 0));
+    const initialStep = normalized.status === 'COMPLETED' ? 0 : normalized.current_step ?? 0;
+    setSelectedStep(initialStep);
+    const stepAttempt = (normalized?.step_attempts ?? []).find((a: any) => a.step_index === initialStep);
     setAnswer(stepAttempt?.answer ?? '');
     setElapsed(0);
   };
@@ -101,7 +104,11 @@ export function ExamSessionPage() {
       await loadSession();
       return;
     }
-    setSession({ ...res.data, current_step: resolveNextStepIndex(res.data) });
+    const nextStep = resolveNextStepIndex(res.data);
+    setSession({ ...res.data, current_step: nextStep });
+    setSelectedStep(nextStep);
+    setStatusNote(`Step ${currentStep + 1} saved`);
+    window.setTimeout(() => setStatusNote(null), 1500);
   };
 
   const completeExam = async () => {
@@ -114,7 +121,15 @@ export function ExamSessionPage() {
       setError(res.error);
       return;
     }
-    setSession({ ...res.data, current_step: resolveNextStepIndex(res.data) });
+    const doneSession = { ...res.data, current_step: 0 };
+    setSession(doneSession);
+    setSelectedStep(0);
+    setStatusNote('Exam completed');
+    const reviewRes = await apiClient.getExamReview(sessionId);
+    if (!reviewRes.error) {
+      setReview(reviewRes.data);
+      setShowResultModal(true);
+    }
   };
 
   useEffect(() => {
@@ -134,8 +149,22 @@ export function ExamSessionPage() {
     setReview(res.data);
   };
 
+  useEffect(() => {
+    if (!showResultModal) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowResultModal(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showResultModal]);
+
   if (loading) {
-    return <div style={{ minHeight: '100%', display: 'grid', placeItems: 'center' }}>Loading exam...</div>;
+    return (
+      <div className={pageStyles.loadingPage} aria-live="polite" aria-busy="true">
+        <Loader2 className={pageStyles.spin} size={24} />
+        <span>Loading exam...</span>
+      </div>
+    );
   }
 
   if (!session) {
@@ -159,8 +188,12 @@ export function ExamSessionPage() {
           </div>
         )}
         <div className={pageStyles.topbarRight}>
+          <div className={pageStyles.statusRegion} aria-live="polite">
+            {busy && <span className={pageStyles.statusBusy}><Loader2 className={pageStyles.spin} size={13} /> Processing...</span>}
+            {statusNote && <span className={pageStyles.statusOk}>{statusNote}</span>}
+          </div>
           {isComplete && <span className={pageStyles.score}><Trophy size={15} style={{ display: 'inline', marginRight: 5 }} />{scorePct}%</span>}
-          <button onClick={() => navigate('/exam')} className={pageStyles.exitBtn}>
+          <button type="button" onClick={() => navigate('/exam')} className={pageStyles.exitBtn}>
             <LogOut size={14} /> Exit
           </button>
         </div>
@@ -177,10 +210,11 @@ export function ExamSessionPage() {
               const active = idx === currentStep && !isComplete;
               return (
                 <button
+                  type="button"
                   key={step}
                   onClick={() => {
                     if (isComplete || idx <= resolveNextStepIndex(session)) {
-                      setSession({ ...session, current_step: idx });
+                      setSelectedStep(idx);
                     }
                   }}
                   className={`${pageStyles.stepBtn} ${active ? pageStyles.stepBtnActive : ''}`}
@@ -204,17 +238,24 @@ export function ExamSessionPage() {
           </div>
           {!isComplete && (
             <button
+              type="button"
               onClick={completeExam}
               disabled={!allSubmitted || busy}
               className={pageStyles.completeBtn}
             >
-              Complete Exam
+              {busy ? 'Completing...' : 'Complete Exam'}
             </button>
           )}
         </aside>
 
         <main className={pageStyles.mainCol}>
           <div className={pageStyles.viewerShell}>
+            {busy && (
+              <div className={pageStyles.busyScrim} aria-live="polite">
+                <Loader2 className={pageStyles.spin} size={22} />
+                <span>Scoring response...</span>
+              </div>
+            )}
             {caseData.images?.length ? (
               <VolumeSliceViewer images={caseData.images} zoom={zoom} imgClassName={styles.medicalImage} />
             ) : (
@@ -222,8 +263,8 @@ export function ExamSessionPage() {
             )}
           </div>
           <div className={pageStyles.viewerTools}>
-            <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} className={pageStyles.toolBtn}><ZoomIn size={15} /></button>
-            <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className={pageStyles.toolBtn}><ZoomOut size={15} /></button>
+            <button type="button" aria-label="Zoom in" onClick={() => setZoom(z => Math.min(3, z + 0.25))} className={pageStyles.toolBtn}><ZoomIn size={15} /></button>
+            <button type="button" aria-label="Zoom out" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className={pageStyles.toolBtn}><ZoomOut size={15} /></button>
           </div>
 
           <section className={pageStyles.answerCard}>
@@ -241,11 +282,12 @@ export function ExamSessionPage() {
             {error && <div className={pageStyles.error}>{error}</div>}
             {!isComplete && (
               <button
+                type="button"
                 onClick={submitStep}
                 disabled={busy || currentLocked}
                 className={pageStyles.submitBtn}
               >
-                <Send size={15} /> Submit Step
+                {busy ? <Loader2 className={pageStyles.spin} size={15} /> : <Send size={15} />} {busy ? 'Submitting...' : 'Submit Step'}
               </button>
             )}
           </section>
@@ -261,7 +303,7 @@ export function ExamSessionPage() {
 
           {isComplete && (
             <div>
-              <button onClick={loadReview} className={pageStyles.reviewBtn}>
+              <button type="button" onClick={loadReview} className={pageStyles.reviewBtn}>
                 <FileText size={15} /> Review Answers
               </button>
               {review && (
@@ -284,6 +326,35 @@ export function ExamSessionPage() {
           )}
         </aside>
       </div>
+      {showResultModal && review && (
+        <div className={pageStyles.modalBackdrop} onClick={() => setShowResultModal(false)} role="presentation">
+          <div className={pageStyles.modalCard} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="exam-result-title">
+            <div className={pageStyles.modalHeader}>
+              <div>
+                <div className={pageStyles.modalKicker}>Final score</div>
+                <h3 id="exam-result-title" className={pageStyles.modalTitle}>Exam Results</h3>
+              </div>
+              <div className={pageStyles.modalTotal}>{scorePct ?? 0}%</div>
+              <button type="button" aria-label="Close results" className={pageStyles.modalIconBtn} onClick={() => setShowResultModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className={pageStyles.modalList}>
+              {STEPS.map((step, idx) => {
+                const attempt = attemptsByStep.get(idx);
+                return (
+                  <div key={step} className={pageStyles.modalItem}>
+                    <div className={pageStyles.modalStep}>{idx + 1}. {step}</div>
+                    <div className={pageStyles.modalScore}>{Math.round((attempt?.score ?? 0) * 100)}%</div>
+                    <div className={pageStyles.modalAnswer}>{attempt?.answer || '-'}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <button type="button" className={pageStyles.modalClose} onClick={() => setShowResultModal(false)}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

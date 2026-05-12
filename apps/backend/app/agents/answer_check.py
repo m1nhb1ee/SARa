@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import re
 from openai import OpenAI
 from .debug.logger import logger
 from .config import LLM_PROVIDER, ANSWER_CHECK_MODEL
@@ -8,6 +9,27 @@ from .config import LLM_PROVIDER, ANSWER_CHECK_MODEL
 
 def _sanitize(s: str) -> str:
     return s.encode("utf-8", errors="replace").decode("utf-8")
+
+
+def _safe_parse_llm_json(raw_text: str) -> dict:
+    text = (raw_text or "").strip()
+    if not text:
+        raise ValueError("Empty LLM response")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        candidate = match.group(0)
+        candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError("Invalid JSON from LLM")
 
 # ── System Prompt ────────────────────────────────────────────────────────────
 
@@ -215,7 +237,25 @@ Evaluate and return JSON.""")
     )
     logger.log_step_latency(step_index, "answer_check", "openai", latency_ms)
 
-    raw = json.loads(response.choices[0].message.content)
+    try:
+        raw = _safe_parse_llm_json(response.choices[0].message.content or "")
+    except Exception as exc:
+        logger.log_tool_result(
+            step=step_index,
+            tool="evaluate_answer",
+            success=False,
+            result_preview=f"JSON parse failed: {str(exc)}"
+        )
+        raw = {
+            "score": 0.0,
+            "passed": False,
+            "errors": valid_error_codes[:1] if valid_error_codes else [],
+            "feedback": "Hệ thống chấm điểm gặp lỗi định dạng phản hồi. Vui lòng thử lại.",
+            "partial_answer_by_error": [],
+            "positive_feedback": "",
+            "could_add": "",
+            "next_step_preview": "",
+        }
 
     logger.log_tool_result(
         step=step_index,
