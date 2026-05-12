@@ -7,12 +7,12 @@ import json
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-
+from .. import socratic
+from .logger import logger
 from .. import answer_check
 
 sys.stdout.reconfigure(encoding="utf-8")
-from .. import socratic
-from .logger import logger
+
 
 load_dotenv(Path(__file__).parents[3] / ".env")
 

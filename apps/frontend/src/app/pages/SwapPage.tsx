@@ -179,7 +179,8 @@ export function SwapPage() {
 
     setStartProgress(8);
     const progressTimer = window.setInterval(() => {
-      setStartProgress(prev => (prev >= 88 ? prev : Math.min(prev + Math.random() * 8 + 3, 88)));
+      // 88% in ~30 seconds (180ms * 166 ticks)
+      setStartProgress(prev => (prev >= 99 ? prev : Math.min(prev + (90 / (30000 / 180)) + (Math.random() * 0.2), 99)));
     }, 180);
 
     return () => window.clearInterval(progressTimer);
@@ -189,6 +190,10 @@ export function SwapPage() {
     setStartingCaseId(caseId);
     setStartProgress(0);
     setStartError(null);
+
+    // Mock 30s loading
+    await new Promise(r => setTimeout(r, 30000));
+
     const res = await apiClient.createSwapSession(caseId);
     if (res.error || !res.data?.id) {
       setStartingCaseId(null);

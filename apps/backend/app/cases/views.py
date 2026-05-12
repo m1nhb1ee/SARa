@@ -5,7 +5,6 @@ from rest_framework.response import Response
 
 from app.core.pagination import StandardPagination
 from .services import list_cases, get_case, list_disease_tags
-from .serializers import CaseListSerializer, CaseDetailSerializer, CaseTagSerializer
 
 
 class CaseTagViewSet(viewsets.ViewSet):

@@ -17,7 +17,7 @@ from app.uploads.services import analyze_medical_image
 logger = logging.getLogger(__name__)
 
 SWAP_VLM_MAX_IMAGES = max(1, int(os.getenv('SWAP_VLM_MAX_IMAGES', '12')))
-SWAP_PERSUASION_THRESHOLD = float(os.getenv('SWAP_PERSUASION_THRESHOLD', '0.5'))
+
 
 MODALITY_TO_UPLOAD = {
     'X-ray': 'XRAY',
@@ -187,10 +187,12 @@ Conversation history:
 Return ONLY valid JSON:
 {{
   "doctor_message": "your in-character reply",
-  "convinced": true,
+  "convinced": false,
   "persuasion_score": 0.0,
   "reasoning_for_grader": "short private grading reason"
 }}
+
+Note: Set "convinced": true ONLY IF persuasion_score >= 0.7. If less than 0.7, set "convinced": false.
 """
     response = _get_openai_client().chat.completions.create(
         model='gpt-4o',
@@ -521,10 +523,10 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
 
-    # Advance the step when the judge explicitly concedes OR when the persuasion
-    # score is high enough — covers cases where the judge LLM is conservative
-    # with the boolean but still scores the argument well.
-    advance = bool(result.get('convinced')) or result.get('persuasion_score', 0) >= SWAP_PERSUASION_THRESHOLD
+    # Advance the step when the judge explicitly concedes.
+    # We rely on the LLM's 'convinced' boolean to ensure the system state
+    # matches the textual message (e.g. avoiding advancing when the doctor's text was a rejection).
+    advance = bool(result.get('convinced'))
     result['convinced'] = advance
 
     sb.table('swap_messages').insert([
