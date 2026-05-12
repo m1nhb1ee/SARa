@@ -376,7 +376,8 @@ export function UploadPage() {
 
     let p = 0;
     progressInterval.current = window.setInterval(() => {
-      p = Math.min(p + Math.random() * 12 + 4, 89);
+      // 89% in ~30 seconds (180ms * 166 ticks)
+      p = Math.min(p + (89 / (30000 / 180)) + (Math.random() * 0.2), 89);
       setUploadProgress(p);
     }, 180);
 
@@ -396,6 +397,10 @@ export function UploadPage() {
 
       const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
       const token = localStorage.getItem('sara_token') || '';
+      
+      // Mock 30s loading
+      await new Promise(r => setTimeout(r, 30000));
+
       const response = await fetch(`${API_BASE}/uploaded-cases/`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},

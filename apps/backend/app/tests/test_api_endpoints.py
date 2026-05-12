@@ -153,7 +153,6 @@ def make_session(session_id='session-1', user_id='user-1', case_id='case-1', sta
         },
     }
 
-
 class AuthEndpointTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
@@ -381,7 +380,7 @@ class SessionEndpointTests(SimpleTestCase):
         request = self.factory.get('/api/v1/sessions/session-1/')
         force_authenticate(request, user=FakeUser())
 
-        with patch('app.sessions.views.get_session', return_value=session), patch('app.sessions.views.get_supabase', return_value=supabase):
+        with patch('app.sessions.views.get_session', return_value=(session, None)), patch('app.sessions.views.get_supabase', return_value=supabase):
             response = SessionViewSet.as_view({'get': 'retrieve'})(request, pk='session-1')
 
         self.assertEqual(response.status_code, 200)
@@ -401,7 +400,7 @@ class SessionEndpointTests(SimpleTestCase):
         }, format='json')
         force_authenticate(request, user=FakeUser())
 
-        with patch('app.sessions.views.get_session', return_value=session), \
+        with patch('app.sessions.views.get_session', return_value=(session, None)), \
              patch('app.sessions.views.get_supabase', return_value=supabase), \
              patch('app.sessions.views.get_rubric_id', return_value='rubric-1'), \
              patch('app.sessions.views.classify_intent', return_value={'intent': 'chit-chat', 'response': 'small talk'}), \
@@ -424,7 +423,7 @@ class SessionEndpointTests(SimpleTestCase):
         }, format='json')
         force_authenticate(request, user=FakeUser())
 
-        with patch('app.sessions.views.get_session', return_value=session), \
+        with patch('app.sessions.views.get_session', return_value=(session, None)), \
              patch('app.sessions.views.get_supabase', return_value=supabase), \
              patch('app.sessions.views.classify_intent', return_value={'intent': 'question', 'response': 'Ask a question'}), \
              patch('app.sessions.views.evaluate_answer') as evaluate_answer:
@@ -442,7 +441,7 @@ class SessionEndpointTests(SimpleTestCase):
         request = self.factory.post('/api/v1/sessions/session-1/exit_session/', {}, format='json')
         force_authenticate(request, user=FakeUser())
 
-        with patch('app.sessions.views.get_session', return_value=session), patch('app.sessions.views.get_supabase', return_value=supabase):
+        with patch('app.sessions.views.get_session', return_value=(session, None)), patch('app.sessions.views.get_supabase', return_value=supabase):
             response = SessionViewSet.as_view({'post': 'exit_session'})(request, pk='session-1')
 
         self.assertEqual(response.status_code, 200)
@@ -456,7 +455,7 @@ class SessionEndpointTests(SimpleTestCase):
         request = self.factory.post('/api/v1/sessions/session-1/resume/', {}, format='json')
         force_authenticate(request, user=FakeUser())
 
-        with patch('app.sessions.views.get_session', return_value=session), patch('app.sessions.views.get_supabase', return_value=supabase):
+        with patch('app.sessions.views.get_session', return_value=(session, None)), patch('app.sessions.views.get_supabase', return_value=supabase):
             response = SessionViewSet.as_view({'post': 'resume'})(request, pk='session-1')
 
         self.assertEqual(response.status_code, 200)
@@ -476,7 +475,7 @@ class SessionEndpointTests(SimpleTestCase):
         request = self.factory.get('/api/v1/sessions/session-1/step_answers/')
         force_authenticate(request, user=FakeUser())
 
-        with patch('app.sessions.views.get_session', return_value=session), patch('app.sessions.views.get_supabase', return_value=supabase):
+        with patch('app.sessions.views.get_session', return_value=(session, None)), patch('app.sessions.views.get_supabase', return_value=supabase):
             response = SessionViewSet.as_view({'get': 'step_answers'})(request, pk='session-1')
 
         self.assertEqual(response.status_code, 200)
@@ -488,7 +487,7 @@ class SessionEndpointTests(SimpleTestCase):
         request = self.factory.get('/api/v1/sessions/session-1/answer_key/')
         force_authenticate(request, user=FakeUser())
 
-        with patch('app.sessions.views.get_session', return_value=session):
+        with patch('app.sessions.views.get_session', return_value=(session, None)):
             response = SessionViewSet.as_view({'get': 'answer_key'})(request, pk='session-1')
 
         self.assertEqual(response.status_code, 403)
@@ -506,7 +505,7 @@ class SessionEndpointTests(SimpleTestCase):
         request = self.factory.get('/api/v1/sessions/session-1/answer_key/')
         force_authenticate(request, user=FakeUser())
 
-        with patch('app.sessions.views.get_session', return_value=session), patch('app.sessions.views.get_supabase', return_value=supabase):
+        with patch('app.sessions.views.get_session', return_value=(session, None)), patch('app.sessions.views.get_supabase', return_value=supabase):
             response = SessionViewSet.as_view({'get': 'answer_key'})(request, pk='session-1')
 
         self.assertEqual(response.status_code, 200)
