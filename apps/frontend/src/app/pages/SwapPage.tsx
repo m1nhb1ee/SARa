@@ -268,7 +268,12 @@ export function SwapPage() {
                     boxShadow: '0 3px 12px rgba(62,31,13,0.12)',
                   }}
                 >
-                  <SketchBorder id={`swap-case-${c.id}`} color={isDone ? 'var(--accent-sage)' : 'var(--ink-secondary)'} opacity={0.45} />
+                  <SketchBorder
+                    id={`swap-case-${c.id}`}
+                    color={isDone ? 'var(--accent-sage)' : 'var(--ink-secondary)'}
+                    opacity={isDone ? 0.9 : 0.45}
+                    zIndex={isDone ? 4 : 1}
+                  />
                   {isDone && (
                     <div style={{
                       position: 'absolute', top: 10, right: 10, zIndex: 2,
