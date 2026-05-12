@@ -30,6 +30,7 @@ class CaseViewSet(viewsets.ViewSet):
             disease_tag=request.query_params.get('disease_tag'),
             status_filter=request.query_params.get('status'),
             is_valid=request.query_params.get('is_valid'),
+            is_exam=False,
         )
         return Response({'cases': cases, 'count': len(cases)})
 

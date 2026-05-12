@@ -66,6 +66,10 @@ class APIClient {
     return this.request<any>(`/cases/${queryString ? '?' + queryString : ''}`);
   }
 
+  async getExamCases() {
+    return this.request<any>('/exam-cases/');
+  }
+
   async getCaseDetail(caseId: string) {
     return this.request<any>(`/cases/${caseId}/`);
   }
@@ -209,6 +213,31 @@ class APIClient {
     }
 
     return { error: 'Stream ended before completion', status: 0 };
+  }
+
+  // Exam
+  async createExamSession(caseId: string) {
+    return this.request<any>('/exam-sessions/', 'POST', { case_id: caseId });
+  }
+
+  async getExamSession(sessionId: string) {
+    return this.request<any>(`/exam-sessions/${sessionId}/`);
+  }
+
+  async submitExamStep(sessionId: string, stepIndex: number, answer: string, timeSpentSeconds: number) {
+    return this.request<any>(`/exam-sessions/${sessionId}/submit_step/`, 'POST', {
+      step_index: stepIndex,
+      answer,
+      time_spent_seconds: timeSpentSeconds,
+    });
+  }
+
+  async completeExamSession(sessionId: string) {
+    return this.request<any>(`/exam-sessions/${sessionId}/complete/`, 'POST');
+  }
+
+  async getExamReview(sessionId: string) {
+    return this.request<any>(`/exam-sessions/${sessionId}/review/`);
   }
 
   // Performance

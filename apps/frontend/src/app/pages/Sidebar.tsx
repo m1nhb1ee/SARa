@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router';
 import {
-  Home, Upload, FolderOpen, User, Settings, LogOut, MessagesSquare
+  Home, Upload, FolderOpen, User, Settings, LogOut, MessagesSquare, ClipboardList
 } from 'lucide-react';
 import { useAuth } from '@/api/authContext';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: 'My Cases', path: '/',            icon: FolderOpen,     accent: 'var(--accent-ink)' },
   { name: 'Upload',   path: '/upload',      icon: Upload,         accent: 'var(--accent-clay)' },
   { name: 'Swap',     path: '/swap',        icon: MessagesSquare, accent: 'var(--accent-sage)' },
+  { name: 'Exam',     path: '/exam',        icon: ClipboardList,  accent: 'var(--accent-ink)' },
   { name: 'Profile',  path: '/performance', icon: User,           accent: 'var(--accent-gold)' },
   { name: 'Settings', path: '/settings',    icon: Settings,       accent: 'var(--ink-secondary)' },
 ];
