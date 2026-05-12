@@ -13,6 +13,11 @@ export function ExamPage() {
   const [startError, setStartError] = useState<string | null>(null);
   const cases = data?.cases ?? [];
   const totalCases = cases.length;
+  const guideItems = [
+    { icon: ClipboardList, label: 'Pick a case', detail: 'Read the clinical note first' },
+    { icon: TimerReset, label: '300s each', detail: 'Timed response per step' },
+    { icon: Activity, label: '4 steps', detail: 'Describe, reason, DDx, conclude' },
+  ];
 
   const startExam = async (caseId: string) => {
     setStartingCaseId(caseId);
@@ -32,10 +37,12 @@ export function ExamPage() {
         <div className={styles.heroWrap}>
           <SketchBorder id="exam-hero" color="var(--ink-secondary)" opacity={0.65} zIndex={3} />
           <div className={styles.topbar}>
-            <div>
-              <div className={styles.eyebrow}>Timed assessment</div>
+            <div className={styles.heroCopy}>
+              <div className={styles.eyebrow}>Timed assessment dossier</div>
               <h1 className={styles.title}>Exam Cases</h1>
-              <p className={styles.subtitle}>Focused diagnostic drills with locked timing and step-by-step scoring.</p>
+              <p className={styles.subtitle}>
+                Choose one case, enter a locked diagnostic flow, and commit each answer under exam timing.
+              </p>
             </div>
             <div className={styles.heroStats} aria-label="Exam format">
               <div className={styles.statPill}><FileCheck2 size={15} /> {totalCases} cases</div>
@@ -44,6 +51,18 @@ export function ExamPage() {
             </div>
           </div>
         </div>
+
+        <section className={styles.guidePanel} aria-label="Exam instructions">
+          {guideItems.map(({ icon: Icon, label, detail }) => (
+            <div key={label} className={styles.guideItem}>
+              <div className={styles.guideIcon}><Icon size={16} /></div>
+              <div>
+                <div className={styles.guideLabel}>{label}</div>
+                <div className={styles.guideDetail}>{detail}</div>
+              </div>
+            </div>
+          ))}
+        </section>
 
         {(error || startError) && (
           <div className={styles.error} role="alert">
@@ -66,23 +85,27 @@ export function ExamPage() {
           </div>
         ) : cases.length === 0 ? (
           <div className={styles.empty}>
-            <div style={{ textAlign: 'center', maxWidth: 420 }}>
-              <SearchX size={40} style={{ margin: '0 auto 12px', color: 'var(--ink-secondary)' }} />
-              <h2 style={{ fontFamily: "'Playfair Display', serif", color: 'var(--ink)', marginBottom: 8 }}>No exam cases yet</h2>
-              <p style={{ color: 'var(--ink-secondary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+            <div className={styles.emptyInner}>
+              <SearchX size={40} className={styles.emptyIcon} />
+              <h2 className={styles.emptyTitle}>No exam cases yet</h2>
+              <p className={styles.emptyText}>
                 Exam mode only shows cases where is_exam is true.
               </p>
             </div>
           </div>
         ) : (
           <div className={styles.grid}>
-            {cases.map((caseItem: any) => {
+            {cases.map((caseItem: any, idx: number) => {
               const firstImage = caseItem.images?.[0]?.slices?.[0]?.image_url;
               const isStarting = startingCaseId === caseItem.id;
               return (
                 <div key={caseItem.id} className={styles.cardWrap}>
                   <SketchBorder id={`exam-card-${caseItem.id}`} color="var(--ink-secondary)" opacity={0.55} zIndex={3} />
                   <div className={styles.card}>
+                    <div className={styles.cardHeader}>
+                      <span className={styles.caseNumber}>Case #{String(idx + 1).padStart(3, '0')}</span>
+                      <span className={styles.stamp}>Timed</span>
+                    </div>
                     <div className={styles.thumb}>
                       <div className={styles.thumbInner}>
                         {firstImage ? (
@@ -102,7 +125,6 @@ export function ExamPage() {
                         <span className={`${styles.chip} ${styles.chipDifficulty}`}>
                         {caseItem.difficulty || 'Exam'}
                         </span>
-                        <span className={styles.stamp}>Timed</span>
                       </div>
                       <h3 className={styles.cardTitle}>
                         {caseItem.title}

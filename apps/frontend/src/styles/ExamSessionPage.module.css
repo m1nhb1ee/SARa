@@ -62,21 +62,63 @@
   border-color: var(--accent-ink);
 }
 
-.timer {
+.timerRail {
+  width: min(280px, 100%);
   border: 1px solid var(--border);
-  background: var(--bg-highlight);
-  color: var(--ink);
-  padding: 8px 14px;
-  font-family: var(--font-mono);
+  background: var(--bg-surface);
+  padding: 8px 10px 10px;
+}
+
+.timerHead {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.timerText {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  line-height: 1;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.timerDanger {
-  background: var(--accent-clay);
-  color: var(--bg-page);
+.timerStep {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.timerTrack {
+  height: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-page);
+  overflow: hidden;
+}
+
+.timerFill {
+  height: 100%;
+  background: var(--accent-gold);
+  transition: width 260ms linear, background-color 220ms ease;
+}
+
+.timerRailDanger {
   border-color: var(--accent-clay);
+}
+
+.timerRailDanger .timerText,
+.timerRailDanger .timerStep {
+  color: var(--accent-clay);
+}
+
+.timerRailDanger .timerFill {
+  background: var(--accent-clay);
   animation: pulse-danger 900ms ease-in-out infinite alternate;
 }
 
@@ -646,7 +688,7 @@
   .modalBackdrop,
   .modalCard,
   .spin,
-  .timerDanger {
+  .timerRailDanger .timerFill {
     animation: none;
   }
 
