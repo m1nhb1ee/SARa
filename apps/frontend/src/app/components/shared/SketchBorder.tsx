@@ -4,9 +4,10 @@ interface Props {
   id: string;
   color?: string;
   opacity?: number;
+  zIndex?: number;
 }
 
-export function SketchBorder({ id, color = 'var(--ink-secondary)', opacity = 1 }: Props) {
+export function SketchBorder({ id, color = 'var(--ink-secondary)', opacity = 1, zIndex = 0 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const fId = `skb-${id}`;
@@ -36,7 +37,7 @@ export function SketchBorder({ id, color = 'var(--ink-secondary)', opacity = 1 }
         pointerEvents: 'none',
         overflow: 'visible',
         opacity,
-        zIndex: 0,
+        zIndex,
       }}
     >
       {size && (
