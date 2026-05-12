@@ -42,6 +42,13 @@ def list_exam_cases(user_id: str) -> list[dict]:
     return [_group_images(row) for row in rows if not row.get('uploaded_by') or row.get('uploaded_by') == user_id]
 
 
+def list_exam_sessions(user_id: str) -> list[dict]:
+    sb = get_supabase()
+    return sb.table('exam_sessions').select(
+        'id, case_id, status, final_score, completed_at, created_at'
+    ).eq('user_id', user_id).order('created_at', desc=True).execute().data or []
+
+
 def _get_exam_case(case_id: str, user_id: str) -> tuple[dict | None, Response | None]:
     sb = get_supabase()
     try:

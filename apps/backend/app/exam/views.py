@@ -10,6 +10,7 @@ from .services import (
     get_exam_review,
     get_exam_session,
     list_exam_cases,
+    list_exam_sessions,
     submit_exam_step,
 )
 
@@ -24,6 +25,10 @@ class ExamCaseViewSet(viewsets.ViewSet):
 
 class ExamSessionViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        sessions = list_exam_sessions(request.user['id'])
+        return Response({'sessions': sessions, 'count': len(sessions)})
 
     def create(self, request):
         serializer = ExamSessionCreateSerializer(data=request.data)

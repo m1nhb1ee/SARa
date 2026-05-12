@@ -220,6 +220,10 @@ class APIClient {
     return this.request<any>('/exam-sessions/', 'POST', { case_id: caseId });
   }
 
+  async listExamSessions() {
+    return this.request<any>('/exam-sessions/');
+  }
+
   async getExamSession(sessionId: string) {
     return this.request<any>(`/exam-sessions/${sessionId}/`);
   }
