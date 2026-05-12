@@ -27,13 +27,27 @@ export function ExamSessionPage() {
   const [error, setError] = useState<string | null>(null);
   const [review, setReview] = useState<any>(null);
 
+  const resolveNextStepIndex = (sessionData: any) => {
+    const attempts = sessionData?.step_attempts ?? [];
+    let idx = 0;
+    while (idx < STEPS.length) {
+      const attempt = attempts.find((item: any) => item.step_index === idx);
+      const done = !!attempt?.submitted_at || !!attempt?.locked;
+      if (!done) break;
+      idx += 1;
+    }
+    return Math.min(idx, STEPS.length - 1);
+  };
+
   const attemptsByStep = useMemo(() => {
     const byStep = new Map<number, any>();
     for (const attempt of session?.step_attempts ?? []) byStep.set(attempt.step_index, attempt);
     return byStep;
   }, [session]);
 
-  const currentStep = session?.current_step ?? 0;
+  const currentStep = session?.status === 'COMPLETED'
+    ? (session?.current_step ?? 0)
+    : Math.max(session?.current_step ?? 0, resolveNextStepIndex(session));
   const currentAttempt = attemptsByStep.get(currentStep);
   const isComplete = session?.status === 'COMPLETED';
   const secondsSpent = Math.min(STEP_SECONDS, (currentAttempt?.time_spent_seconds ?? 0) + elapsed);
@@ -41,7 +55,7 @@ export function ExamSessionPage() {
   const currentLocked = isComplete || currentAttempt?.locked || secondsLeft <= 0;
   const allSubmitted = STEPS.every((_, idx) => {
     const attempt = attemptsByStep.get(idx);
-    return attempt?.submitted_at && (attempt?.answer ?? '').trim();
+    return attempt?.submitted_at || attempt?.locked;
   });
 
   const loadSession = async () => {
@@ -53,8 +67,9 @@ export function ExamSessionPage() {
       setError(res.error);
       return;
     }
-    setSession(res.data);
-    const stepAttempt = (res.data?.step_attempts ?? []).find((a: any) => a.step_index === (res.data?.current_step ?? 0));
+    const normalized = { ...res.data, current_step: resolveNextStepIndex(res.data) };
+    setSession(normalized);
+    const stepAttempt = (normalized?.step_attempts ?? []).find((a: any) => a.step_index === (normalized?.current_step ?? 0));
     setAnswer(stepAttempt?.answer ?? '');
     setElapsed(0);
   };
@@ -73,18 +88,19 @@ export function ExamSessionPage() {
     setElapsed(0);
   }, [currentStep, attemptsByStep]);
 
-  const submitStep = async () => {
+  const submitStep = async (force = false) => {
     if (!sessionId || currentLocked || busy) return;
+    if (!force && !answer.trim()) return;
     setBusy(true);
     setError(null);
     const res = await apiClient.submitExamStep(sessionId, currentStep, answer, secondsSpent);
     setBusy(false);
     if (res.error) {
-      setError(res.error);
+      if (secondsLeft > 0) setError(res.error);
       await loadSession();
       return;
     }
-    setSession(res.data);
+    setSession({ ...res.data, current_step: resolveNextStepIndex(res.data) });
   };
 
   const completeExam = async () => {
@@ -97,8 +113,15 @@ export function ExamSessionPage() {
       setError(res.error);
       return;
     }
-    setSession(res.data);
+    setSession({ ...res.data, current_step: resolveNextStepIndex(res.data) });
   };
+
+  useEffect(() => {
+    if (!sessionId || busy || isComplete || currentLocked) return;
+    if (secondsLeft === 0) {
+      submitStep(true);
+    }
+  }, [sessionId, busy, isComplete, currentLocked, secondsLeft]);
 
   const loadReview = async () => {
     if (!sessionId) return;
@@ -147,7 +170,7 @@ export function ExamSessionPage() {
                 <button
                   key={step}
                   onClick={() => {
-                    if (isComplete || idx <= currentStep) {
+                    if (isComplete || idx <= resolveNextStepIndex(session)) {
                       setSession({ ...session, current_step: idx });
                     }
                   }}
@@ -252,7 +275,7 @@ export function ExamSessionPage() {
             {!isComplete && (
               <button
                 onClick={submitStep}
-                disabled={busy || currentLocked || !answer.trim()}
+                disabled={busy || currentLocked}
                 style={{ marginTop: 12, border: '1px solid var(--accent-clay)', background: 'var(--accent-clay)', color: 'var(--bg-page)', padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', fontFamily: 'var(--font-mono)' }}
               >
                 <Send size={15} /> Submit Step
