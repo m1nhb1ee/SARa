@@ -62,7 +62,13 @@
   border-color: var(--accent-ink);
 }
 
+.timerWrap {
+  position: relative;
+}
+
 .timerRail {
+  position: relative;
+  z-index: 1;
   width: min(280px, 100%);
   border: 1px solid var(--border);
   background: var(--bg-surface);

@@ -18,7 +18,8 @@ class SwapSessionViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
     def list(self, request):
-        return Response({'sessions': list_swap_sessions(request.user['id'])})
+        sessions = list_swap_sessions(request.user['id'])
+        return Response({'count': len(sessions), 'results': sessions, 'sessions': sessions})
 
     def create(self, request):
         serializer = SwapSessionCreateSerializer(data=request.data)

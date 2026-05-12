@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { CheckCircle2, Clock3, FileText, Loader2, Lock, LogOut, Send, Trophy, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { CheckCircle2, Clock3, Loader2, Lock, LogOut, Send, Trophy, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { apiClient } from '@/api/client';
 import { VolumeSliceViewer } from '@/app/components/shared/VolumeSliceViewer';
+import { SketchBorder } from '@/app/components/shared/SketchBorder';
 import { STEPS } from '@/constants/training';
 import styles from '@/styles/DiagnosisSession.module.css';
 import pageStyles from '@/styles/ExamSessionPage.module.css';
@@ -26,7 +27,6 @@ export function ExamSessionPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [review, setReview] = useState<any>(null);
   const [selectedStep, setSelectedStep] = useState<number>(0);
   const [statusNote, setStatusNote] = useState<string | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
@@ -126,11 +126,7 @@ export function ExamSessionPage() {
     setSession(doneSession);
     setSelectedStep(0);
     setStatusNote('Exam completed');
-    const reviewRes = await apiClient.getExamReview(sessionId);
-    if (!reviewRes.error) {
-      setReview(reviewRes.data);
-      setShowResultModal(true);
-    }
+    setShowResultModal(true);
   };
 
   useEffect(() => {
@@ -139,16 +135,6 @@ export function ExamSessionPage() {
       submitStep(true);
     }
   }, [sessionId, busy, isComplete, currentLocked, secondsLeft]);
-
-  const loadReview = async () => {
-    if (!sessionId) return;
-    const res = await apiClient.getExamReview(sessionId);
-    if (res.error) {
-      setError(res.error);
-      return;
-    }
-    setReview(res.data);
-  };
 
   useEffect(() => {
     if (!showResultModal) return;
@@ -184,13 +170,16 @@ export function ExamSessionPage() {
           <span className={pageStyles.chip}>Exam</span>
         </div>
         {!isComplete && (
-          <div className={`${pageStyles.timerRail} ${secondsLeft <= 30 ? pageStyles.timerRailDanger : ''}`}>
-            <div className={pageStyles.timerHead}>
-              <span className={pageStyles.timerText}><Clock3 size={15} /> {formatTime(secondsLeft)}</span>
-              <span className={pageStyles.timerStep}>Step timer</span>
-            </div>
-            <div className={pageStyles.timerTrack} role="progressbar" aria-valuemin={0} aria-valuemax={STEP_SECONDS} aria-valuenow={secondsLeft} aria-label="Time remaining">
-              <div className={pageStyles.timerFill} style={{ width: `${timeLeftPct}%` }} />
+          <div className={pageStyles.timerWrap}>
+            <SketchBorder id="exam-session-timer" color="var(--ink-secondary)" opacity={0.6} zIndex={2} />
+            <div className={`${pageStyles.timerRail} ${secondsLeft <= 30 ? pageStyles.timerRailDanger : ''}`}>
+              <div className={pageStyles.timerHead}>
+                <span className={pageStyles.timerText}><Clock3 size={15} /> {formatTime(secondsLeft)}</span>
+                <span className={pageStyles.timerStep}>Step timer</span>
+              </div>
+              <div className={pageStyles.timerTrack} role="progressbar" aria-valuemin={0} aria-valuemax={STEP_SECONDS} aria-valuenow={secondsLeft} aria-label="Time remaining">
+                <div className={pageStyles.timerFill} style={{ width: `${timeLeftPct}%` }} />
+              </div>
             </div>
           </div>
         )}
@@ -307,33 +296,9 @@ export function ExamSessionPage() {
             <div><strong className={pageStyles.infoLabel}>Disease tag</strong><br />{caseData.disease_tag || '-'}</div>
             <div><strong className={pageStyles.infoLabel}>Difficulty</strong><br />{caseData.difficulty || '-'}</div>
           </div>
-
-          {isComplete && (
-            <div>
-              <button type="button" onClick={loadReview} className={pageStyles.reviewBtn}>
-                <FileText size={15} /> Review Answers
-              </button>
-              {review && (
-                <div className={pageStyles.reviewList}>
-                  {STEPS.map((step, idx) => {
-                    const attempt = attemptsByStep.get(idx);
-                    const key = review.answer_key?.[step];
-                    return (
-                      <div key={step} className={pageStyles.reviewItem}>
-                        <div className={pageStyles.reviewStep}>{step}</div>
-                        <div className={pageStyles.reviewText}>Your answer: {attempt?.answer || '-'}</div>
-                        <div className={pageStyles.reviewScore}>Score: {Math.round((attempt?.score ?? 0) * 100)}%</div>
-                        <div className={pageStyles.reviewKey}>Key: {key?.expected_finding || '-'}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
         </aside>
       </div>
-      {showResultModal && review && (
+      {showResultModal && (
         <div className={pageStyles.modalBackdrop} onClick={() => setShowResultModal(false)} role="presentation">
           <div className={pageStyles.modalCard} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="exam-result-title">
             <div className={pageStyles.modalHeader}>
@@ -353,7 +318,6 @@ export function ExamSessionPage() {
                   <div key={step} className={pageStyles.modalItem}>
                     <div className={pageStyles.modalStep}>{idx + 1}. {step}</div>
                     <div className={pageStyles.modalScore}>{Math.round((attempt?.score ?? 0) * 100)}%</div>
-                    <div className={pageStyles.modalAnswer}>{attempt?.answer || '-'}</div>
                   </div>
                 );
               })}
