@@ -43,11 +43,12 @@ def _group_images(case: dict) -> dict:
     return case
 
 
-def list_cases(user_id: str, source=None, modality=None, difficulty=None, disease_tag=None, status_filter=None, is_valid=None) -> list:
+def list_cases(user_id: str, source=None, modality=None, difficulty=None, disease_tag=None, status_filter=None, is_valid=None, is_exam=False) -> list:
     sb = get_supabase()
     query = sb.table('cases').select(
-        'id, title, modality, difficulty, clinical_history, disease_tag, status, source, tags, created_at, uploaded_by, is_valid, case_images(image_url, slice_index, volume_name)'
+        'id, title, modality, difficulty, clinical_history, disease_tag, status, source, tags, created_at, uploaded_by, is_valid, is_exam, case_images(image_url, slice_index, volume_name)'
     )
+    query = query.eq('is_exam', bool(is_exam))
     if source == 'system':
         query = query.eq('source', 'system')
     elif source == 'uploaded':
@@ -76,7 +77,7 @@ def get_case(case_id: str) -> dict | None:
     sb = get_supabase()
     try:
         result = sb.table('cases').select(
-            'id, title, modality, difficulty, clinical_history, disease_tag, status, source, tags, created_at, uploaded_by, is_valid, case_images(image_url, slice_index, volume_name)'
+            'id, title, modality, difficulty, clinical_history, disease_tag, status, source, tags, created_at, uploaded_by, is_valid, is_exam, case_images(image_url, slice_index, volume_name)'
         ).eq('id', case_id).single().execute()
         return _group_images(result.data)
     except Exception:

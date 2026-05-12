@@ -17,6 +17,9 @@ from app.uploads.services import analyze_medical_image
 logger = logging.getLogger(__name__)
 
 SWAP_VLM_MAX_IMAGES = max(1, int(os.getenv('SWAP_VLM_MAX_IMAGES', '12')))
+SWAP_PHASE_DEBATING = 'DEBATING'
+SWAP_PHASE_AWAITING_CONFIRMATION = 'AWAITING_CONFIRMATION'
+SWAP_PHASE_CONFIRMED = 'CONFIRMED'
 
 
 MODALITY_TO_UPLOAD = {
@@ -45,7 +48,7 @@ def _get_case_for_user(case_id: str, user_id: str) -> tuple[dict | None, Respons
     try:
         result = sb.table('cases').select(
             'id, title, modality, difficulty, clinical_history, disease_tag, status, source, uploaded_by, '
-            'is_valid, case_images(image_url, slice_index, volume_name)'
+            'is_valid, is_exam, case_images(image_url, slice_index, volume_name)'
         ).eq('id', case_id).single().execute()
     except Exception:
         return None, Response({'error': 'Case not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -53,6 +56,8 @@ def _get_case_for_user(case_id: str, user_id: str) -> tuple[dict | None, Respons
     case = result.data
     if case.get('uploaded_by') and case['uploaded_by'] != user_id:
         return None, Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    if case.get('is_exam') is True:
+        return None, Response({'error': 'Exam cases cannot be used for swap debate'}, status=status.HTTP_400_BAD_REQUEST)
     if case.get('is_valid') is not True:
         return None, Response({'error': 'Case is not valid for swap debate'}, status=status.HTTP_400_BAD_REQUEST)
     return case, None
@@ -122,6 +127,73 @@ def _format_history(messages: list[dict], pending_user_message: str) -> str:
     return "\n".join(lines)
 
 
+def _is_confirmation_message(message: str) -> bool:
+    text = " ".join((message or "").strip().lower().split())
+    if not text:
+        return False
+    confirm_words = (
+        'dong y', 'đồng ý', 'ok', 'okay', 'yes', 'chot', 'chốt',
+        'dung roi', 'đúng rồi', 'nhat tri', 'nhất trí', 'tiep tuc',
+        'tiếp tục', 'sang buoc', 'sang bước'
+    )
+    reject_words = (
+        'khong', 'không', 'chua', 'chưa', 'sai', 'bo sung', 'bổ sung',
+        'sua', 'sửa', 'nhung', 'nhưng'
+    )
+    if any(word in text for word in reject_words):
+        return False
+    return any(word in text for word in confirm_words)
+
+
+def _step_state_map(states: list[dict] | None) -> dict[int, dict]:
+    return {int(state['step_index']): state for state in (states or [])}
+
+
+def _default_step_state(session_id: str, step_index: int) -> dict:
+    return {
+        'swap_session_id': session_id,
+        'step_index': step_index,
+        'step_code': STEP_CODES[step_index],
+        'phase': SWAP_PHASE_DEBATING,
+        'convinced': False,
+        'pending_summary': None,
+        'agreed_answer': None,
+        'debate_score': None,
+        'knowledge_score': None,
+        'reasoning': '',
+    }
+
+
+def _previous_agreed_answers(states: list[dict], current_step: int) -> list[dict]:
+    by_step = _step_state_map(states)
+    agreed = []
+    for idx in range(current_step):
+        state = by_step.get(idx) or {}
+        if state.get('agreed_answer'):
+            agreed.append({'step_code': STEP_CODES[idx], 'agreed_answer': state['agreed_answer']})
+    return agreed
+
+
+def _current_step_visible_history(messages: list[dict], step_index: int, pending_user_message: str) -> str:
+    lines = []
+    for message in messages:
+        if message.get('step_index') != step_index:
+            continue
+        role = 'Doctor' if message['role'] == 'doctor' else 'User'
+        lines.append(f"{role}: {message['content']}")
+    lines.append(f"User: {pending_user_message}")
+    return "\n".join(lines)
+
+
+def _combined_score(result: dict[str, Any]) -> float:
+    debate = result.get('debate_score')
+    knowledge = result.get('knowledge_score')
+    if debate is None and knowledge is None:
+        return _clamp_score(result.get('persuasion_score', 0))
+    values = [_clamp_score(v) for v in (debate, knowledge) if v is not None]
+    return sum(values) / len(values) if values else 0.0
+
+
 def _clamp_score(value: Any) -> float:
     try:
         score = float(value)
@@ -139,18 +211,119 @@ def _get_openai_client() -> OpenAI:
     return OpenAI(api_key=api_key)
 
 
+def _translate_doctor_diagnosis_for_user(doctor_diagnosis: dict[str, Any]) -> dict[str, str]:
+    source_by_step = {
+        code: str(
+            doctor_diagnosis.get(code)
+            or doctor_diagnosis.get('OBSERVE' if code == 'DESCRIBE' else code)
+            or ''
+        ).strip()
+        for code in STEP_CODES
+    }
+    if not any(source_by_step.values()):
+        return source_by_step
+
+    prompt = f"""
+Translate and polish these radiology step answers into Vietnamese before they are shown to a student.
+
+Rules:
+- Return ONLY valid JSON.
+- Keep exactly these keys: {STEP_CODES}.
+- Translate all English to natural Vietnamese.
+- Keep standard radiology abbreviations when useful, but explain them in Vietnamese if needed.
+- Do not add hidden answer-key details that are not present in the source.
+- Do not prefix the value with the step code, for example do not start with "DESCRIBE:".
+- Write each value as the doctor speaking concisely to the student.
+
+Source JSON:
+{json.dumps(source_by_step, ensure_ascii=False)}
+
+Return JSON shape:
+{{
+  "DESCRIBE": "...",
+  "REASONING": "...",
+  "DDx": "...",
+  "CONCLUSION": "..."
+}}
+"""
+    response = _get_openai_client().chat.completions.create(
+        model='gpt-4o',
+        messages=[{'role': 'user', 'content': prompt}],
+        temperature=0.2,
+        max_tokens=1000,
+        timeout=45,
+    )
+    parsed = _json_from_text(response.choices[0].message.content or '')
+    translated = {}
+    for code in STEP_CODES:
+        value = str(parsed.get(code) or source_by_step.get(code) or '').strip()
+        translated[code] = value
+    return translated
+
+
+def _summarize_agreed_answer_from_conversation(
+    session: dict,
+    messages: list[dict],
+    user_message: str,
+    states: list[dict] | None = None,
+) -> str:
+    step_index = session['current_step']
+    step_code = STEP_CODES[step_index]
+    previous_agreed = _previous_agreed_answers(states or [], step_index)
+    prompt = f"""
+Create the agreed answer for the current radiology debate step.
+
+Rules:
+- Use ONLY the visible conversation below and the latest user answer.
+- Do NOT use or infer from any hidden answer key, rubric, target answer, or model diagnosis.
+- The agreed answer should reflect what the user and doctor have actually discussed.
+- If the conversation contains conflicting statements, summarize only the part the doctor has accepted or the user's latest corrected position.
+- Respond in Vietnamese.
+- Return ONLY valid JSON.
+- Do not prefix the answer with the step code.
+
+Current step: {step_code}
+Previous agreed answers, for context only:
+{json.dumps(previous_agreed, ensure_ascii=False)}
+
+Visible conversation for current step:
+{_current_step_visible_history(messages, step_index, user_message)}
+
+Return JSON:
+{{
+  "agreed_answer": "one concise Vietnamese paragraph based only on the conversation"
+}}
+"""
+    response = _get_openai_client().chat.completions.create(
+        model='gpt-4o',
+        messages=[{'role': 'user', 'content': prompt}],
+        temperature=0.2,
+        max_tokens=400,
+        timeout=45,
+    )
+    parsed = _json_from_text(response.choices[0].message.content or '')
+    return str(parsed.get('agreed_answer') or '').strip()
+
+
 def _doctor_reply(
     session: dict,
     case: dict,
     answer_key: dict[str, dict[str, Any]],
     messages: list[dict],
     user_message: str,
+    states: list[dict] | None = None,
 ) -> dict[str, Any]:
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
     target = answer_key.get(step_code, {})
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
     doctor_step = doctor_diagnosis.get(step_code, '')
+    previous_agreed = _previous_agreed_answers(states or [], step_index)
+    step_mode = (
+        'Observation reconciliation. Validate image description; do not debate subjective reasoning.'
+        if step_code == 'DESCRIBE'
+        else 'Diagnostic debate. Defend a clear argument and concede only to stronger reasoning.'
+    )
 
     prompt = f"""
 You are roleplaying a radiologist in a medical education debate.
@@ -164,6 +337,8 @@ Persona:
 Conversation rules:
 - Discuss ONLY the current step: {step_code}.
 - Do not reveal future steps.
+- Current mode: {step_mode}
+- Use only previous agreed answers as context. Do not reveal or use later-step answers.
 - If the user's argument is weak, push back confidently.
 - If the user's argument touches the main expected finding(s) and good reasoning — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording.
 - Respond in Vietnamese.
@@ -181,6 +356,9 @@ Expected finding: {target.get('expected_finding', '')}
 Clinical explanation: {target.get('clinical_explanation', '')}
 Key points: {target.get('key_points', [])}
 
+Previous agreed answers:
+{json.dumps(previous_agreed, ensure_ascii=False)}
+
 Conversation history:
 {_format_history(messages, user_message)}
 
@@ -189,10 +367,14 @@ Return ONLY valid JSON:
   "doctor_message": "your in-character reply",
   "convinced": false,
   "persuasion_score": 0.0,
+  "debate_score": 0.0,
+  "knowledge_score": 0.0,
+  "pending_summary": "",
   "reasoning_for_grader": "short private grading reason"
 }}
 
 Note: Set "convinced": true ONLY IF persuasion_score >= 0.7. If less than 0.7, set "convinced": false.
+Note: Leave "pending_summary" empty. The system will build the user-visible agreed answer from the visible conversation only.
 """
     response = _get_openai_client().chat.completions.create(
         model='gpt-4o',
@@ -205,10 +387,14 @@ Note: Set "convinced": true ONLY IF persuasion_score >= 0.7. If less than 0.7, s
         parsed = _json_from_text(response.choices[0].message.content or '')
     except Exception:
         parsed = {}
+    persuasion_score = _clamp_score(parsed.get('persuasion_score', 0))
     return {
         'doctor_message': str(parsed.get('doctor_message') or '').strip() or 'Tôi chưa bị thuyết phục.',
-        'convinced': bool(parsed.get('convinced', False)),
-        'persuasion_score': _clamp_score(parsed.get('persuasion_score', 0)),
+        'convinced': bool(parsed.get('convinced', False)) and persuasion_score >= 0.7,
+        'persuasion_score': persuasion_score,
+        'debate_score': _clamp_score(parsed.get('debate_score', persuasion_score)),
+        'knowledge_score': _clamp_score(parsed.get('knowledge_score', persuasion_score)),
+        'pending_summary': str(parsed.get('pending_summary') or '').strip(),
         'reasoning_for_grader': str(parsed.get('reasoning_for_grader') or '').strip(),
     }
 
@@ -219,12 +405,19 @@ def _doctor_text_prompt(
     answer_key: dict[str, dict[str, Any]],
     messages: list[dict],
     user_message: str,
+    states: list[dict] | None = None,
 ) -> str:
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
     target = answer_key.get(step_code, {})
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
     doctor_step = doctor_diagnosis.get(step_code, '')
+    previous_agreed = _previous_agreed_answers(states or [], step_index)
+    step_mode = (
+        'Observation reconciliation. Validate image description; do not debate subjective reasoning.'
+        if step_code == 'DESCRIBE'
+        else 'Diagnostic debate. Defend a clear argument and concede only to stronger reasoning.'
+    )
 
     return f"""
 You are roleplaying a radiologist in a medical education debate.
@@ -238,6 +431,8 @@ Persona:
 Conversation rules:
 - Discuss ONLY the current step: {step_code}.
 - Do not reveal future steps.
+- Current mode: {step_mode}
+- Use only previous agreed answers as context. Do not reveal or use later-step answers.
 - If the user's argument is weak, push back confidently.
 - If the user's argument touches the main expected finding(s) and good reasoning — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording but also do not let the user get away with weak arguments.
 - Weak arguments might be vague, off-topic, or miss the key expected findings. Strong arguments will clearly reference specific imaging findings and align with the expected answer key or be logically sound even if wording differs.
@@ -255,6 +450,9 @@ Hidden target answer for this step:
 Expected finding: {target.get('expected_finding', '')}
 Clinical explanation: {target.get('clinical_explanation', '')}
 Key points: {target.get('key_points', [])}
+
+Previous agreed answers:
+{json.dumps(previous_agreed, ensure_ascii=False)}
 
 Conversation history:
 {_format_history(messages, user_message)}
@@ -282,10 +480,12 @@ def _judge_doctor_text(
     messages: list[dict],
     user_message: str,
     doctor_message: str,
+    states: list[dict] | None = None,
 ) -> dict[str, Any]:
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
     target = answer_key.get(step_code, {})
+    previous_agreed = _previous_agreed_answers(states or [], step_index)
     prompt = f"""
 You are the hidden grader for a medical roleplay debate.
 
@@ -304,6 +504,8 @@ Current step: {step_code}
 Target expected finding: {target.get('expected_finding', '')}
 Target clinical explanation: {target.get('clinical_explanation', '')}
 Target key points: {target.get('key_points', [])}
+Previous agreed answers:
+{json.dumps(previous_agreed, ensure_ascii=False)}
 
 Previous conversation:
 {_format_history(messages, user_message)}
@@ -315,8 +517,13 @@ Return ONLY valid JSON:
 {{
   "convinced": true,
   "persuasion_score": 0.0,
+  "debate_score": 0.0,
+  "knowledge_score": 0.0,
+  "pending_summary": "",
   "reasoning_for_grader": "short private grading reason"
 }}
+
+Important: Leave "pending_summary" empty. Do not summarize from the hidden target answer.
 """
     response = _get_openai_client().chat.completions.create(
         model='gpt-4o',
@@ -329,10 +536,14 @@ Return ONLY valid JSON:
         parsed = _json_from_text(response.choices[0].message.content or '')
     except Exception:
         parsed = {}
+    persuasion_score = _clamp_score(parsed.get('persuasion_score', 0))
     return {
         'doctor_message': doctor_message,
-        'convinced': bool(parsed.get('convinced', False)),
-        'persuasion_score': _clamp_score(parsed.get('persuasion_score', 0)),
+        'convinced': bool(parsed.get('convinced', False)) and persuasion_score >= 0.7,
+        'persuasion_score': persuasion_score,
+        'debate_score': _clamp_score(parsed.get('debate_score', persuasion_score)),
+        'knowledge_score': _clamp_score(parsed.get('knowledge_score', persuasion_score)),
+        'pending_summary': str(parsed.get('pending_summary') or '').strip(),
         'reasoning_for_grader': str(parsed.get('reasoning_for_grader') or '').strip(),
     }
 
@@ -353,8 +564,8 @@ def _final_grade(case: dict, answer_key: dict[str, dict[str, Any]], messages: li
     prompt = f"""
 You are grading a medical debate training session.
 
-Read the full transcript and score how well the user persuaded the doctor for each diagnostic step.
-Score 0.0-1.0. Reward medically accurate reasoning, use of image findings, and successful persuasion.
+Read the full transcript and score the user for each diagnostic step.
+Score 0.0-1.0. debate_score rewards persuasive rebuttal and correction. knowledge_score rewards medical accuracy against the ground truth.
 Return Vietnamese reasoning, but only valid JSON.
 
 Case:
@@ -370,10 +581,10 @@ Transcript:
 Return ONLY valid JSON:
 {{
   "scores": [
-    {{"step_code": "DESCRIBE", "persuasion_score": 0.0, "reasoning": "short reason"}},
-    {{"step_code": "REASONING", "persuasion_score": 0.0, "reasoning": "short reason"}},
-    {{"step_code": "DDx", "persuasion_score": 0.0, "reasoning": "short reason"}},
-    {{"step_code": "CONCLUSION", "persuasion_score": 0.0, "reasoning": "short reason"}}
+    {{"step_code": "DESCRIBE", "debate_score": 0.0, "knowledge_score": 0.0, "reasoning": "short reason"}},
+    {{"step_code": "REASONING", "debate_score": 0.0, "knowledge_score": 0.0, "reasoning": "short reason"}},
+    {{"step_code": "DDx", "debate_score": 0.0, "knowledge_score": 0.0, "reasoning": "short reason"}},
+    {{"step_code": "CONCLUSION", "debate_score": 0.0, "knowledge_score": 0.0, "reasoning": "short reason"}}
   ]
 }}
 """
@@ -390,7 +601,8 @@ Return ONLY valid JSON:
         {
             'step_index': idx,
             'step_code': code,
-            'persuasion_score': _clamp_score(by_code.get(code, {}).get('persuasion_score', 0)),
+            'debate_score': _clamp_score(by_code.get(code, {}).get('debate_score', by_code.get(code, {}).get('persuasion_score', 0))),
+            'knowledge_score': _clamp_score(by_code.get(code, {}).get('knowledge_score', by_code.get(code, {}).get('persuasion_score', 0))),
             'reasoning': str(by_code.get(code, {}).get('reasoning') or '').strip(),
         }
         for idx, code in enumerate(STEP_CODES)
@@ -426,11 +638,15 @@ def _serialize_session(session: dict) -> dict:
     scores = sb.table('swap_step_scores').select('*').eq(
         'swap_session_id', session['id']
     ).order('step_index').execute().data or []
+    states = sb.table('swap_step_states').select('*').eq(
+        'swap_session_id', session['id']
+    ).order('step_index').execute().data or []
     return {
         **session,
         'case': _case_summary(case or {}),
         'messages': messages,
         'scores': scores,
+        'step_states': states,
         'step_codes': STEP_CODES,
     }
 
@@ -476,6 +692,14 @@ def create_swap_session(case_id: str, user_id: str) -> tuple[dict | None, Respon
         volume_names=volume_names,
     )
     doctor_diagnosis = findings.get('answer_key', {}) or {}
+    try:
+        doctor_diagnosis = _translate_doctor_diagnosis_for_user(doctor_diagnosis)
+    except Exception as exc:
+        logger.exception("swap: failed to translate initial doctor diagnosis: %s", exc)
+        return None, Response(
+            {'error': 'Could not translate swap answers before showing them to the user', 'message': str(exc)},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
 
     sb = get_supabase()
     inserted = sb.table('swap_sessions').insert({
@@ -484,6 +708,10 @@ def create_swap_session(case_id: str, user_id: str) -> tuple[dict | None, Respon
         'doctor_diagnosis': doctor_diagnosis,
         'raw_vlm_output': findings.get('raw_findings', ''),
     }).execute().data[0]
+    sb.table('swap_step_states').insert([
+        _default_step_state(inserted['id'], idx)
+        for idx in range(len(STEP_CODES))
+    ]).execute()
 
     initial_message = (
         doctor_diagnosis.get('DESCRIBE')
@@ -515,19 +743,37 @@ def get_swap_session(session_id: str, user_id: str) -> tuple[dict | None, Respon
 
 
 def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tuple[dict | None, Response | None]:
-    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_codes')}
+    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
     answer_key = _answer_key_for_case(session['case_id'])
     sb = get_supabase()
     session_id = session['id']
     user_id = session['user_id']
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
+    combined_score = _combined_score(result)
 
     # Advance the step when the judge explicitly concedes.
     # We rely on the LLM's 'convinced' boolean to ensure the system state
     # matches the textual message (e.g. avoiding advancing when the doctor's text was a rejection).
     advance = bool(result.get('convinced'))
     result['convinced'] = advance
+    if advance:
+        try:
+            pending_summary = _summarize_agreed_answer_from_conversation(
+                session,
+                data['messages'],
+                message,
+                data.get('step_states'),
+            )
+        except Exception as exc:
+            logger.exception("swap: failed to summarize agreed answer from conversation: %s", exc)
+            pending_summary = message
+        result['pending_summary'] = pending_summary
+        result['doctor_message'] = (
+            f"{result['doctor_message']}\n\n"
+            f"Phần thống nhất cho bước {step_code}: {pending_summary}\n"
+            "Bạn có đồng ý với kết luận này để chuyển sang bước tiếp theo không?"
+        )
 
     sb.table('swap_messages').insert([
         {
@@ -545,10 +791,44 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             'metadata': {
                 'convinced': advance,
                 'persuasion_score': result['persuasion_score'],
+                'debate_score': result.get('debate_score'),
+                'knowledge_score': result.get('knowledge_score'),
+                'pending_summary': result.get('pending_summary', ''),
                 'reasoning_for_grader': result['reasoning_for_grader'],
             },
         },
     ]).execute()
+
+    if advance:
+        sb.table('swap_step_states').upsert({
+            'swap_session_id': session_id,
+            'step_index': step_index,
+            'step_code': step_code,
+            'phase': SWAP_PHASE_AWAITING_CONFIRMATION,
+            'convinced': True,
+            'pending_summary': pending_summary,
+            'agreed_answer': None,
+            'debate_score': result.get('debate_score', combined_score),
+            'knowledge_score': result.get('knowledge_score', combined_score),
+            'reasoning': result.get('reasoning_for_grader', ''),
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }, on_conflict='swap_session_id,step_index').execute()
+        result['awaiting_confirmation'] = True
+        advance = False
+    else:
+        sb.table('swap_step_states').upsert({
+            'swap_session_id': session_id,
+            'step_index': step_index,
+            'step_code': step_code,
+            'phase': SWAP_PHASE_DEBATING,
+            'convinced': False,
+            'pending_summary': None,
+            'agreed_answer': None,
+            'debate_score': result.get('debate_score'),
+            'knowledge_score': result.get('knowledge_score'),
+            'reasoning': result.get('reasoning_for_grader', ''),
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }, on_conflict='swap_session_id,step_index').execute()
 
     if advance:
         try:
@@ -653,17 +933,139 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
     return updated, None
 
 
+def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response | None]:
+    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
+    sb = get_supabase()
+    session_id = session['id']
+    user_id = session['user_id']
+    step_index = session['current_step']
+    step_code = STEP_CODES[step_index]
+    state = _step_state_map(data.get('step_states')).get(step_index) or {}
+    agreed_answer = state.get('pending_summary') or ''
+    if not agreed_answer:
+        return None, Response({'error': 'No pending step summary to confirm'}, status=status.HTTP_400_BAD_REQUEST)
+
+    sb.table('swap_messages').insert([
+        {
+            'swap_session_id': session_id,
+            'role': 'user',
+            'step_index': step_index,
+            'content': message,
+            'metadata': {'confirmation': True},
+        },
+        {
+            'swap_session_id': session_id,
+            'role': 'doctor',
+            'step_index': step_index,
+            'content': f'Thống nhất bước {step_code}: {agreed_answer}',
+            'metadata': {'confirmed': True},
+        },
+    ]).execute()
+    sb.table('swap_step_states').upsert({
+        'swap_session_id': session_id,
+        'step_index': step_index,
+        'step_code': step_code,
+        'phase': SWAP_PHASE_CONFIRMED,
+        'convinced': True,
+        'pending_summary': None,
+        'agreed_answer': agreed_answer,
+        'debate_score': state.get('debate_score'),
+        'knowledge_score': state.get('knowledge_score'),
+        'reasoning': state.get('reasoning') or '',
+        'updated_at': datetime.now(timezone.utc).isoformat(),
+    }, on_conflict='swap_session_id,step_index').execute()
+    sb.table('swap_step_scores').upsert({
+        'swap_session_id': session_id,
+        'step_index': step_index,
+        'step_code': step_code,
+        'persuasion_score': _combined_score(state),
+        'convinced': True,
+        'reasoning': state.get('reasoning') or '',
+    }, on_conflict='swap_session_id,step_index').execute()
+
+    result: dict[str, Any] = {'confirmed': True}
+    if step_index >= len(STEP_CODES) - 1:
+        full_messages = sb.table('swap_messages').select('*').eq(
+            'swap_session_id', session_id
+        ).order('created_at').execute().data or []
+        answer_key = _answer_key_for_case(session['case_id'])
+        try:
+            final_scores = _final_grade(data['case'], answer_key, full_messages)
+        except Exception:
+            states = sb.table('swap_step_states').select('*').eq('swap_session_id', session_id).execute().data or []
+            final_scores = [
+                {
+                    'step_index': idx,
+                    'step_code': STEP_CODES[idx],
+                    'debate_score': _clamp_score((_step_state_map(states).get(idx) or {}).get('debate_score', 0)),
+                    'knowledge_score': _clamp_score((_step_state_map(states).get(idx) or {}).get('knowledge_score', 0)),
+                    'reasoning': (_step_state_map(states).get(idx) or {}).get('reasoning') or '',
+                }
+                for idx in range(len(STEP_CODES))
+            ]
+        for score in final_scores:
+            combined = (_clamp_score(score.get('debate_score')) + _clamp_score(score.get('knowledge_score'))) / 2
+            sb.table('swap_step_scores').upsert({
+                'swap_session_id': session_id,
+                'step_index': score['step_index'],
+                'step_code': score['step_code'],
+                'persuasion_score': combined,
+                'convinced': True,
+                'reasoning': score.get('reasoning') or '',
+            }, on_conflict='swap_session_id,step_index').execute()
+            sb.table('swap_step_states').upsert({
+                'swap_session_id': session_id,
+                'step_index': score['step_index'],
+                'step_code': score['step_code'],
+                'phase': SWAP_PHASE_CONFIRMED,
+                'convinced': True,
+                'debate_score': _clamp_score(score.get('debate_score')),
+                'knowledge_score': _clamp_score(score.get('knowledge_score')),
+                'reasoning': score.get('reasoning') or '',
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }, on_conflict='swap_session_id,step_index').execute()
+        final_score = sum((_clamp_score(s.get('debate_score')) + _clamp_score(s.get('knowledge_score'))) / 2 for s in final_scores) / len(STEP_CODES)
+        sb.table('swap_sessions').update({
+            'status': 'COMPLETED',
+            'final_score': round(final_score, 4),
+            'completed_at': datetime.now(timezone.utc).isoformat(),
+        }).eq('id', session_id).execute()
+        result['session_complete'] = True
+    else:
+        next_step = step_index + 1
+        sb.table('swap_sessions').update({'current_step': next_step}).eq('id', session_id).execute()
+        result['next_step'] = next_step
+        next_message = (session.get('doctor_diagnosis') or {}).get(STEP_CODES[next_step], '')
+        if next_message:
+            sb.table('swap_messages').insert({
+                'swap_session_id': session_id,
+                'role': 'doctor',
+                'step_index': next_step,
+                'content': next_message,
+                'metadata': {'source': 'initial_vlm'},
+            }).execute()
+
+    updated, updated_err = get_swap_session(session_id, user_id)
+    if updated_err:
+        return None, updated_err
+    updated['last_result'] = result
+    return updated, None
+
+
 def submit_swap_message(session_id: str, user_id: str, message: str) -> tuple[dict | None, Response | None]:
     data, err = get_swap_session(session_id, user_id)
     if err:
         return None, err
-    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_codes')}
+    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
     if session['status'] != 'IN_PROGRESS':
         return None, Response({'error': 'Swap session is already completed'}, status=status.HTTP_400_BAD_REQUEST)
+    state = _step_state_map(data.get('step_states')).get(session['current_step']) or {}
+    if state.get('phase') == SWAP_PHASE_AWAITING_CONFIRMATION and _is_confirmation_message(message):
+        return _confirm_swap_step(data, message)
 
     answer_key = _answer_key_for_case(session['case_id'])
     try:
-        result = _doctor_reply(session, data['case'], answer_key, data['messages'], message)
+        result = _doctor_reply(session, data['case'], answer_key, data['messages'], message, data.get('step_states'))
     except Exception as exc:
         return None, Response({'error': 'Doctor model failed', 'message': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
@@ -680,20 +1082,28 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
         yield _sse('error', {'error': getattr(err, 'data', {'error': 'Request failed'}).get('error', 'Request failed')})
         return
 
-    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_codes')}
+    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
     if session['status'] != 'IN_PROGRESS':
         yield _sse('error', {'error': 'Swap session is already completed'})
+        return
+    state = _step_state_map(data.get('step_states')).get(session['current_step']) or {}
+    if state.get('phase') == SWAP_PHASE_AWAITING_CONFIRMATION and _is_confirmation_message(message):
+        updated, store_err = _confirm_swap_step(data, message)
+        if store_err:
+            yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
+            return
+        yield _sse('done', {'session': updated, 'last_result': updated.get('last_result', {})})
         return
 
     answer_key = _answer_key_for_case(session['case_id'])
     doctor_message = ''
     try:
-        prompt = _doctor_text_prompt(session, data['case'], answer_key, data['messages'], message)
+        prompt = _doctor_text_prompt(session, data['case'], answer_key, data['messages'], message, data.get('step_states'))
         for delta in _stream_doctor_text(prompt):
             doctor_message += delta
             yield _sse('delta', {'delta': delta})
 
-        result = _judge_doctor_text(session, answer_key, data['messages'], message, doctor_message)
+        result = _judge_doctor_text(session, answer_key, data['messages'], message, doctor_message, data.get('step_states'))
         updated, store_err = _store_swap_exchange(data, message, result)
         if store_err:
             yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})

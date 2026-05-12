@@ -52,6 +52,16 @@ export function useCaseDetail(caseId: string | null) {
   return state;
 }
 
+export function useExamCases() {
+  const [state, patch] = useQueryState<any>();
+
+  const refetch = useCallback(() => resolveQuery(() => apiClient.getExamCases(), patch), []);
+
+  useEffect(() => { refetch(); }, []);
+
+  return { ...state, refetch };
+}
+
 export function useSessions(params?: { status?: string; page?: number }) {
   const [state, patch] = useQueryState<any>();
   const paramsKey = JSON.stringify(params);
@@ -155,4 +165,9 @@ export function useDeleteUploadedCase() {
     apiClient.deleteUploadedCase(uploadSessionId)
   );
   return { deleteCase: mutate, loading, error };
+}
+
+export function useCreateExamSession() {
+  const { mutate, loading, error } = useMutation((caseId: string) => apiClient.createExamSession(caseId));
+  return { createExamSession: mutate, loading, error };
 }

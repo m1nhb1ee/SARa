@@ -5,6 +5,7 @@ from app.cases.views import CaseViewSet, CaseTagViewSet
 from app.sessions.views import SessionViewSet, StudentPerformanceViewSet
 from app.uploads.views import UserUploadedCaseViewSet
 from app.swap.views import SwapSessionViewSet
+from app.exam.views import ExamCaseViewSet, ExamSessionViewSet
 from app.auth.views import LoginView, MeView, LogoutView, RegisterView
 
 router = DefaultRouter()
@@ -14,6 +15,8 @@ router.register('sessions', SessionViewSet, basename='sessions')
 router.register('performance', StudentPerformanceViewSet, basename='performance')
 router.register('uploaded-cases', UserUploadedCaseViewSet, basename='uploaded-cases')
 router.register('swap-sessions', SwapSessionViewSet, basename='swap-sessions')
+router.register('exam-cases', ExamCaseViewSet, basename='exam-cases')
+router.register('exam-sessions', ExamSessionViewSet, basename='exam-sessions')
 
 urlpatterns = router.urls + [
     path('auth/register/', RegisterView.as_view()),

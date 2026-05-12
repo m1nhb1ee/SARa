@@ -107,6 +107,15 @@ class SessionViewSet(viewsets.ViewSet):
         if not case_id:
             return Response({'error': 'case_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            case_result = sb.table('cases').select('id, title, is_exam').eq('id', case_id).single().execute()
+            case = case_result.data or {}
+        except Exception:
+            return Response({'error': 'Case not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if case.get('is_exam') is True:
+            return Response({'error': 'Exam cases cannot be used for diagnosis sessions'}, status=status.HTTP_400_BAD_REQUEST)
+
         result = sb.table('sessions').insert({
             'user_id': user_id,
             'case_id': case_id,
@@ -116,11 +125,7 @@ class SessionViewSet(viewsets.ViewSet):
 
         session = result.data[0]
 
-        try:
-            case_result = sb.table('cases').select('title').eq('id', case_id).single().execute()
-            session['case_title'] = case_result.data.get('title')
-        except Exception:
-            session['case_title'] = None
+        session['case_title'] = case.get('title')
 
         return Response(session, status=status.HTTP_201_CREATED)
 
@@ -528,11 +533,43 @@ class StudentPerformanceViewSet(viewsets.ViewSet):
                 if scores
             }
 
+        exam_sessions = sb.table('exam_sessions').select(
+            'id, final_score, status, completed_at'
+        ).eq('user_id', user_id).eq('status', 'COMPLETED').execute()
+        completed_exam = exam_sessions.data or []
+        exam_cases_completed = len(completed_exam)
+        exam_average_score = round(
+            sum(s['final_score'] for s in completed_exam if s['final_score'] is not None) / exam_cases_completed,
+            4,
+        ) if exam_cases_completed else 0.0
+
+        exam_accuracy_by_step = {}
+        if completed_exam:
+            exam_session_ids = [s['id'] for s in completed_exam]
+            exam_attempts = sb.table('exam_step_attempts').select(
+                'step_code, score'
+            ).in_('exam_session_id', exam_session_ids).execute()
+
+            exam_step_scores: dict = {code: [] for code in STEP_CODES}
+            for a in (exam_attempts.data or []):
+                code = normalize_step_code(a.get('step_code'))
+                if code in exam_step_scores and a['score'] is not None:
+                    exam_step_scores[code].append(a['score'])
+
+            exam_accuracy_by_step = {
+                code: round(sum(scores) / len(scores), 4)
+                for code, scores in exam_step_scores.items()
+                if scores
+            }
+
         return Response({
             'user_id': user_id,
             'email': request.user.get('email'),
             'total_cases_completed': total_cases_completed,
             'average_score': average_score,
             'accuracy_by_step': accuracy_by_step,
+            'exam_cases_completed': exam_cases_completed,
+            'exam_average_score': exam_average_score,
+            'exam_accuracy_by_step': exam_accuracy_by_step,
             'last_activity': last_activity,
         })

@@ -8,7 +8,8 @@ import { SketchBorder } from '@/app/components/shared/SketchBorder';
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, PieChart, Pie
+  ResponsiveContainer, Cell, PieChart, Pie,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 import { useMyStats, useSessions } from '@/api/hooks';
 import { useAuth } from '@/api/authContext';
@@ -23,6 +24,7 @@ export function ProfilePage() {
   const recentSessions = (sessionsData?.results ?? []).slice(0, 6);
 
   const accuracyByStep: Record<string, number> = stats?.accuracy_by_step ?? {};
+  const examAccuracyByStep: Record<string, number> = stats?.exam_accuracy_by_step ?? {};
   const weakestStep = useMemo(() => {
     const entries = Object.entries(accuracyByStep);
     if (!entries.length) return null;
@@ -31,6 +33,8 @@ export function ProfilePage() {
 
   const avgScore = stats ? Math.round((stats.average_score ?? 0) * 100) : 0;
   const casesCompleted = stats?.total_cases_completed ?? 0;
+  const examAvgScore = stats ? Math.round((stats.exam_average_score ?? 0) * 100) : 0;
+  const examCasesCompleted = stats?.exam_cases_completed ?? 0;
 
   const accuracyByStep_chart = useMemo(() => {
     const entries = Object.entries(accuracyByStep);
@@ -42,6 +46,14 @@ export function ProfilePage() {
     ];
     return entries.map(([step, score]) => ({ modality: step, accuracy: Math.round((score as number) * 100) }));
   }, [accuracyByStep]);
+
+  const examRadarData = useMemo(() => {
+    const stepOrder = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION'];
+    return stepOrder.map(step => ({
+      step,
+      score: Math.round((examAccuracyByStep[step] ?? 0) * 100),
+    }));
+  }, [examAccuracyByStep]);
 
   const monthlyTrend = useMemo(() => {
     const completed = (sessionsData?.results ?? []).filter(
@@ -268,6 +280,29 @@ export function ProfilePage() {
                     {accuracyByStep_chart.map((_, i) => <Cell key={i} fill="var(--accent-ink)" opacity={0.7} />)}
                   </Bar>
                 </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="p-6 mb-6 border rounded relative" style={cardStyle}>
+              <SketchBorder id="prof-exam-radar" color="var(--ink-secondary)" opacity={0.7} />
+              <div className="flex justify-between items-start gap-4 mb-4">
+                <div>
+                  <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: 'var(--ink)', margin: 0 }}>
+                    Exam Performance
+                  </h3>
+                  <p style={{ fontFamily: "var(--font-mono)", fontSize: '12px', color: 'var(--ink-secondary)', marginTop: 4 }}>
+                    {examCasesCompleted} completed exams - avg {examAvgScore}%
+                  </p>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={240}>
+                <RadarChart data={examRadarData}>
+                  <PolarGrid stroke="var(--border)" />
+                  <PolarAngleAxis dataKey="step" tick={{ fill: 'var(--ink-secondary)', fontSize: 11, fontFamily: 'var(--font-mono)' }} />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: 'var(--ink-secondary)', fontSize: 10 }} />
+                  <Radar name="Exam" dataKey="score" stroke="var(--accent-clay)" fill="var(--accent-clay)" fillOpacity={0.24} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-surface-alt)', border: '1px solid var(--border)', fontFamily: "var(--font-mono)" }} />
+                </RadarChart>
               </ResponsiveContainer>
             </div>
 
