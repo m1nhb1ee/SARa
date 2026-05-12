@@ -88,7 +88,8 @@ Return ONLY valid JSON, no markdown. All values must be plain strings (not array
   "DESCRIBE": "<string> Consolidated structural observations from the VLM output.",
   "REASONING": "<string> Consolidated clinical interpretation and working diagnosis from the VLM output.",
   "DDx": "<string> 4 differential diagnoses based on the findings with one imaging reason each.",
-  "CONCLUSION": "<string> Main finding + confidence (High/Moderate/Low) + recommended next step."
+  "CONCLUSION": "<string> Main finding + confidence (High/Moderate/Low) + recommended next step.",
+  "difficulty": "<easy|medium|hard> easy=single classic finding with straightforward diagnosis; hard=complex multi-system findings, rare condition, or challenging differential; medium=everything in between."
 }}"""
 
 
@@ -107,5 +108,6 @@ Return ONLY valid JSON, no markdown. All values must be plain strings (not array
   "DESCRIBE": "<string> List each visible structure; note whether normal or abnormal. Describe location, size, shape, and density of the main finding. Write No focal finding only if every structure is normal.",
   "REASONING": "<string> Interpret the clinical significance of the findings. State whether normal or abnormal, name the specific imaging sign if present, and give the single most specific working diagnosis with reasoning.",
   "DDx": "<string> 4 differential diagnoses based on previous steps' findings, each with one imaging reason.",
-  "CONCLUSION": "<string> Main finding + confidence (High/Moderate/Low) + recommended next step."
+  "CONCLUSION": "<string> Main finding + confidence (High/Moderate/Low) + recommended next step.",
+  "difficulty": "<easy|medium|hard> easy=single classic finding with straightforward diagnosis; hard=complex multi-system findings, rare condition, or challenging differential; medium=everything in between."
 }}"""
