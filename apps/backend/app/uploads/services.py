@@ -84,12 +84,16 @@ def create_case_in_supabase(
     if not user_exists.data:
         sb.table('users').insert({'id': user_id, 'email': f'{user_id}@auto.local', 'role': 'student'}).execute()
 
+    ai_difficulty = findings.get('difficulty', 'medium')
+    if ai_difficulty not in ('easy', 'medium', 'hard'):
+        ai_difficulty = 'medium'
+
     case_result = sb.table('cases').insert({
         'uploaded_by': user_id,
         'source': 'uploaded',
         'title': title,
         'modality': MODALITY_MAP.get(modality, 'X-ray'),
-        'difficulty': 'medium',
+        'difficulty': ai_difficulty,
         'clinical_history': (clinical_history or '').strip(),
         'status': 'published',
     }).execute()
@@ -505,7 +509,9 @@ def _parse_findings(description: str, modality: str, prompt_steps: int = 4, sour
                 k: str(parsed.get(k, fallback[k])).strip()
                 for k in fallback
             }
-            return _build_response(answer_key, text, modality, expected_steps, source)
+            raw_diff = str(parsed.get('difficulty', 'medium')).strip().lower().split()[0]
+            difficulty = raw_diff if raw_diff in ('easy', 'medium', 'hard') else 'medium'
+            return _build_response(answer_key, text, modality, expected_steps, source, difficulty)
     except Exception:
         pass
 
@@ -534,7 +540,7 @@ def _parse_findings(description: str, modality: str, prompt_steps: int = 4, sour
     return _build_response(fallback, text, modality, expected_steps, source)
 
 
-def _build_response(answer_key: dict, raw: str, modality: str, step_codes: list[str], source: str) -> Dict[str, Any]:
+def _build_response(answer_key: dict, raw: str, modality: str, step_codes: list[str], source: str, difficulty: str = 'medium') -> Dict[str, Any]:
     summary = " ".join([
         answer_key.get("DESCRIBE", "")[:80],
         answer_key.get("REASONING", "")[:80],
@@ -545,6 +551,7 @@ def _build_response(answer_key: dict, raw: str, modality: str, step_codes: list[
         "clinical_history": f"AI (MedGemma) analyzed {modality}: {summary[:100]}",
         "raw_findings":     raw,
         "confidence":       0.82,
+        "difficulty":       difficulty,
         "answer_key":       answer_key,
         "pipeline_rubric":  {code: STEP_TEMPLATES[code] for code in step_codes},
     }
@@ -592,6 +599,8 @@ def _complete_final_steps_with_llm(findings: Dict[str, Any], modality: str, regi
                 'DDx': str(parsed.get('DDx') or fallback['DDx']).strip(),
                 'CONCLUSION': str(parsed.get('CONCLUSION') or fallback['CONCLUSION']).strip(),
             }
+            raw_diff = str(parsed.get('difficulty', 'medium')).strip().lower().split()[0]
+            findings['difficulty'] = raw_diff if raw_diff in ('easy', 'medium', 'hard') else 'medium'
             findings['llm_completion_raw'] = raw
             logger.info("LLM completion generated DDx and CONCLUSION")
         except Exception as e:
