@@ -5,6 +5,7 @@ import { apiClient } from '@/api/client';
 import { VolumeSliceViewer } from '@/app/components/shared/VolumeSliceViewer';
 import { STEPS } from '@/constants/training';
 import styles from '@/styles/DiagnosisSession.module.css';
+import pageStyles from '@/styles/ExamSessionPage.module.css';
 
 const STEP_SECONDS = 300;
 
@@ -145,22 +146,30 @@ export function ExamSessionPage() {
   const scorePct = session.final_score != null ? Math.round(session.final_score * 100) : null;
 
   return (
-    <div style={{ minHeight: '100%', background: 'var(--bg-page)', display: 'grid', gridTemplateRows: 'auto 1fr' }}>
-      <div style={{ height: 58, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px', background: 'var(--bg-surface-alt)' }}>
-        <strong style={{ fontFamily: "'Playfair Display', serif", color: 'var(--ink)', fontSize: 20 }}>{caseData.title}</strong>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--bg-page)', background: 'var(--accent-ink)', padding: '4px 8px' }}>{caseData.modality}</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-secondary)', border: '1px solid var(--border)', padding: '3px 8px' }}>Exam</span>
-        <div style={{ flex: 1 }} />
-        {isComplete && <span style={{ color: 'var(--accent-sage)', fontFamily: 'var(--font-mono)' }}><Trophy size={15} style={{ display: 'inline', marginRight: 5 }} />{scorePct}%</span>}
-        <button onClick={() => navigate('/exam')} style={{ border: '1px solid var(--border)', background: 'transparent', padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'center' }}>
-          <LogOut size={14} /> Exit
-        </button>
+    <div className={pageStyles.page}>
+      <div className={pageStyles.topbar}>
+        <div className={pageStyles.titleWrap}>
+          <h1 className={pageStyles.title}>{caseData.title}</h1>
+          <span className={`${pageStyles.chip} ${pageStyles.chipFilled}`}>{caseData.modality}</span>
+          <span className={pageStyles.chip}>Exam</span>
+        </div>
+        {!isComplete && (
+          <div className={`${pageStyles.timer} ${secondsLeft <= 30 ? pageStyles.timerDanger : ''}`}>
+            <Clock3 size={15} /> {formatTime(secondsLeft)}
+          </div>
+        )}
+        <div className={pageStyles.topbarRight}>
+          {isComplete && <span className={pageStyles.score}><Trophy size={15} style={{ display: 'inline', marginRight: 5 }} />{scorePct}%</span>}
+          <button onClick={() => navigate('/exam')} className={pageStyles.exitBtn}>
+            <LogOut size={14} /> Exit
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '280px minmax(420px, 1fr) 320px', minHeight: 0 }}>
-        <aside style={{ borderRight: '1px solid var(--border)', padding: 18, background: 'var(--bg-surface-alt)', overflow: 'auto' }}>
-          <h2 style={{ fontFamily: "'Playfair Display', serif", color: 'var(--ink)', marginBottom: 12 }}>Step History</h2>
-          <div style={{ display: 'grid', gap: 10 }}>
+      <div className={pageStyles.layout}>
+        <aside className={pageStyles.sidebar}>
+          <h2 className={pageStyles.sectionTitle}>Step Timeline</h2>
+          <div className={pageStyles.stepRail}>
             {STEPS.map((step, idx) => {
               const attempt = attemptsByStep.get(idx);
               const locked = isComplete || attempt?.locked;
@@ -174,23 +183,18 @@ export function ExamSessionPage() {
                       setSession({ ...session, current_step: idx });
                     }
                   }}
-                  style={{
-                    textAlign: 'left',
-                    border: active ? '2px solid var(--accent-clay)' : '1px solid var(--border)',
-                    background: active ? 'rgba(192,57,43,0.06)' : 'var(--bg-page)',
-                    padding: 12,
-                    borderRadius: 6,
-                  }}
+                  className={`${pageStyles.stepBtn} ${active ? pageStyles.stepBtnActive : ''}`}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink)' }}>{idx + 1}. {step}</span>
+                  <span className={`${pageStyles.stepDot} ${submitted || locked ? pageStyles.stepDotDone : ''} ${active ? pageStyles.stepDotActive : ''}`} />
+                  <div className={pageStyles.stepHead}>
+                    <span className={pageStyles.stepName}>{idx + 1}. {step}</span>
                     {locked ? <Lock size={14} /> : submitted ? <CheckCircle2 size={14} color="var(--accent-sage)" /> : <Clock3 size={14} />}
                   </div>
-                  <div style={{ marginTop: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-secondary)' }}>
+                  <div className={pageStyles.stepMeta}>
                     {locked ? 'Locked' : submitted ? 'Submitted, editable' : 'Not submitted'}
                   </div>
                   {isComplete && attempt?.score != null && (
-                    <div style={{ marginTop: 6, color: 'var(--accent-sage)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                    <div className={pageStyles.reviewScore}>
                       {Math.round(attempt.score * 100)}%
                     </div>
                   )}
@@ -202,81 +206,44 @@ export function ExamSessionPage() {
             <button
               onClick={completeExam}
               disabled={!allSubmitted || busy}
-              style={{
-                width: '100%',
-                marginTop: 18,
-                padding: '11px 12px',
-                border: '1px solid var(--accent-sage)',
-                background: allSubmitted ? 'var(--accent-sage)' : 'transparent',
-                color: allSubmitted ? 'var(--bg-page)' : 'var(--ink-secondary)',
-                fontFamily: 'var(--font-mono)',
-              }}
+              className={pageStyles.completeBtn}
             >
               Complete Exam
             </button>
           )}
         </aside>
 
-        <main style={{ position: 'relative', padding: 22, minHeight: 0, overflow: 'auto' }}>
-          {!isComplete && (
-            <div style={{
-              position: 'absolute',
-              top: 18,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 2,
-              border: '1px solid var(--border)',
-              background: secondsLeft <= 30 ? 'var(--accent-clay)' : 'var(--bg-surface-alt)',
-              color: secondsLeft <= 30 ? 'var(--bg-page)' : 'var(--ink)',
-              padding: '8px 14px',
-              fontFamily: 'var(--font-mono)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}>
-              <Clock3 size={16} /> {formatTime(secondsLeft)}
-            </div>
-          )}
-          <div style={{ height: '58vh', minHeight: 380, border: '1px solid var(--border)', background: '#101010', display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
+        <main className={pageStyles.mainCol}>
+          <div className={pageStyles.viewerShell}>
             {caseData.images?.length ? (
               <VolumeSliceViewer images={caseData.images} zoom={zoom} imgClassName={styles.medicalImage} />
             ) : (
               <div style={{ color: 'var(--bg-page)' }}>No images available</div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 10 }}>
-            <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} style={{ border: '1px solid var(--border)', padding: 8 }}><ZoomIn size={15} /></button>
-            <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} style={{ border: '1px solid var(--border)', padding: 8 }}><ZoomOut size={15} /></button>
+          <div className={pageStyles.viewerTools}>
+            <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} className={pageStyles.toolBtn}><ZoomIn size={15} /></button>
+            <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className={pageStyles.toolBtn}><ZoomOut size={15} /></button>
           </div>
 
-          <section style={{ marginTop: 18, border: '1px solid var(--border)', background: 'var(--bg-surface-alt)', padding: 16 }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-secondary)', marginBottom: 8 }}>
+          <section className={pageStyles.answerCard}>
+            <div className={pageStyles.stepIndex}>
               Step {currentStep + 1} / {STEPS.length}
             </div>
-            <h2 style={{ fontFamily: "'Playfair Display', serif", color: 'var(--ink)', margin: '0 0 10px' }}>{STEPS[currentStep]}</h2>
+            <h2 className={pageStyles.stepTitle}>{STEPS[currentStep]}</h2>
             <textarea
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
               disabled={currentLocked}
               placeholder="Write your answer for this step..."
-              style={{
-                width: '100%',
-                minHeight: 150,
-                resize: 'vertical',
-                border: '1px solid var(--border)',
-                background: currentLocked ? 'rgba(0,0,0,0.04)' : 'var(--bg-page)',
-                color: 'var(--ink)',
-                padding: 12,
-                fontFamily: 'var(--font-mono)',
-                lineHeight: 1.5,
-              }}
+              className={pageStyles.answerInput}
             />
-            {error && <div style={{ marginTop: 10, color: 'var(--accent-clay)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{error}</div>}
+            {error && <div className={pageStyles.error}>{error}</div>}
             {!isComplete && (
               <button
                 onClick={submitStep}
                 disabled={busy || currentLocked}
-                style={{ marginTop: 12, border: '1px solid var(--accent-clay)', background: 'var(--accent-clay)', color: 'var(--bg-page)', padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', fontFamily: 'var(--font-mono)' }}
+                className={pageStyles.submitBtn}
               >
                 <Send size={15} /> Submit Step
               </button>
@@ -284,30 +251,30 @@ export function ExamSessionPage() {
           </section>
         </main>
 
-        <aside style={{ borderLeft: '1px solid var(--border)', padding: 18, background: 'var(--bg-surface-alt)', overflow: 'auto' }}>
-          <h2 style={{ fontFamily: "'Playfair Display', serif", color: 'var(--ink)', marginBottom: 12 }}>Case Info</h2>
-          <div style={{ display: 'grid', gap: 12, fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--ink-secondary)' }}>
-            <div><strong style={{ color: 'var(--ink)' }}>History</strong><br />{caseData.clinical_history || 'No clinical history provided.'}</div>
-            <div><strong style={{ color: 'var(--ink)' }}>Disease tag</strong><br />{caseData.disease_tag || '-'}</div>
-            <div><strong style={{ color: 'var(--ink)' }}>Difficulty</strong><br />{caseData.difficulty || '-'}</div>
+        <aside className={pageStyles.infoCol}>
+          <h2 className={pageStyles.sectionTitle}>Case Brief</h2>
+          <div className={pageStyles.infoGrid}>
+            <div><strong className={pageStyles.infoLabel}>History</strong><br />{caseData.clinical_history || 'No clinical history provided.'}</div>
+            <div><strong className={pageStyles.infoLabel}>Disease tag</strong><br />{caseData.disease_tag || '-'}</div>
+            <div><strong className={pageStyles.infoLabel}>Difficulty</strong><br />{caseData.difficulty || '-'}</div>
           </div>
 
           {isComplete && (
-            <div style={{ marginTop: 22 }}>
-              <button onClick={loadReview} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--accent-ink)', background: 'var(--accent-ink)', color: 'var(--bg-page)', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <div>
+              <button onClick={loadReview} className={pageStyles.reviewBtn}>
                 <FileText size={15} /> Review Answers
               </button>
               {review && (
-                <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
+                <div className={pageStyles.reviewList}>
                   {STEPS.map((step, idx) => {
                     const attempt = attemptsByStep.get(idx);
                     const key = review.answer_key?.[step];
                     return (
-                      <div key={step} style={{ border: '1px solid var(--border)', background: 'var(--bg-page)', padding: 12 }}>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink)', marginBottom: 6 }}>{step}</div>
-                        <div style={{ fontSize: 12, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>Your answer: {attempt?.answer || '-'}</div>
-                        <div style={{ fontSize: 12, color: 'var(--accent-sage)', marginTop: 6 }}>Score: {Math.round((attempt?.score ?? 0) * 100)}%</div>
-                        <div style={{ fontSize: 12, color: 'var(--ink)', marginTop: 6 }}>Key: {key?.expected_finding || '-'}</div>
+                      <div key={step} className={pageStyles.reviewItem}>
+                        <div className={pageStyles.reviewStep}>{step}</div>
+                        <div className={pageStyles.reviewText}>Your answer: {attempt?.answer || '-'}</div>
+                        <div className={pageStyles.reviewScore}>Score: {Math.round((attempt?.score ?? 0) * 100)}%</div>
+                        <div className={pageStyles.reviewKey}>Key: {key?.expected_finding || '-'}</div>
                       </div>
                     );
                   })}

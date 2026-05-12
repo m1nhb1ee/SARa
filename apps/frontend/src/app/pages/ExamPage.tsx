@@ -70,15 +70,26 @@ export function ExamPage() {
               const firstImage = caseItem.images?.[0]?.slices?.[0]?.image_url;
               const isStarting = startingCaseId === caseItem.id;
               return (
-                <div key={caseItem.id} style={{ border: '1px solid var(--border)', background: 'var(--bg-surface-alt)', overflow: 'hidden', borderRadius: 6 }}>
-                  <div style={{ height: 170, background: 'var(--border-strong)', display: 'grid', placeItems: 'center' }}>
+                <div
+                  key={caseItem.id}
+                  style={{
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-surface)',
+                    overflow: 'hidden',
+                    borderRadius: 6,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: 420,
+                  }}
+                >
+                  <div style={{ height: 170, background: 'var(--border-strong)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                     {firstImage ? (
                       <img src={firstImage} alt={caseItem.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                       <ClipboardList size={36} color="var(--ink-secondary)" />
                     )}
                   </div>
-                  <div style={{ padding: 16 }}>
+                  <div style={{ padding: 16, background: 'var(--bg-surface-alt)', color: 'var(--ink)', display: 'flex', flexDirection: 'column', flex: 1 }}>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--bg-page)', background: 'var(--accent-ink)', padding: '3px 7px' }}>
                         {caseItem.modality || 'CASE'}
@@ -98,7 +109,7 @@ export function ExamPage() {
                       disabled={isStarting}
                       style={{
                         width: '100%',
-                        marginTop: 14,
+                        marginTop: 'auto',
                         border: '1px solid var(--accent-clay)',
                         background: isStarting ? 'transparent' : 'var(--accent-clay)',
                         color: isStarting ? 'var(--accent-clay)' : 'var(--bg-page)',

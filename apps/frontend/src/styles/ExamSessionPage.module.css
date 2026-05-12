@@ -1,0 +1,357 @@
+.page {
+  min-height: 100%;
+  background: var(--bg-page);
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 64px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-surface-alt) 92%, white 8%);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+}
+
+.titleWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border: 1px solid var(--border);
+  color: var(--ink-secondary);
+  padding: 3px 8px;
+  background: var(--bg-surface);
+}
+
+.chipFilled {
+  color: var(--bg-page);
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
+
+.timer {
+  border: 1px solid var(--border);
+  background: var(--bg-highlight);
+  color: var(--ink);
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timerDanger {
+  background: var(--accent-clay);
+  color: var(--bg-page);
+  border-color: var(--accent-clay);
+}
+
+.topbarRight {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.score {
+  color: var(--accent-sage);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.exitBtn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+}
+
+.layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 300px minmax(540px, 1fr) 300px;
+}
+
+.sidebar,
+.infoCol {
+  background: var(--bg-surface-alt);
+  overflow: auto;
+  padding: 18px;
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+}
+
+.infoCol {
+  border-left: 1px solid var(--border);
+}
+
+.sectionTitle {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  color: var(--ink);
+  font-size: 31px;
+}
+
+.stepRail {
+  position: relative;
+  display: grid;
+  gap: 10px;
+}
+
+.stepRail::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: color-mix(in srgb, var(--border-strong) 46%, transparent);
+}
+
+.stepBtn {
+  position: relative;
+  z-index: 1;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--bg-page);
+  padding: 12px 12px 12px 32px;
+  border-radius: 6px;
+}
+
+.stepBtnActive {
+  border: 2px solid var(--accent-clay);
+  background: color-mix(in srgb, var(--accent-clay-soft) 36%, var(--bg-page));
+}
+
+.stepDot {
+  position: absolute;
+  left: 8px;
+  top: 16px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.stepDotDone {
+  background: var(--accent-sage);
+}
+
+.stepDotActive {
+  background: var(--accent-clay);
+}
+
+.stepHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stepName {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.stepMeta {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+.completeBtn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 11px 12px;
+  border: 1px solid var(--accent-sage);
+  background: var(--accent-sage);
+  color: var(--bg-page);
+  font-family: var(--font-mono);
+}
+
+.completeBtn:disabled {
+  background: transparent;
+  color: var(--ink-secondary);
+}
+
+.mainCol {
+  min-height: 0;
+  overflow: auto;
+  padding: 22px;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 12px;
+}
+
+.viewerShell {
+  border: 1px solid var(--border);
+  background: #111;
+  min-height: 420px;
+  height: 60vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.viewerTools {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.toolBtn {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--ink);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+}
+
+.answerCard {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-surface-alt) 84%, white 16%);
+  padding: 16px;
+}
+
+.stepIndex {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-secondary);
+  margin-bottom: 6px;
+}
+
+.stepTitle {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  color: var(--ink);
+  font-size: 30px;
+}
+
+.answerInput {
+  width: 100%;
+  min-height: 170px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  background: var(--bg-page);
+  color: var(--ink);
+  padding: 12px;
+  font-family: var(--font-mono);
+  line-height: 1.5;
+}
+
+.answerInput:disabled {
+  background: color-mix(in srgb, var(--bg-subtle) 60%, white 40%);
+}
+
+.submitBtn {
+  margin-top: 12px;
+  border: 1px solid var(--accent-clay);
+  background: var(--accent-clay);
+  color: var(--bg-page);
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+}
+
+.error {
+  margin-top: 10px;
+  color: var(--accent-clay);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.infoGrid {
+  display: grid;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.infoLabel {
+  color: var(--ink);
+}
+
+.reviewBtn {
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-ink);
+  background: var(--accent-ink);
+  color: var(--bg-page);
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.reviewList {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.reviewItem {
+  border: 1px solid var(--border);
+  background: var(--bg-page);
+  padding: 10px;
+}
+
+.reviewStep {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.reviewText {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  line-height: 1.45;
+}
+
+.reviewScore {
+  font-size: 12px;
+  color: var(--accent-sage);
+  margin-top: 6px;
+}
+
+.reviewKey {
+  font-size: 12px;
+  color: var(--ink);
+  margin-top: 6px;
+}
