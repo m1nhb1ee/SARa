@@ -5,7 +5,6 @@ from rest_framework.response import Response
 
 from app.core.pagination import StandardPagination
 from .services import list_cases, get_case, list_disease_tags
-from .serializers import CaseListSerializer, CaseDetailSerializer, CaseTagSerializer
 
 
 class CaseTagViewSet(viewsets.ViewSet):
@@ -30,6 +29,7 @@ class CaseViewSet(viewsets.ViewSet):
             difficulty=request.query_params.get('difficulty'),
             disease_tag=request.query_params.get('disease_tag'),
             status_filter=request.query_params.get('status'),
+            is_valid=request.query_params.get('is_valid'),
         )
         return Response({'cases': cases, 'count': len(cases)})
 

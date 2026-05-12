@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SARa · Smart AI Radiology — Group 076</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Quicksand:wght@500;600;700&family=Fredoka:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap&subset=vietnamese" rel="stylesheet">
+<style>
+  /* Force Vietnamese subset preload */
+  @font-face{font-family:'Caveat';font-display:swap;unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+1EA0-1EF9,U+20AB;}
+</style>
+<style>
+  :root{
+    --cream:#FBF6EC;
+    --paper:#FFF8EC;
+    --ink:#2B2A33;
+    --soft:#5A5667;
+    --peach:#FFB59E;
+    --peach-2:#FFD3A5;
+    --mint:#B8E0D2;
+    --mint-2:#D6EFE3;
+    --sky:#A8D8EA;
+    --sky-2:#CFE9F4;
+    --rose:#F4B6C2;
+    --lemon:#FFE8A3;
+    --lilac:#D6CDEA;
+    --line:#2B2A33;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--cream);color:var(--ink);font-family:'Be Vietnam Pro',system-ui,sans-serif;overflow:hidden}
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(255,181,158,.12) 0 30%, transparent 31%),
+      radial-gradient(circle at 80% 70%, rgba(168,216,234,.14) 0 26%, transparent 27%),
+      radial-gradient(circle at 60% 20%, rgba(184,224,210,.12) 0 22%, transparent 23%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  /* ====== Deck ====== */
+  .deck{position:relative;width:100vw;height:100vh;z-index:1}
+  .slide{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    padding:48px 64px;opacity:0;transform:translateY(24px) scale(.985);
+    transition:opacity .55s ease, transform .65s cubic-bezier(.2,.8,.2,1);
+    pointer-events:none;
+  }
+  .slide.active{opacity:1;transform:none;pointer-events:auto}
+  .slide.prev{transform:translateY(-24px) scale(.985)}
+
+  .stage{
+    width:min(1280px,96%);height:min(760px,92%);
+    background:var(--paper);
+    border:2.5px solid var(--line);
+    border-radius:28px;
+    box-shadow: 8px 10px 0 rgba(43,42,51,.08), 0 30px 60px rgba(43,42,51,.08);
+    padding:42px 52px;position:relative;overflow:hidden;
+  }
+  .stage::before{
+    content:"";position:absolute;inset:0;border-radius:28px;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 38px, rgba(43,42,51,.04) 38px 39px);
+    pointer-events:none;
+  }
+  .tape{
+    position:absolute;width:120px;height:26px;background:var(--lemon);
+    border:1.5px solid var(--line);transform:rotate(-4deg);
+    top:-10px;left:80px;opacity:.95;border-radius:3px;
+  }
+  .tape.right{left:auto;right:80px;transform:rotate(3deg);background:var(--rose)}
+
+  /* ====== Type ====== */
+  h1,h2,h3,h4{font-family:'Fredoka',sans-serif;margin:0;color:var(--ink);font-weight:700;letter-spacing:.3px}
+  .hand{font-family:'Caveat',cursive}
+  .ph{font-family:'Patrick Hand',cursive}
+  p{line-height:1.55;color:var(--soft)}
+  .kicker{font-family:'Caveat',cursive;font-size:30px;color:var(--peach);transform:rotate(-1.5deg);display:inline-block}
+  .underline{position:relative;display:inline-block}
+  .underline::after{
+    content:"";position:absolute;left:-4px;right:-4px;bottom:-6px;height:10px;
+    background:var(--lemon);z-index:-1;border-radius:6px;transform:rotate(-.6deg);
+  }
+
+  /* ====== Layout helpers ====== */
+  .row{display:flex;gap:28px}
+  .col{flex:1}
+  .center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;height:100%}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+
+  .card{
+    background:#fff;border:2px solid var(--line);border-radius:18px;
+    padding:18px 20px;position:relative;
+    box-shadow: 4px 5px 0 rgba(43,42,51,.08);
+  }
+  .card.peach{background:#FFEDE3}
+  .card.mint{background:#E5F4EC}
+  .card.sky{background:#E2F1F8}
+  .card.rose{background:#FCE7EC}
+  .card.lemon{background:#FFF4CF}
+  .card.lilac{background:#EFE9F5}
+  .card .tag{
+    position:absolute;top:-12px;left:14px;background:var(--ink);color:var(--paper);
+    font-family:'Patrick Hand',cursive;font-size:14px;padding:2px 10px;border-radius:8px;
+    transform:rotate(-2deg);
+  }
+
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;
+    background:#fff;border:2px solid var(--line);border-radius:999px;
+    padding:6px 14px;font-family:'Patrick Hand',cursive;font-size:16px;
+    box-shadow:3px 3px 0 rgba(43,42,51,.08);
+  }
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--peach);border:1.5px solid var(--line)}
+
+  /* ====== Nav ====== */
+  .nav{
+    position:fixed;left:0;right:0;bottom:18px;display:flex;justify-content:center;gap:10px;z-index:5;
+  }
+  .nav button{
+    border:2px solid var(--line);background:#fff;border-radius:999px;
+    width:44px;height:44px;cursor:pointer;font-family:'Patrick Hand',cursive;font-size:18px;
+    box-shadow:3px 3px 0 rgba(43,42,51,.12);transition:transform .15s ease;
+  }
+  .nav button:hover{transform:translateY(-2px)}
+  .progress{
+    position:fixed;top:14px;left:24px;right:24px;height:6px;background:rgba(43,42,51,.08);
+    border-radius:99px;overflow:hidden;z-index:5;
+  }
+  .progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--peach),var(--rose),var(--sky));transition:width .5s ease}
+  .counter{
+    position:fixed;top:24px;right:32px;font-family:'Caveat',cursive;font-size:22px;color:var(--soft);z-index:5;
+  }
+  .brand{
+    position:fixed;top:18px;left:32px;font-family:'Fredoka',sans-serif;font-size:20px;z-index:5;
+    color:var(--ink);
+  }
+  .brand b{color:var(--peach)}
+
+  /* ====== Doodles ====== */
+  .doodle{position:absolute;pointer-events:none;opacity:.95}
+  .squiggle{
+    border-bottom:3px dashed var(--line);width:80px;display:inline-block;height:0;margin:0 8px 6px;
+  }
+  .arrow{display:inline-flex;align-items:center;color:var(--ink);font-family:'Caveat',cursive}
+
+  /* big number */
+  .big{font-family:'Fredoka',sans-serif;font-size:56px;line-height:1;color:var(--ink)}
+  .big.peach{color:#E96A4D}
+  .big.sky{color:#3E8AA8}
+  .big.mint{color:#3F8A6E}
+
+  /* Pipeline */
+  .step{
+    position:relative;background:#fff;border:2px solid var(--line);border-radius:14px;padding:14px 12px;text-align:center;
+    box-shadow:3px 4px 0 rgba(43,42,51,.08);transition:transform .25s ease;
+  }
+  .slide.active .step{animation:pop .55s both}
+  .step:nth-child(1){animation-delay:.05s}
+  .step:nth-child(2){animation-delay:.15s}
+  .step:nth-child(3){animation-delay:.25s}
+  .step:nth-child(4){animation-delay:.35s}
+  .step:nth-child(5){animation-delay:.45s}
+  .step:nth-child(6){animation-delay:.55s}
+  @keyframes pop{from{opacity:0;transform:translateY(8px) rotate(-1deg)}to{opacity:1;transform:none}}
+  .step .num{font-family:'Caveat',cursive;font-size:24px;color:var(--peach)}
+  .step h4{font-size:18px;margin-top:2px}
+  .step p{font-size:13px;margin:6px 0 0}
+  .step.s1{background:#FFEDE3}
+  .step.s2{background:#FFF4CF}
+  .step.s3{background:#E5F4EC}
+  .step.s4{background:#E2F1F8}
+  .step.s5{background:#EFE9F5}
+  .step.s6{background:#FCE7EC}
+
+  .agent{
+    background:#fff;border:2.5px solid var(--line);border-radius:22px;padding:20px;
+    box-shadow:5px 6px 0 rgba(43,42,51,.1);position:relative;
+  }
+  .agent .face{font-size:40px;margin-bottom:6px}
+  .agent.cv{background:#E2F1F8}
+  .agent.so{background:#FFEDE3}
+  .agent.ac{background:#E5F4EC}
+
+  ul.tick{list-style:none;padding:0;margin:8px 0}
+  ul.tick li{padding:6px 0 6px 28px;position:relative;color:var(--ink);font-family:'Patrick Hand',cursive;font-size:18px}
+  ul.tick li::before{
+    content:"✓";position:absolute;left:0;top:4px;width:20px;height:20px;border-radius:50%;
+    background:var(--mint);border:1.5px solid var(--line);font-size:13px;text-align:center;line-height:18px;
+  }
+  ul.cross li::before{content:"✕";background:var(--rose)}
+
+  .stat{
+    background:#fff;border:2px solid var(--line);border-radius:18px;padding:18px;text-align:center;
+    box-shadow:4px 5px 0 rgba(43,42,51,.08);
+  }
+  .stat b{display:block;font-family:'Fredoka',sans-serif;font-size:38px;color:#E96A4D}
+  .stat span{font-family:'Patrick Hand',cursive;color:var(--soft)}
+
+  /* mock browser */
+  .mock{
+    background:#fff;border:2px solid var(--line);border-radius:14px;overflow:hidden;
+    box-shadow:5px 6px 0 rgba(43,42,51,.1);
+  }
+  .mock .bar{display:flex;gap:6px;padding:8px 10px;background:#F4EEDF;border-bottom:2px solid var(--line)}
+  .mock .bar i{width:10px;height:10px;border-radius:50%;background:#FFB59E;border:1.5px solid var(--line)}
+  .mock .bar i:nth-child(2){background:#FFE08C}
+  .mock .bar i:nth-child(3){background:#B8E0D2}
+  .mock .body{padding:12px;font-family:'Patrick Hand',cursive;font-size:14px;color:var(--ink)}
+
+  /* slide title block */
+  .title-row{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+  .title-row h2{font-size:42px}
+  .chip{font-family:'Caveat',cursive;font-size:24px;background:var(--lemon);border:2px solid var(--line);padding:2px 14px;border-radius:999px;transform:rotate(-1deg);box-shadow:3px 3px 0 rgba(43,42,51,.08)}
+
+  /* hero */
+  .hero h1{font-size:96px;line-height:1;letter-spacing:1px}
+  .hero .sub{font-family:'Caveat',cursive;font-size:34px;color:var(--soft)}
+
+  /* small helpers */
+  .muted{color:var(--soft)}
+  .center-text{text-align:center}
+  .right{text-align:right}
+  .mt-8{margin-top:8px}
+  .mt-16{margin-top:16px}
+  .mt-24{margin-top:24px}
+
+  /* connector arrows for pipeline */
+  .pipeline{position:relative}
+  .pipeline svg.arrows{position:absolute;inset:0;pointer-events:none}
+
+  /* speech bubble */
+  .bubble{
+    position:relative;background:#fff;border:2px solid var(--line);border-radius:18px;padding:12px 14px;
+    font-family:'Patrick Hand',cursive;font-size:16px;box-shadow:3px 4px 0 rgba(43,42,51,.08);
+  }
+  .bubble::after{
+    content:"";position:absolute;left:24px;bottom:-12px;width:18px;height:18px;background:#fff;
+    border-right:2px solid var(--line);border-bottom:2px solid var(--line);transform:rotate(45deg);
+  }
+
+  .footer-note{position:absolute;bottom:16px;right:24px;font-family:'Caveat',cursive;color:var(--soft);font-size:18px}
+  .corner-num{position:absolute;top:16px;right:24px;font-family:'Fredoka',sans-serif;color:var(--soft)}
+
+  /* hint key */
+  .hint{position:fixed;left:24px;bottom:18px;font-family:'Caveat',cursive;color:var(--soft);font-size:18px;z-index:5}
+</style>
+</head>
+<body>
+
+<div class="brand"><b>SARa</b> · Smart AI Radiology</div>
+<div class="counter" id="counter">1 / 13</div>
+<div class="progress"><i id="bar"></i></div>
+
+<div class="deck" id="deck">
+
+  <!-- =================== SLIDE 1 — HERO =================== -->
+  <section class="slide active">
+    <div class="stage">
+      <span class="tape"></span>
+      <span class="tape right"></span>
+      <div class="hero center">
+        <span class="kicker">xin chào  ✨</span>
+        <h1 class="mt-8"><span class="underline">SARa</span></h1>
+        <div class="sub">Smart AI Radiology — cho sinh viên y</div>
+        <div class="row mt-24" style="gap:14px;flex-wrap:wrap;justify-content:center">
+          <span class="pill"><span class="dot"></span>Group 076</span>
+          <span class="pill"><span class="dot" style="background:var(--mint)"></span>Cohort 1 · VinUniversity</span>
+          <span class="pill"><span class="dot" style="background:var(--sky)"></span>3 Agents · 4-step Pipeline</span>
+        </div>
+
+        <!-- doodle stethoscope + xray -->
+        <svg class="doodle" style="left:60px;bottom:60px" width="170" height="140" viewBox="0 0 170 140" fill="none">
+          <path d="M20 20 Q20 90 70 95 Q120 100 120 50" stroke="#2B2A33" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <circle cx="120" cy="40" r="14" stroke="#2B2A33" stroke-width="3" fill="#FFB59E"/>
+          <circle cx="20" cy="20" r="6" fill="#2B2A33"/>
+          <path d="M70 110 q10 12 30 0" stroke="#2B2A33" stroke-width="2" fill="none"/>
+        </svg>
+        <svg class="doodle" style="right:60px;top:90px" width="180" height="160" viewBox="0 0 180 160" fill="none">
+          <rect x="15" y="15" width="150" height="130" rx="14" fill="#E2F1F8" stroke="#2B2A33" stroke-width="2.5"/>
+          <path d="M50 40 q40 -10 80 5 M55 70 q35 -8 70 4 M60 100 q30 -6 60 3" stroke="#2B2A33" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <circle cx="115" cy="78" r="14" fill="#FFB59E" stroke="#2B2A33" stroke-width="2"/>
+        </svg>
+      </div>
+      <div class="footer-note">→ dùng phím ← / → để chuyển slide</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 2 — HOOK =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 0 · Hook</span>
+          <h2>Bạn vừa tan lâm sàng…</h2>
+        </div>
+        <span class="chip">1 phút</span>
+      </div>
+      <div class="grid-2" style="margin-top:8px">
+        <div>
+          <div class="card peach">
+            <span class="tag">tình huống</span>
+            <p style="color:var(--ink);font-family:'Patrick Hand',cursive;font-size:20px">
+              Sinh viên y năm 4 mở một ca X-quang ra ôn. Nhìn vào ảnh… <i>không biết bắt đầu từ đâu</i>.
+            </p>
+          </div>
+          <div class="card sky mt-16">
+            <span class="tag">đã thử</span>
+            <ul class="tick" style="--tick-color:var(--sky)">
+              <li>Nhắn giảng viên — chờ 1–2 ngày</li>
+              <li>Google, YouTube — thông tin rải rác</li>
+              <li>Đọc đáp án cuối — không hiểu sai ở bước nào</li>
+            </ul>
+          </div>
+          <div class="bubble mt-16" style="margin-top:30px">
+            “Mình muốn biết mình sai ở đâu — chứ không chỉ là đúng hay sai.”
+          </div>
+        </div>
+        <div class="center" style="position:relative">
+          <svg width="380" height="380" viewBox="0 0 380 380">
+            <circle cx="190" cy="190" r="150" fill="#FFF4CF" stroke="#2B2A33" stroke-width="3"/>
+            <circle cx="150" cy="170" r="10" fill="#2B2A33"/>
+            <circle cx="230" cy="170" r="10" fill="#2B2A33"/>
+            <path d="M140 240 q50 -25 100 0" stroke="#2B2A33" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <path d="M120 110 q20 -25 50 -10 M210 100 q20 -20 50 0" stroke="#2B2A33" stroke-width="3" fill="none"/>
+            <text x="280" y="80" font-family="Caveat" font-size="32" fill="#E96A4D">?</text>
+            <text x="80" y="100" font-family="Caveat" font-size="32" fill="#E96A4D">??</text>
+            <text x="320" y="200" font-family="Caveat" font-size="32" fill="#E96A4D">?</text>
+          </svg>
+          <span class="hand" style="font-size:28px;color:var(--soft)">— và đó là lý do <b style="color:var(--ink)">SARa</b> ra đời</span>
+        </div>
+      </div>
+      <div class="corner-num">02</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 3 — PROBLEM =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 1 · Problem</span>
+          <h2>Thiếu một <span class="underline">feedback loop</span> có cấu trúc</h2>
+        </div>
+        <span class="chip">2 phút</span>
+      </div>
+
+      <div class="grid-3 mt-16">
+        <div class="stat"><b>72%</b><span>SV cho biết đào tạo CĐHA chưa đủ</span></div>
+        <div class="stat"><b>50%</b><span>SV năm 3–4 thiếu tự tin đọc phim</span></div>
+        <div class="stat"><b>2–3h</b><span>thời gian tự học mỗi ca</span></div>
+      </div>
+
+      <div class="grid-2 mt-24">
+        <div class="card lemon">
+          <span class="tag">cách học hiện tại</span>
+          <p style="font-family:'Patrick Hand',cursive;font-size:18px;color:var(--ink)">
+            Lecture → quan sát bị động lâm sàng → về tự ôn 1 mình.
+            <br/>Không ai nói: <b>“bạn sai ở bước nào”</b>.
+          </p>
+        </div>
+        <div class="card rose">
+          <span class="tag">root cause</span>
+          <p style="font-family:'Patrick Hand',cursive;font-size:18px;color:var(--ink)">
+            <b>Premature closure</b> — sinh viên nhìn ảnh là đoán luôn chẩn đoán cuối,
+            bỏ qua Describe & DDx. Thói quen sai hình thành ngay khi học.
+          </p>
+        </div>
+      </div>
+
+      <svg class="doodle" style="right:36px;bottom:30px" width="180" height="100" viewBox="0 0 180 100">
+        <path d="M10 50 q40 -40 80 0 t80 0" stroke="#E96A4D" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <text x="20" y="90" font-family="Caveat" font-size="22" fill="#5A5667">vòng lặp đứt</text>
+      </svg>
+      <div class="corner-num">03</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 4 — PAIN POINTS =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 2 · Pain Points</span>
+          <h2>3 nút thắt cốt lõi</h2>
+        </div>
+        <span class="chip">1.5 phút</span>
+      </div>
+      <div class="grid-3 mt-16" style="height:60%">
+        <div class="card peach" style="display:flex;flex-direction:column">
+          <div style="font-size:42px">🧩</div>
+          <h3>Không có feedback theo bước</h3>
+          <p>Tài liệu chỉ cho đáp án cuối — không ai chỉ <b>“sai ở Describe vì bỏ qua bờ tổn thương”</b>.</p>
+        </div>
+        <div class="card sky" style="display:flex;flex-direction:column">
+          <div style="font-size:42px">⏳</div>
+          <h3>Feedback giảng viên chậm</h3>
+          <p>Số sinh viên tăng, BV thực hành không tăng. Messenger không phải hệ thống học tập.</p>
+        </div>
+        <div class="card mint" style="display:flex;flex-direction:column">
+          <div style="font-size:42px">🔁</div>
+          <h3>Thói quen sai âm thầm hình thành</h3>
+          <p>Mỗi ca tự học không hướng dẫn = thêm 1 lần củng cố <b>premature closure</b>.</p>
+        </div>
+      </div>
+      <div class="corner-num">04</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 5 — HYPOTHESIS =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 3 · Hypothesis</span>
+          <h2>Giả thuyết của chúng tôi</h2>
+        </div>
+        <span class="chip">1 phút</span>
+      </div>
+      <div class="center" style="height:75%">
+        <div class="card lilac" style="max-width:920px;padding:30px 36px;transform:rotate(-.6deg)">
+          <span class="tag">if & only if</span>
+          <p style="font-family:'Fredoka',sans-serif;font-size:30px;color:var(--ink);line-height:1.4">
+            Sinh viên y năm 4–5 sẽ <span class="underline">thay thế</span> việc hỏi giảng viên & Google bằng
+            <b>AI feedback theo từng bước</b> — <i>khi và chỉ khi</i>
+            feedback chỉ ra được <b>lỗi sai tại 1 bước cụ thể</b> trong pipeline,
+            và độ chính xác đủ tin cậy lâm sàng.
+          </p>
+        </div>
+        <div class="row mt-24" style="gap:14px">
+          <span class="pill"><span class="dot" style="background:var(--mint)"></span>Step-level, không chung chung</span>
+          <span class="pill"><span class="dot" style="background:var(--peach)"></span>Ép theo quy trình bác sĩ</span>
+          <span class="pill"><span class="dot" style="background:var(--sky)"></span>Testable trong 3 tuần</span>
+        </div>
+      </div>
+      <div class="corner-num">05</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 6 — PIPELINE 6 STEPS =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 4 · Solution</span>
+          <h2>Pipeline 4 bước — <span class="underline">không nhảy cóc</span></h2>
+        </div>
+        <span class="chip">enforce server-side</span>
+      </div>
+
+      <div class="grid-4 mt-16 pipeline">
+        <div class="step s1"><div class="num">1</div><h4>DESCRIBE</h4><p>Mô tả chi tiết findings trên ảnh</p></div>
+        <div class="step s3"><div class="num">2</div><h4>REASONING</h4><p>Lập luận ý nghĩa lâm sàng</p></div>
+        <div class="step s5"><div class="num">3</div><h4>DDx</h4><p>Chẩn đoán phân biệt</p></div>
+        <div class="step s6"><div class="num">4</div><h4>CONCLUSION</h4><p>Kết luận &amp; mức tự tin</p></div>
+      </div>
+
+      <div class="grid-2 mt-24" style="gap:30px;align-items:center">
+        <div class="card mint">
+          <span class="tag">cứng</span>
+          <ul class="tick">
+            <li>Score gate ≥ 0.6 mới qua bước</li>
+            <li>Không thể thấy answer key trước khi đủ 4 bước</li>
+            <li>State machine kiểm soát toàn pipeline</li>
+          </ul>
+        </div>
+        <div class="card rose">
+          <span class="tag">trải nghiệm</span>
+          <ul class="tick" >
+            <li>Trả lời tự do — không multiple choice</li>
+            <li>Feedback ngay sau mỗi bước</li>
+            <li>Câu hỏi Socratic dẫn dắt khi sai</li>
+          </ul>
+        </div>
+      </div>
+      <div class="corner-num">06</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 7 — 3 AGENTS =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 4 · Architecture</span>
+          <h2>3 Agents song hành</h2>
+        </div>
+        <span class="chip">cùng LLM, prompt khác</span>
+      </div>
+
+      <div class="grid-3 mt-16">
+        <div class="agent cv">
+          <div class="face">🩻</div>
+          <h3>CV Agent</h3>
+          <p style="font-family:'Patrick Hand',cursive;font-size:16px;color:var(--ink)">
+            <b>GPT-4o</b> tiền xử lý prompt theo modality/region →
+            <b>MedGemma 4B</b> (Gradio) trả findings JSON theo 4-step format.
+          </p>
+        </div>
+        <div class="agent so">
+          <div class="face">💬</div>
+          <h3>Socratic Agent</h3>
+          <p style="font-family:'Patrick Hand',cursive;font-size:16px;color:var(--ink)">
+            Đặt câu hỏi dẫn dắt theo bước hiện tại — <b>không tiết lộ đáp án</b>,
+            tăng độ khó khi SV trả lời sai.
+          </p>
+        </div>
+        <div class="agent ac">
+          <div class="face">✅</div>
+          <h3>Answer-Check Agent</h3>
+          <p style="font-family:'Patrick Hand',cursive;font-size:16px;color:var(--ink)">
+            Chấm câu trả lời theo <b>rubric JSON</b> đã được bác sĩ duyệt — chỉ ra
+            <b>sai ở bước nào, vì sao</b>.
+          </p>
+        </div>
+      </div>
+
+      <!-- flow under -->
+      <svg viewBox="0 0 1100 260" width="100%" height="220" style="margin-top:14px;display:block">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2B2A33"/>
+          </marker>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#5A5667"/>
+          </marker>
+        </defs>
+
+        <!-- Student -->
+        <rect x="20" y="105" width="140" height="60" rx="14" fill="#FFF4CF" stroke="#2B2A33" stroke-width="2.5"/>
+        <text x="90" y="142" font-family="Fredoka" font-weight="600" font-size="20" text-anchor="middle" fill="#2B2A33">Student</text>
+
+        <!-- Backend -->
+        <rect x="200" y="105" width="200" height="60" rx="14" fill="#E2F1F8" stroke="#2B2A33" stroke-width="2.5"/>
+        <text x="300" y="132" font-family="Fredoka" font-weight="600" font-size="18" text-anchor="middle" fill="#2B2A33">Django Backend</text>
+        <text x="300" y="153" font-family="Patrick Hand" font-size="14" text-anchor="middle" fill="#5A5667">State Machine · 4 steps</text>
+
+        <!-- 3 Agents -->
+        <rect x="440" y="20" width="220" height="55" rx="14" fill="#FFEDE3" stroke="#2B2A33" stroke-width="2.5"/>
+        <text x="550" y="53" font-family="Fredoka" font-weight="600" font-size="18" text-anchor="middle" fill="#2B2A33">Socratic Agent</text>
+
+        <rect x="440" y="105" width="220" height="60" rx="14" fill="#E5F4EC" stroke="#2B2A33" stroke-width="2.5"/>
+        <text x="550" y="132" font-family="Fredoka" font-weight="600" font-size="18" text-anchor="middle" fill="#2B2A33">Answer-Check Agent</text>
+        <text x="550" y="152" font-family="Patrick Hand" font-size="13" text-anchor="middle" fill="#5A5667">GPT-4o · rubric</text>
+
+        <rect x="440" y="195" width="220" height="55" rx="14" fill="#E2F1F8" stroke="#2B2A33" stroke-width="2.5"/>
+        <text x="550" y="220" font-family="Fredoka" font-weight="600" font-size="18" text-anchor="middle" fill="#2B2A33">CV Agent</text>
+        <text x="550" y="238" font-family="Patrick Hand" font-size="13" text-anchor="middle" fill="#5A5667">GPT-4o → MedGemma</text>
+
+        <!-- Supabase -->
+        <rect x="700" y="105" width="180" height="60" rx="14" fill="#EFE9F5" stroke="#2B2A33" stroke-width="2.5"/>
+        <text x="790" y="132" font-family="Fredoka" font-weight="600" font-size="18" text-anchor="middle" fill="#2B2A33">Supabase</text>
+        <text x="790" y="153" font-family="Patrick Hand" font-size="13" text-anchor="middle" fill="#5A5667">Postgres · Storage</text>
+
+        <!-- Feedback -->
+        <rect x="920" y="105" width="160" height="60" rx="14" fill="#FCE7EC" stroke="#2B2A33" stroke-width="2.5"/>
+        <text x="1000" y="142" font-family="Fredoka" font-weight="600" font-size="20" text-anchor="middle" fill="#2B2A33">Feedback</text>
+
+        <!-- Arrows: Student → Backend -->
+        <path d="M160 135 H198" stroke="#2B2A33" stroke-width="2.2" fill="none" marker-end="url(#arr)"/>
+
+        <!-- Backend → each agent -->
+        <path d="M400 125 Q420 125 420 50 H438" stroke="#2B2A33" stroke-width="2.2" fill="none" marker-end="url(#arr)"/>
+        <path d="M400 135 H438" stroke="#2B2A33" stroke-width="2.2" fill="none" marker-end="url(#arr)"/>
+        <path d="M400 145 Q420 145 420 222 H438" stroke="#2B2A33" stroke-width="2.2" fill="none" marker-end="url(#arr)"/>
+
+        <!-- Each agent → Supabase -->
+        <path d="M660 50 Q685 50 685 130 H698" stroke="#2B2A33" stroke-width="2.2" fill="none" marker-end="url(#arr)"/>
+        <path d="M660 135 H698" stroke="#2B2A33" stroke-width="2.2" fill="none" marker-end="url(#arr)"/>
+        <path d="M660 222 Q685 222 685 142 H698" stroke="#2B2A33" stroke-width="2.2" fill="none" marker-end="url(#arr)"/>
+
+        <!-- Supabase → Feedback -->
+        <path d="M880 135 H918" stroke="#2B2A33" stroke-width="2.2" fill="none" marker-end="url(#arr)"/>
+
+        <!-- Feedback → back to Student (dashed loop) -->
+        <path d="M1000 165 Q1000 240 540 250 Q90 245 90 167" stroke="#5A5667" stroke-width="2" fill="none" stroke-dasharray="6 6" marker-end="url(#arr2)"/>
+      </svg>
+      <div class="corner-num">07</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 8 — TECH STACK =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 4 · Stack</span>
+          <h2>Tech stack <span class="underline">thực tế</span></h2>
+        </div>
+        <span class="chip">đã chạy được</span>
+      </div>
+      <div class="grid-3 mt-16">
+        <div class="card sky">
+          <span class="tag">frontend</span>
+          <ul class="tick">
+            <li>React 18 + Vite + TypeScript</li>
+            <li>Tailwind / module CSS</li>
+            <li>Volume-Slice viewer cho CT/MRI</li>
+            <li>Pages: Library · Session · Dashboard · AnswerKey</li>
+          </ul>
+        </div>
+        <div class="card peach">
+          <span class="tag">backend</span>
+          <ul class="tick">
+            <li>Django + DRF</li>
+            <li>State machine 4 bước · score gate 0.6</li>
+            <li>Async job CV Agent (queue)</li>
+            <li>API: <i>/sessions</i>, <i>/submit_answer</i>, <i>/cases</i></li>
+          </ul>
+        </div>
+        <div class="card mint">
+          <span class="tag">data & ai</span>
+          <ul class="tick">
+            <li>Supabase Postgres · 12 bảng · RLS</li>
+            <li>Object Storage + Signed URL</li>
+            <li>MedGemma-1.5-4B qua gradio_client</li>
+            <li>GPT-4o pre-processing + rubric scoring</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="grid-2 mt-24">
+        <div class="card lemon">
+          <span class="tag">đã có</span>
+          <p style="font-family:'Patrick Hand',cursive;font-size:18px;color:var(--ink)">
+            <b>22 cases</b> bulk-upload Supabase · multi-volume (Axial / Coronal / Bone Window) ·
+            answer key + rubric đã review · pipeline replay log.
+          </p>
+        </div>
+        <div class="card rose">
+          <span class="tag">tradeoff</span>
+          <p style="font-family:'Patrick Hand',cursive;font-size:18px;color:var(--ink)">
+            VLM nhẹ → độ chính xác thấp hơn model nặng, nhưng đủ để
+            <b>luyện tư duy pipeline</b>. Có fallback mock findings khi HF Space down.
+          </p>
+        </div>
+      </div>
+      <div class="corner-num">08</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 9 — MVP SCOPE =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 5 · MVP Scope</span>
+          <h2>MoSCoW — <span class="underline">tập trung</span></h2>
+        </div>
+        <span class="chip">3 tuần sprint</span>
+      </div>
+      <div class="grid-3 mt-16" style="height:65%">
+        <div class="card mint" style="display:flex;flex-direction:column">
+          <span class="tag">MUST</span>
+          <ul class="tick">
+            <li>20–30 ca phổ biến nhất</li>
+            <li>3 Agents + state machine 4 bước</li>
+            <li>Answer key gate 4/4</li>
+            <li>Session tracking cơ bản</li>
+          </ul>
+        </div>
+        <div class="card lemon" style="display:flex;flex-direction:column">
+          <span class="tag">SHOULD</span>
+          <ul class="tick">
+            <li>Google OAuth login</li>
+            <li>Self-confidence rating 1–10</li>
+            <li>Performance dashboard theo bước</li>
+            <li>Multi-volume image viewer ✅</li>
+          </ul>
+        </div>
+        <div class="card rose" style="display:flex;flex-direction:column">
+          <span class="tag">WON'T</span>
+          <ul class="tick cross">
+            <li>Chẩn đoán cho bệnh nhân thật</li>
+            <li>App iOS / Android native</li>
+            <li>Tích hợp PACS / LIS</li>
+            <li>Billing / subscription</li>
+          </ul>
+        </div>
+      </div>
+      <p class="hand center-text mt-16" style="font-size:26px;color:var(--soft)">
+        WON'T quan trọng <b style="color:var(--ink)">không kém</b> MUST — bảo vệ sprint khỏi scope creep.
+      </p>
+      <div class="corner-num">09</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 10 — DEMO MOCK =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 6 · Demo</span>
+          <h2>User journey trong <span class="underline">5 màn hình</span></h2>
+        </div>
+        <span class="chip">3–4 phút</span>
+      </div>
+
+      <div class="grid-2 mt-16" style="gap:22px;height:80%">
+        <!-- left: case library mock -->
+        <div class="mock">
+          <div class="bar"><i></i><i></i><i></i><span style="margin-left:auto;font-family:'Patrick Hand',cursive;font-size:13px;color:var(--soft)">sara.app / library</span></div>
+          <div class="body">
+            <b>📚 Case Library</b>
+            <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap">
+              <span class="pill" style="font-size:13px;padding:3px 10px">X-ray</span>
+              <span class="pill" style="font-size:13px;padding:3px 10px">CT</span>
+              <span class="pill" style="font-size:13px;padding:3px 10px">MRI</span>
+              <span class="pill" style="font-size:13px;padding:3px 10px;background:var(--lemon)">Cơ bản</span>
+            </div>
+            <div class="grid-2" style="gap:8px">
+              <div class="card peach" style="padding:10px">
+                <b>Pneumonia · CXR</b>
+                <p style="font-size:13px;margin:4px 0">Nam 32t, sốt 3 ngày, ho đờm</p>
+                <span class="pill" style="font-size:12px;background:var(--mint)">Bắt đầu</span>
+              </div>
+              <div class="card sky" style="padding:10px">
+                <b>Brain Tumor · MRI</b>
+                <p style="font-size:13px;margin:4px 0">Nữ 45t, đau đầu kéo dài</p>
+                <span class="pill" style="font-size:12px;background:var(--lemon)">Tiếp tục</span>
+              </div>
+              <div class="card mint" style="padding:10px">
+                <b>Fracture · X-ray</b>
+                <p style="font-size:13px;margin:4px 0">Nam 21t, té xe máy</p>
+                <span class="pill" style="font-size:12px">Hoàn thành</span>
+              </div>
+              <div class="card rose" style="padding:10px">
+                <b>Pleural Effusion</b>
+                <p style="font-size:13px;margin:4px 0">Nữ 60t, khó thở tăng dần</p>
+                <span class="pill" style="font-size:12px;background:var(--mint)">Bắt đầu</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- right: session mock -->
+        <div class="mock">
+          <div class="bar"><i></i><i></i><i></i><span style="margin-left:auto;font-family:'Patrick Hand',cursive;font-size:13px;color:var(--soft)">sara.app / session</span></div>
+          <div class="body">
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div style="flex:1.1">
+                <svg width="100%" height="170" viewBox="0 0 220 170">
+                  <rect x="5" y="5" width="210" height="160" rx="10" fill="#1d2230"/>
+                  <path d="M30 30 q40 -10 80 5 M40 60 q40 -8 70 4 M50 90 q30 -6 60 3 M60 120 q20 -4 50 2" stroke="#9bd4ff" stroke-width="2" fill="none"/>
+                  <circle cx="140" cy="95" r="16" fill="#FFB59E" opacity=".7"/>
+                  <circle cx="140" cy="95" r="22" stroke="#FFB59E" stroke-width="1.5" fill="none" stroke-dasharray="3 3"/>
+                </svg>
+                <p style="font-size:12px;color:var(--soft);margin:4px 0 0">Axial · Lung Window · slice 14/24</p>
+              </div>
+              <div style="flex:1">
+                <span class="pill" style="font-size:12px;background:var(--lemon)">Step 1 · DESCRIBE</span>
+                <p style="font-size:14px;margin:8px 0 4px"><b>🧠 Socratic:</b> Mô tả vùng đặc bạn nhận thấy ở thùy dưới phổi phải — bờ tổn thương ra sao?</p>
+                <div style="background:#FFF8EC;border:1.5px dashed var(--line);border-radius:8px;padding:8px;font-size:13px">
+                  vùng đặc, đường bờ chưa rõ, không co kéo trung thất…
+                </div>
+                <div class="card mint" style="padding:8px;margin-top:8px">
+                  <b style="color:#2C7B5A">✓ Score 85/100</b>
+                  <p style="font-size:12px;margin:2px 0">Đúng vị trí. Cần chú ý <b>bờ tổn thương</b> để phân biệt consolidation vs atelectasis.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="hand center-text mt-16" style="font-size:24px;color:var(--soft)">
+        Không phải <i>đúng/sai</i> — mà là <b style="color:var(--ink)">SAI Ở ĐÂU · VÌ SAO · LÀM GÌ TIẾP</b>.
+      </p>
+      <div class="corner-num">10</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 11 — METRICS =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 7 · Metrics</span>
+          <h2>Đo gì để biết mình <span class="underline">đúng hướng</span>?</h2>
+        </div>
+        <span class="chip">1 phút</span>
+      </div>
+
+      <div class="grid-2 mt-16">
+        <div class="card peach" style="transform:rotate(-.3deg)">
+          <span class="tag">★ north-star</span>
+          <p style="font-family:'Fredoka',sans-serif;font-size:26px;color:var(--ink);line-height:1.4">
+            % người dùng <b>tự</b> quay lại làm ca thứ 2 trong 7 ngày — không cần ai nhắc.
+          </p>
+          <div class="row mt-8" style="gap:10px">
+            <span class="pill" style="background:var(--mint)"><span class="dot" style="background:var(--ink)"></span>Target ≥ 40% tuần 2 pilot</span>
+          </div>
+        </div>
+        <div class="grid-2" style="gap:14px">
+          <div class="stat"><b>≥200</b><span>WAU (tháng 3)</span></div>
+          <div class="stat"><b>5–10</b><span>cases / user / tuần</span></div>
+          <div class="stat"><b>40–50%</b><span>retention tuần 4</span></div>
+          <div class="stat"><b>≤30′</b><span>thời gian / ca</span></div>
+        </div>
+      </div>
+
+      <div class="card lilac mt-24">
+        <span class="tag">validation trigger</span>
+        <p style="font-family:'Patrick Hand',cursive;font-size:18px;color:var(--ink)">
+          Nếu <b>≥15/30</b> sinh viên pilot tự hoàn thành <b>≥3 ca</b> trong 7 ngày mà không cần team nhắc
+          → hypothesis được validated → mở rộng lên 100 ca + pitch seed.
+        </p>
+      </div>
+      <div class="corner-num">11</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 12 — ROADMAP =================== -->
+  <section class="slide">
+    <div class="stage">
+      <div class="title-row">
+        <div>
+          <span class="kicker">Phần 8 · Next Steps</span>
+          <h2>Đang ở đâu &amp; <span class="underline">đi tiếp ra sao</span></h2>
+        </div>
+        <span class="chip">1 phút</span>
+      </div>
+
+      <div class="card sky mt-16">
+        <span class="tag">trạng thái</span>
+        <p style="font-family:'Patrick Hand',cursive;font-size:18px;color:var(--ink)">
+          MVP đã chạy demo · 22 cases trên Supabase · pipeline 4 bước hoàn chỉnh ·
+          đang fix VLM GPU abort + viết test cases · medical advisor đang review answer key.
+        </p>
+      </div>
+
+      <div class="grid-3 mt-24">
+        <div class="card peach"><span class="tag">tuần 1</span>
+          <ul class="tick"><li>5 ca hardcode hoàn chỉnh</li><li>Red-team 20 session</li><li>Tinh chỉnh prompt</li></ul>
+        </div>
+        <div class="card lemon"><span class="tag">tuần 2</span>
+          <ul class="tick"><li>Recruit 30 pilot students</li><li>Thêm 20 ca</li><li>Bật logging + telemetry</li></ul>
+        </div>
+        <div class="card mint"><span class="tag">tuần 3</span>
+          <ul class="tick"><li>Thu feedback · iterate</li><li>Đánh giá retention</li><li>Quyết định go/no-go</li></ul>
+        </div>
+      </div>
+
+      <div class="card rose mt-16">
+        <span class="tag">nếu validated</span>
+        <p style="font-family:'Patrick Hand',cursive;font-size:18px;color:var(--ink)">
+          Mở rộng case library → 100 · Partnership VinUni + Hanoi Medical University · Pitch seed funding.
+        </p>
+      </div>
+      <div class="corner-num">12</div>
+    </div>
+  </section>
+
+  <!-- =================== SLIDE 13 — THANKS =================== -->
+  <section class="slide">
+    <div class="stage">
+      <span class="tape"></span>
+      <span class="tape right"></span>
+      <div class="hero center">
+        <span class="kicker">cảm ơn đã lắng nghe ✨</span>
+        <h1 class="mt-8" style="font-size:88px"><span class="underline">SARa</span> ❤️ Q&amp;A</h1>
+        <p class="hand mt-16" style="font-size:30px;color:var(--soft);max-width:760px">
+          SARa không thay thế giảng viên hay bác sĩ — SARa là <b style="color:var(--ink)">công cụ luyện tập có cấu trúc</b>,
+          để sinh viên tự học hiệu quả &amp; tự tin hơn khi bước vào lâm sàng.
+        </p>
+        <div class="row mt-24" style="gap:14px;flex-wrap:wrap;justify-content:center">
+          <span class="pill"><span class="dot"></span>Nguyễn Trọng Tiến</span>
+          <span class="pill"><span class="dot" style="background:var(--mint)"></span>Nguyễn Trọng Minh</span>
+          <span class="pill"><span class="dot" style="background:var(--sky)"></span>Nguyễn Trọng Thiên Khôi</span>
+        </div>
+
+        <svg class="doodle" style="left:50px;bottom:50px" width="200" height="160" viewBox="0 0 200 160">
+          <path d="M30 80 q30 -60 70 -30 q40 30 0 70 q-40 40 -70 -40z" fill="#FFB59E" stroke="#2B2A33" stroke-width="2.5"/>
+          <path d="M50 80 q15 -10 30 0 M70 95 q10 -8 20 0" stroke="#2B2A33" stroke-width="2" fill="none"/>
+        </svg>
+        <svg class="doodle" style="right:50px;bottom:50px" width="180" height="160" viewBox="0 0 180 160">
+          <circle cx="90" cy="90" r="55" fill="#B8E0D2" stroke="#2B2A33" stroke-width="2.5"/>
+          <path d="M65 90 q25 -15 50 0 M70 105 q20 8 40 0" stroke="#2B2A33" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          <circle cx="75" cy="78" r="4" fill="#2B2A33"/><circle cx="105" cy="78" r="4" fill="#2B2A33"/>
+        </svg>
+      </div>
+      <div class="footer-note">Group 076 · Cohort 1 · VinUniversity · 2026</div>
+    </div>
+  </section>
+
+</div>
+
+<div class="hint">← / → · Space · Home/End</div>
+<div class="nav">
+  <button id="prev" title="Trước">‹</button>
+  <button id="next" title="Sau">›</button>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const counter = document.getElementById('counter');
+  const bar = document.getElementById('bar');
+  let i = 0;
+  function go(n){
+    n = Math.max(0, Math.min(slides.length-1, n));
+    slides[i].classList.remove('active');
+    slides[i].classList.add('prev');
+    i = n;
+    slides.forEach((s,k)=>{ if(k!==i) s.classList.remove('active'); });
+    requestAnimationFrame(()=>{
+      slides[i].classList.remove('prev');
+      slides[i].classList.add('active');
+      counter.textContent = (i+1)+' / '+slides.length;
+      bar.style.width = ((i+1)/slides.length*100)+'%';
+    });
+  }
+  document.getElementById('prev').onclick = ()=> go(i-1);
+  document.getElementById('next').onclick = ()=> go(i+1);
+  window.addEventListener('keydown', e=>{
+    if(['ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); go(i+1); }
+    else if(['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); go(i-1); }
+    else if(e.key==='Home') go(0);
+    else if(e.key==='End') go(slides.length-1);
+  });
+  // swipe
+  let sx=0;
+  window.addEventListener('touchstart', e=> sx=e.touches[0].clientX);
+  window.addEventListener('touchend', e=>{
+    const dx = e.changedTouches[0].clientX - sx;
+    if(Math.abs(dx)>40) go(i + (dx<0?1:-1));
+  });
+  bar.style.width = (1/slides.length*100)+'%';
+</script>
+</body>
+</html>

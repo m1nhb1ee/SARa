@@ -15,38 +15,40 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useCaseDetail, useSessionDetail, useSubmitAnswer, useExitSession } from "@/api/hooks";
+import { apiClient } from "@/api/client";
 import styles from "@/styles/DiagnosisSession.module.css";
 import { VolumeSliceViewer } from "@/app/components/shared/VolumeSliceViewer";
 import type { CaseVolume } from "@/types";
 
-const steps = ["OBSERVE", "DESCRIBE", "INTERPRET", "HYPOTHESIS", "DDx", "CONCLUSION"];
+const steps = ["DESCRIBE", "REASONING", "DDx", "CONCLUSION"];
+const displaySteps = ["OBSERVE", "DESCRIBE", "REASONING", "DDx", "CONCLUSION"];
+
+const INTRO_MESSAGE = `Chào mừng bạn đến với SaRa - nền tảng giúp học chuẩn đoán hình ảnh hiệu quả theo các bước Observe-Describe-Reasoning-DDx-Conclusion! \nTrước khi bắt đầu, hãy dành thời gian quan sát toàn bộ hình ảnh một cách có hệ thống — không bỏ sót bất kỳ vùng nào. Tìm kiếm các bất thường về mật độ, hình dạng, vị trí và kích thước.\n\nỞ mỗi bước, bạn có tối đa 3 lần trả lời trước khi được chấm điểm và chuyển sang bước tiếp theo.\n Bấm sẵn sàng để bắt đầu nhé !`;
 
 const QUESTION_PROMPTS: Record<number, string> = {
-  0: "Bước 1: Quan sát kỹ hình ảnh. Bạn nhìn thấy những bất thường gì? Hãy xác định vùng bất thường mà bạn nhận thấy.",
-  1: "Bước 2: Mô tả chi tiết các đặc điểm của tổn thương bạn quan sát thấy.",
-  2: "Bước 3: Diễn giải ý nghĩa lâm sàn của các phát hiện này.",
-  3: "Bước 4: Đưa ra giả thuyết chẩn đoán dự phòng.",
-  4: "Bước 5: Phân tích các chẩn đoán phân biệt cần loại trừ.",
-  5: "Bước 6: Đưa ra kết luận chẩn đoán cuối cùng.",
+  0: "Mô tả chi tiết các bất thường bạn thấy (vị trí, mật độ, hình dạng, dấu hiệu liên quan).",
+  1: "Dựa trên các dấu hiệu hình ảnh và thông tin lâm sàng, hãy đề xuất các giả thiết chẩn đoán ban đầu và giải thích bằng bằng chứng.",
+  2: "Các chẩn đoán phân biệt có thể là gì?",
+  3: "Kết luận chẩn đoán khả dĩ nhất và giải thích ngắn gọn.",
 };
 
 function buildMessagesFromAttempts(attempts: any[], currentStep: number): Message[] {
-  const byStep: Record<number, any> = {};
-  for (const a of attempts) {
-    const idx = a.step_index;
-    if (!byStep[idx] || a.attempt_number > byStep[idx].attempt_number) {
-      byStep[idx] = a;
-    }
-  }
-
   const msgs: Message[] = [];
   for (let i = 0; i <= currentStep; i++) {
     msgs.push({ id: `resume-q-${i}`, role: "ai", type: "question", content: QUESTION_PROMPTS[i] ?? `Bước ${i + 1}: Tiếp tục.` });
-    const attempt = byStep[i];
-    if (attempt && i < currentStep) {
-      msgs.push({ id: `resume-a-${i}`, role: "student", content: attempt.student_answer });
+    const stepAttempts = attempts
+      .filter((a) => a.step_index === i)
+      .sort((a, b) => (a.attempt_number ?? 0) - (b.attempt_number ?? 0));
+
+    for (const attempt of stepAttempts) {
+      msgs.push({ id: `resume-a-${i}-${attempt.attempt_number ?? 0}`, role: "student", content: attempt.student_answer });
       const feedbackContent = typeof attempt.feedback === "string" ? attempt.feedback : attempt.feedback?.content ?? "";
-      msgs.push({ id: `resume-f-${i}`, role: "ai", type: attempt.score >= 0.6 ? "correct" : "partial", content: feedbackContent });
+      msgs.push({
+        id: `resume-f-${i}-${attempt.attempt_number ?? 0}`,
+        role: "ai",
+        type: attempt.score >= 0.6 ? "correct" : "partial",
+        content: feedbackContent,
+      });
     }
   }
   return msgs;
@@ -56,7 +58,7 @@ interface Message {
   id: string;
   role: "ai" | "student";
   content: string;
-  type?: "question" | "correct" | "partial" | "incorrect";
+  type?: "intro" | "question" | "correct" | "partial" | "incorrect";
 }
 
 interface FeedbackResult {
@@ -67,17 +69,18 @@ interface FeedbackResult {
     student_answer: string;
     score: number;
     errors: string[];
-    feedback: {
-      type: "error" | "hint" | "correct";
-      content: string;
-    };
+    feedback: string | { type: "error" | "hint" | "correct"; content: string };
     latency_ms: number;
   };
   passed: boolean;
+  force_advance?: boolean;
+  positive_feedback?: string;
+  could_add?: string;
+  answer_key_preview?: string;
   next_step?: number;
   session_complete?: boolean;
   hint?: string;
-  message: string;
+  message?: string;
 }
 
 export function DiagnosisSession() {
@@ -103,6 +106,7 @@ export function DiagnosisSession() {
   const [showExitModal, setShowExitModal] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [introReady, setIntroReady] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [activeTab, setActiveTab] = useState<"image" | "chat">("image");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -110,44 +114,27 @@ export function DiagnosisSession() {
   // Create or resume session on mount
   useEffect(() => {
     if (!caseId || sessionId) return;
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-    const token = localStorage.getItem('sara_token') || '';
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     const initSession = async () => {
-      // Check for an existing resumable session (PAUSED or IN_PROGRESS) for this case
-      const listRes = await fetch(`${API_BASE}/sessions/?case=${caseId}`, { headers });
-      if (listRes.ok) {
-        const listData = await listRes.json();
-        const resumable = (listData.results as any[] ?? []).find(
-          (s: any) => s.status === 'ABANDONED' || s.status === 'IN_PROGRESS'
-        );
-        if (resumable) {
-          const detailRes = await fetch(`${API_BASE}/sessions/${resumable.id}/`, { headers });
-          if (detailRes.ok) {
-            const detail = await detailRes.json();
-            // Reactivate ABANDONED session (no-op if already IN_PROGRESS)
-            await fetch(`${API_BASE}/sessions/${resumable.id}/resume/`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...headers },
-            });
-            setSessionId(detail.id);
-            setMessages(buildMessagesFromAttempts(detail.step_attempts ?? [], detail.current_step ?? 0));
-            return;
-          }
+      const listRes = await apiClient.getSessions({ case: caseId });
+      const resumable = (listRes.data?.results as any[] ?? []).find(
+        (s: any) => s.status === 'ABANDONED' || s.status === 'IN_PROGRESS'
+      );
+      if (resumable) {
+        const detailRes = await apiClient.getSessionDetail(resumable.id);
+        if (detailRes.data) {
+          await apiClient.resumeSession(resumable.id);
+          setSessionId(detailRes.data.id);
+          setIntroReady(true);
+          setMessages(buildMessagesFromAttempts(detailRes.data.step_attempts ?? [], detailRes.data.current_step ?? 0));
+          return;
         }
       }
 
-      // No resumable session — create a new one
-      const createRes = await fetch(`${API_BASE}/sessions/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ case_id: caseId }),
-      });
-      if (createRes.ok) {
-        const data = await createRes.json();
-        setSessionId(data.id);
-        setMessages([{ id: "1", role: "ai", type: "question", content: QUESTION_PROMPTS[0] }]);
+      const createRes = await apiClient.createSession(caseId);
+      if (createRes.data) {
+        setSessionId(createRes.data.id);
+        setMessages([{ id: "1", role: "ai", type: "intro", content: INTRO_MESSAGE }]);
       }
     };
 
@@ -185,43 +172,53 @@ export function DiagnosisSession() {
     setIsTyping(true);
 
     // Call API to submit answer
-    const result = await submitAnswer(sessionId, input) as FeedbackResult | null;
+    const result = await submitAnswer(sessionId, input) as any;
     setIsTyping(false);
 
-    if (result) {
-      setLastFeedback(result);
+    if (!result) return;
 
-      // Add AI feedback message — backend returns feedback as string, not {type,content}
-      const feedbackContent = typeof result.attempt.feedback === 'string'
-        ? result.attempt.feedback
-        : result.attempt.feedback?.content ?? '';
+    // Socratic response: question/chit-chat intent — no evaluation
+    if (result.type === 'socratic') {
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: "ai",
-        type: result.passed ? "correct" : "partial",
-        content: feedbackContent,
+        type: "question",
+        content: result.message || '',
       };
       setMessages((prev) => [...prev, aiMsg]);
+      return;
+    }
 
-      // Show feedback modal
+    const feedbackResult = result as FeedbackResult;
+    setLastFeedback(feedbackResult);
+
+    if (feedbackResult.passed || feedbackResult.force_advance) {
+      // Pass or force-advance: show score modal and sync session
       setShowFeedback(true);
-
-      // Refetch session to get updated step - wait for it to complete if passed
-      if (result.passed || result.attempt.score >= 0.6) {
-        // Use next_step from response or refetch after delay
-        if (result.next_step !== undefined) {
-          // Backend returned next_step, we can use it immediately
-          console.log(`Backend provided next_step: ${result.next_step}`);
-        }
-        // Still refetch to ensure sync
-        setTimeout(() => refetchSession(), 300);
+      setTimeout(() => refetchSession(), 300);
+    } else {
+      // Fail: show Socratic hint in chat — no score modal yet
+      const hint = feedbackResult.hint || '';
+      if (hint) {
+        const aiMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          type: "question",
+          content: hint,
+        };
+        setMessages((prev) => [...prev, aiMsg]);
       }
     }
   };
 
+  const handleIntroReady = () => {
+    setIntroReady(true);
+    setMessages(prev => [...prev, { id: Date.now().toString(), role: "ai", type: "question", content: QUESTION_PROMPTS[0] }]);
+  };
+
   const handleFeedbackContinue = async () => {
-    // Check if score is too low to advance
-    if (lastFeedback && lastFeedback.attempt.score < 0.6) {
+    // Check if score is too low to advance (force_advance bypasses this)
+    if (lastFeedback && lastFeedback.attempt.score < 0.6 && !lastFeedback.force_advance) {
       return; // Don't allow advancing if score < 60
     }
 
@@ -440,27 +437,30 @@ export function DiagnosisSession() {
             transition={{ duration: 0.5, delay: 0.24 }}
           >
             <div className={styles.stepperTrack}>
-              {steps.map((step, i) => (
-                <div key={step} style={{ display: "flex", alignItems: "center" }}>
-                  <div className={styles.stepItem}>
-                    <div className={
-                      i < currentStep
-                        ? styles.stepCircleDone
-                        : i === currentStep
-                          ? styles.stepCircleActive
-                          : styles.stepCircleIdle
-                    }>
-                      {i < currentStep ? "✓" : i + 1}
+              {displaySteps.map((step, i) => {
+                const activeIdx = introReady ? currentStep + 1 : 0;
+                return (
+                  <div key={step} style={{ display: "flex", alignItems: "center" }}>
+                    <div className={styles.stepItem}>
+                      <div className={
+                        i < activeIdx
+                          ? styles.stepCircleDone
+                          : i === activeIdx
+                            ? styles.stepCircleActive
+                            : styles.stepCircleIdle
+                      }>
+                        {i < activeIdx ? "✓" : i + 1}
+                      </div>
+                      <span className={`${styles.stepLabel} ${i <= activeIdx ? styles.stepLabelActive : styles.stepLabelIdle}`}>
+                        {step}
+                      </span>
                     </div>
-                    <span className={`${styles.stepLabel} ${i <= currentStep ? styles.stepLabelActive : styles.stepLabelIdle}`}>
-                      {step}
-                    </span>
+                    {i < displaySteps.length - 1 && (
+                      <div className={i < activeIdx ? styles.stepConnectorDone : styles.stepConnectorIdle} />
+                    )}
                   </div>
-                  {i < steps.length - 1 && (
-                    <div className={i < currentStep ? styles.stepConnectorDone : styles.stepConnectorIdle} />
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </motion.div>
 
@@ -472,7 +472,9 @@ export function DiagnosisSession() {
             transition={{ duration: 0.5, delay: 0.28 }}
           >
             <span className={styles.stepChipInner}>
-              Bước {currentStep + 1} – {stepName}
+              {introReady
+                ? `Bước ${currentStep + 2} – ${stepName}`
+                : "Bước 1 – OBSERVE"}
             </span>
           </motion.div>
 
@@ -494,10 +496,33 @@ export function DiagnosisSession() {
                 {msg.role === "ai" ? (
                   <div className={`${styles.aiMessage} ${msg.type === "correct" ? styles.aiMessageCorrect : ""}`}>
                     <div className={styles.aiMessageHeader}>
-                      <span className={styles.aiMessageAuthor}>Dr. AI's Notes</span>
+                      <span className={styles.aiMessageAuthor}>
+                        {msg.type === "intro" ? "Dr. AI" : "Dr. AI's Notes"}
+                      </span>
                       {msg.type === "correct" && <span style={{ fontSize: 11 }}>✓</span>}
                     </div>
-                    <p className={styles.aiMessageText}>{msg.content}</p>
+                    <p className={styles.aiMessageText} style={{ whiteSpace: "pre-line" }}>{msg.content}</p>
+                    {msg.type === "intro" && !introReady && (
+                      <button
+                        onClick={handleIntroReady}
+                        style={{
+                          marginTop: 14,
+                          padding: "8px 20px",
+                          background: "var(--vj-terracotta)",
+                          color: "var(--vj-parchment)",
+                          border: "none",
+                          borderRadius: 2,
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          letterSpacing: "0.06em",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Sẵn sàng →
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className={styles.studentMessage}>
@@ -544,7 +569,7 @@ export function DiagnosisSession() {
                 animate={{ opacity: 1, y: 0 }}
                 className={styles.shortAnswerError}
               >
-                <AlertTriangle size={13} color="#A93226" />
+                <AlertTriangle size={13} color="var(--accent-clay)" />
                 <span className={styles.shortAnswerErrorText}>{shortAnswerError}</span>
               </motion.div>
             )}
@@ -554,13 +579,14 @@ export function DiagnosisSession() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="Ghi chú quan sát của bạn..."
+                placeholder={introReady ? "Ghi chú quan sát của bạn..." : "Nhấn Sẵn sàng để bắt đầu..."}
+                disabled={!introReady}
                 rows={3}
                 className={styles.textarea}
               />
               <button
                 onClick={handleSend}
-                disabled={isTyping || !sessionId}
+                disabled={isTyping || !sessionId || !introReady}
                 className={styles.sendButton}
               >
                 <Send size={14} />
@@ -599,10 +625,10 @@ export function DiagnosisSession() {
                 <div className={styles.scoreRingWrapper}>
                   <div className={styles.scoreRingInner}>
                     <svg width="100" height="100" className={styles.scoreRingSvg}>
-                      <circle cx="50" cy="50" r="42" fill="none" stroke="#C4A882" strokeWidth="6" />
+                      <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border)" strokeWidth="6" />
                       <circle
                         cx="50" cy="50" r="42" fill="none"
-                        stroke={lastFeedback.passed ? "#C0392B" : "#C4A882"}
+                        stroke={lastFeedback.passed ? "var(--accent-clay)" : "var(--border)"}
                         strokeWidth="6"
                         strokeDasharray={`${lastFeedback.attempt.score * 264} 264`}
                         strokeLinecap="round"
@@ -622,8 +648,8 @@ export function DiagnosisSession() {
                 <div className={`${styles.feedbackStickyNote} ${lastFeedback.passed ? styles.feedbackStickyNotePassed : styles.feedbackStickyNoteFailed}`}>
                   <div className={styles.feedbackNoteHeader}>
                     {lastFeedback.passed
-                      ? <CheckCircle2 size={14} color="#7D9B76" />
-                      : <AlertTriangle size={14} color="#C4A882" />
+                      ? <CheckCircle2 size={14} color="var(--accent-sage)" />
+                      : <AlertTriangle size={14} color="var(--border)" />
                     }
                     <span className={`${styles.feedbackNoteTitle} ${lastFeedback.passed ? styles.feedbackNoteTitlePassed : styles.feedbackNoteTitleFailed}`}>
                       {lastFeedback.passed ? "Dr. AI's Notes — Correct!" : "Dr. AI's Notes — Need Improvement"}
@@ -632,11 +658,35 @@ export function DiagnosisSession() {
                   <p className={styles.feedbackNoteText}>{typeof lastFeedback.attempt.feedback === 'string' ? lastFeedback.attempt.feedback : lastFeedback.attempt.feedback?.content}</p>
                 </div>
 
+                {/* Positive feedback — force_advance only (pass already shows it in Dr. AI's Notes) */}
+                {lastFeedback.force_advance && lastFeedback.positive_feedback && (
+                  <div className={styles.feedbackPositive}>
+                    <p className={styles.feedbackSectionLabel} style={{ color: 'var(--vj-olive)' }}>Điểm tốt</p>
+                    <p className={styles.feedbackSectionText}>{lastFeedback.positive_feedback}</p>
+                  </div>
+                )}
+
+                {/* Could add */}
+                {lastFeedback.could_add && (
+                  <div className={styles.feedbackCouldAdd}>
+                    <p className={styles.feedbackSectionLabel} style={{ color: 'var(--vj-faded)' }}>Có thể bổ sung</p>
+                    <p className={styles.feedbackSectionText}>{lastFeedback.could_add}</p>
+                  </div>
+                )}
+
+                {/* Answer key */}
+                {lastFeedback.answer_key_preview && (
+                  <div className={styles.feedbackAnswerKey}>
+                    <p className={styles.feedbackSectionLabel} style={{ color: 'var(--vj-terracotta)' }}>Đáp án chuẩn</p>
+                    <p className={styles.feedbackSectionText}>{lastFeedback.answer_key_preview}</p>
+                  </div>
+                )}
+
                 {/* Errors */}
                 {lastFeedback.attempt.errors.length > 0 && (
                   <div className={styles.feedbackErrors}>
                     <div className={styles.feedbackErrorsHeader}>
-                      <AlertTriangle size={13} color="#A93226" />
+                      <AlertTriangle size={13} color="var(--accent-clay)" />
                       <span className={styles.feedbackErrorsTitle}>Errors</span>
                     </div>
                     <div className={styles.feedbackErrorTags}>
@@ -649,37 +699,23 @@ export function DiagnosisSession() {
 
                 {/* Latency */}
                 <div className={styles.feedbackLatency}>
-                  <Clock size={13} color="#6B4C3B" />
+                  <Clock size={13} color="var(--ink-secondary)" />
                   <div>
                     <p className={styles.feedbackLatencyLabel}>Thời gian xử lý OpenAI API</p>
                     <p className={styles.feedbackLatencyValue}>{lastFeedback.attempt.latency_ms}ms</p>
                   </div>
                 </div>
 
-                {/* Low Score Warning */}
-                {lastFeedback.attempt.score < 0.6 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={styles.feedbackLowScoreWarning}
-                  >
-                    <div className={styles.feedbackLowScoreHeader}>
-                      <AlertTriangle size={14} color="#C0392B" />
-                      <span className={styles.feedbackLowScoreTitle}>Không đủ điểm để tiếp tục</span>
-                    </div>
-                    <p className={styles.feedbackLowScoreText}>
-                      Bạn cần đạt ít nhất <strong>60/100</strong> điểm để chuyển sang bước tiếp theo. Vui lòng cố gắng lại.
-                    </p>
-                  </motion.div>
-                )}
 
                 {/* CTA */}
                 <button
                   onClick={handleFeedbackContinue}
-                  disabled={lastFeedback.attempt.score < 0.6}
-                  className={`${styles.continueButton} ${lastFeedback.attempt.score < 0.6 ? styles.continueButtonDisabled : styles.continueButtonEnabled}`}
+                  disabled={lastFeedback.attempt.score < 0.6 && !lastFeedback.force_advance}
+                  className={`${styles.continueButton} ${lastFeedback.attempt.score < 0.6 && !lastFeedback.force_advance ? styles.continueButtonDisabled : styles.continueButtonEnabled}`}
                 >
-                  {lastFeedback.attempt.score < 0.6 ? (
+                  {lastFeedback.force_advance ? (
+                    <>Chuyển bước tiếp theo <ChevronRight size={15} /></>
+                  ) : lastFeedback.attempt.score < 0.6 ? (
                     <>Cần đạt 60 điểm để tiếp tục</>
                   ) : currentStep < steps.length - 1 ? (
                     <>Tiếp tục → Bước {currentStep + 1}: {steps[currentStep]} <ChevronRight size={15} /></>
@@ -713,8 +749,8 @@ export function DiagnosisSession() {
               {/* Header */}
               <div className={styles.exitModalHeader}>
                 <div className={styles.exitModalHeaderRow}>
-                  <div className={`${styles.exitModalIcon}`} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid #7D9B76' }}>
-                    <CheckCircle2 size={20} color="#7D9B76" />
+                  <div className={`${styles.exitModalIcon}`} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid var(--accent-sage)' }}>
+                    <CheckCircle2 size={20} color="var(--accent-sage)" />
                   </div>
                   <div>
                     <h3 className={styles.exitModalTitle}>Hoàn thành!</h3>
@@ -726,7 +762,7 @@ export function DiagnosisSession() {
               {/* Body — score */}
               <div className={styles.exitModalBody}>
                 <div className={styles.exitModalNote} style={{ textAlign: 'center', padding: '20px 12px', transform: 'rotate(0deg)' }}>
-                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--vj-faded)', marginBottom: 8 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--vj-faded)', marginBottom: 8 }}>
                     Điểm trung bình
                   </div>
                   <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 48, fontWeight: 700, color: 'var(--vj-ink)', lineHeight: 1 }}>
@@ -734,7 +770,7 @@ export function DiagnosisSession() {
                       ? Math.round(sessionData.final_score * 100)
                       : '—'}
                   </div>
-                  <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 12, color: 'var(--vj-faded)', marginTop: 4 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: 'var(--vj-faded)', marginTop: 4 }}>
                     / 100
                   </div>
                 </div>
@@ -792,7 +828,7 @@ export function DiagnosisSession() {
               <div className={styles.exitModalHeader}>
                 <div className={styles.exitModalHeaderRow}>
                   <div className={styles.exitModalIcon}>
-                    <LogOut size={20} color="#A93226" />
+                    <LogOut size={20} color="var(--accent-clay)" />
                   </div>
                   <div>
                     <h3 className={styles.exitModalTitle}>Thoát khỏi session?</h3>
@@ -842,7 +878,7 @@ export function DiagnosisSession() {
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity }}
-                        style={{ width: 14, height: 14, borderRadius: "50%", borderTop: "2px solid #F5EDD6", borderRight: "2px solid #F5EDD6", borderBottom: "2px solid transparent", borderLeft: "2px solid transparent" }}
+                        style={{ width: 14, height: 14, borderRadius: "50%", borderTop: "2px solid var(--bg-page)", borderRight: "2px solid var(--bg-page)", borderBottom: "2px solid transparent", borderLeft: "2px solid transparent" }}
                       />
                       Đang lưu...
                     </>

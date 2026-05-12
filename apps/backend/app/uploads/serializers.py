@@ -1,4 +1,4 @@
-import os
+
 from rest_framework import serializers
 
 ALLOWED_EXTENSIONS = ('jpg', 'jpeg', 'png', 'bmp', 'gif')
@@ -12,6 +12,11 @@ class UploadInputSerializer(serializers.Serializer):
         required=False,
     )
     region = serializers.CharField(required=False, default='unspecified')
+    engine = serializers.ChoiceField(
+        choices=['gpt', 'vlm'],
+        default='vlm',
+        required=False,
+    )
 
 
 class UploadSessionSerializer(serializers.Serializer):
@@ -25,3 +30,5 @@ class UploadSessionSerializer(serializers.Serializer):
 class UploadResultSerializer(serializers.Serializer):
     upload_session = UploadSessionSerializer()
     case = serializers.DictField()
+    findings = serializers.DictField(required=False)
+    engine = serializers.CharField(required=False)

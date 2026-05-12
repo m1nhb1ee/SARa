@@ -12,12 +12,12 @@ const STEP_VISUAL_META: Array<{
   color: string;
   isFinal?: boolean;
 }> = [
-  { num: 'I',   color: '#1B3A5C' },
-  { num: 'II',  color: '#1B5C4A' },
-  { num: 'III', color: '#C9882A' },
-  { num: 'IV',  color: '#C0392B' },
+  { num: 'I',   color: 'var(--accent-ink)' },
+  { num: 'II',  color: 'var(--accent-sage)' },
+  { num: 'III', color: 'var(--accent-ochre)' },
+  { num: 'IV',  color: 'var(--accent-clay)' },
   { num: 'V',   color: '#5C3D2E' },
-  { num: 'VI',  color: '#7D9B76', isFinal: true },
+  { num: 'VI',  color: 'var(--accent-sage)', isFinal: true },
 ];
 
 // ─── Composite step type used throughout the view ───
@@ -27,7 +27,6 @@ interface StepItem {
   name: string;
   color: string;
   isFinal?: boolean;
-  criterion?: string;
   // Answer-key content
   text: string;
   keyPoint: string;
@@ -45,7 +44,7 @@ interface StepItem {
 //  Shared UI helpers (verbatim from UploadPage)
 // ────────────────────────────────────────────────────────────────
 
-function WavyUnderline({ width = 220, color = '#2C1810', opacity = 0.45 }: {
+function WavyUnderline({ width = 220, color = 'var(--ink)', opacity = 0.45 }: {
   width?: number; color?: string; opacity?: number;
 }) {
   const w = width;
@@ -62,7 +61,7 @@ function WavyUnderline({ width = 220, color = '#2C1810', opacity = 0.45 }: {
   );
 }
 
-function ThumbTack({ color = '#C0392B' }: { color?: string }) {
+function ThumbTack({ color = 'var(--accent-clay)' }: { color?: string }) {
   return (
     <svg width="16" height="22" viewBox="0 0 16 22">
       <circle cx="8" cy="5" r="4" fill={color} />
@@ -98,7 +97,7 @@ function StepCard({
     <div
       className="mb-6 relative"
       style={{
-        background: '#EDE0C4',
+        background: 'var(--bg-surface-alt)',
         borderLeft: `4px solid ${step.color}`,
         border: `1px solid rgba(196,168,130,0.6)`,
         borderLeftWidth: '4px',
@@ -120,8 +119,8 @@ function StepCard({
           className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
           style={{
             background: step.color,
-            color: '#F5EDD6',
-            fontFamily: "'Special Elite', cursive",
+            color: 'var(--bg-page)',
+            fontFamily: "var(--font-typewriter)",
             fontSize: '11px',
           }}
         >
@@ -131,7 +130,7 @@ function StepCard({
         <div className="flex-1">
           <div
             style={{
-              fontFamily: "'Special Elite', cursive",
+              fontFamily: "var(--font-typewriter)",
               fontSize: '13px',
               letterSpacing: '0.12em',
               color: step.color,
@@ -147,10 +146,10 @@ function StepCard({
           <div
             className="flex-shrink-0 px-2 py-0.5"
             style={{
-              fontFamily: "'Special Elite', cursive",
+              fontFamily: "var(--font-typewriter)",
               fontSize: '10px',
               letterSpacing: '0.08em',
-              color: '#F5EDD6',
+              color: 'var(--bg-page)',
               background: scoreColor(step.score),
               transform: 'rotate(-1.5deg)',
             }}
@@ -162,57 +161,12 @@ function StepCard({
 
       {/* Body */}
       <div className="px-6 pb-4">
-        {/* Criterion text */}
-        {step.criterion && (
-          <div
-            className="mb-4 p-3"
-            style={{
-              background: 'rgba(27,58,92,0.05)',
-              borderLeft: '3px solid #1B3A5C',
-              maxWidth: '95%',
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "'Special Elite', cursive",
-                fontSize: '10px',
-                color: '#1B3A5C',
-                letterSpacing: '0.08em',
-                marginBottom: '4px',
-              }}
-            >
-              TIÊU CHÍ
-            </div>
-            <p
-              style={{
-                fontFamily: "'Lora', serif",
-                fontSize: '13.5px',
-                color: '#1B3A5C',
-                lineHeight: 1.7,
-              }}
-            >
-              {step.criterion}
-            </p>
-          </div>
-        )}
-
         {/* Main answer text */}
-        <div
-          style={{
-            fontFamily: "'Special Elite', cursive",
-            fontSize: '10px',
-            color: '#6B4C3B',
-            letterSpacing: '0.08em',
-            marginBottom: '4px',
-          }}
-        >
-          ĐÁP ÁN
-        </div>
         <p
           style={{
             fontFamily: "'Lora', serif",
             fontSize: '14.5px',
-            color: '#2C1810',
+            color: 'var(--ink)',
             lineHeight: 1.85,
           }}
         >
@@ -229,7 +183,7 @@ function StepCard({
           <div
             className="mt-5 p-4 relative"
             style={{
-              background: '#FFF9C4',
+              background: 'var(--bg-highlight)',
               transform: 'rotate(-0.8deg)',
               boxShadow:
                 '0 3px 10px rgba(62,31,13,0.14), inset 0 0 0 1px rgba(196,168,130,0.3)',
@@ -251,9 +205,9 @@ function StepCard({
             />
             <div
               style={{
-                fontFamily: "'Special Elite', cursive",
+                fontFamily: "var(--font-typewriter)",
                 fontSize: '10px',
-                color: '#C9882A',
+                color: 'var(--accent-ochre)',
                 letterSpacing: '0.1em',
                 marginBottom: '4px',
               }}
@@ -264,7 +218,7 @@ function StepCard({
               style={{
                 fontFamily: "'Caveat', cursive",
                 fontSize: '14px',
-                color: '#2C1810',
+                color: 'var(--ink)',
                 lineHeight: 1.6,
               }}
             >
@@ -274,12 +228,12 @@ function StepCard({
         )}
 
         {/* Clinical explanation note (if separate from key point) */}
-        {step.clinicalExplanation && step.clinicalExplanation !== step.keyPoint && (
+        {!isUploadView && step.clinicalExplanation && step.clinicalExplanation !== step.keyPoint && (
           <div
             className="mt-4 p-3 relative"
             style={{
               background: 'rgba(27,58,92,0.05)',
-              borderLeft: '3px solid #1B3A5C',
+              borderLeft: '3px solid var(--accent-ink)',
               maxWidth: '95%',
             }}
           >
@@ -287,7 +241,7 @@ function StepCard({
               style={{
                 fontFamily: "'Lora', serif",
                 fontSize: '13px',
-                color: '#1B3A5C',
+                color: 'var(--accent-ink)',
                 lineHeight: 1.65,
                 fontStyle: 'italic',
               }}
@@ -323,9 +277,9 @@ function StepCard({
             />
             <div
               style={{
-                fontFamily: "'Special Elite', cursive",
+                fontFamily: "var(--font-typewriter)",
                 fontSize: '10px',
-                color: '#1B3A5C',
+                color: 'var(--accent-ink)',
                 letterSpacing: '0.1em',
                 marginBottom: '4px',
               }}
@@ -336,7 +290,7 @@ function StepCard({
               style={{
                 fontFamily: "'Lora', serif",
                 fontSize: '16px',
-                color: '#2C1810',
+                color: 'var(--ink)',
                 lineHeight: 1.6,
               }}
             >
@@ -351,13 +305,13 @@ function StepCard({
             {/* Diagnosis stamp */}
             <div
               className="mb-4 p-4 border-2"
-              style={{ borderColor: '#7D9B76', background: 'rgba(125,155,118,0.06)' }}
+              style={{ borderColor: 'var(--accent-sage)', background: 'rgba(125,155,118,0.06)' }}
             >
               <div
                 style={{
-                  fontFamily: "'Special Elite', cursive",
+                  fontFamily: "var(--font-typewriter)",
                   fontSize: '11px',
-                  color: '#7D9B76',
+                  color: 'var(--accent-sage)',
                   letterSpacing: '0.15em',
                   marginBottom: '4px',
                 }}
@@ -368,7 +322,7 @@ function StepCard({
                 style={{
                   fontFamily: "'Playfair Display', serif",
                   fontSize: '20px',
-                  color: '#2C1810',
+                  color: 'var(--ink)',
                   fontWeight: 700,
                 }}
               >
@@ -384,7 +338,7 @@ function StepCard({
                     <rect
                       x="12" y="4" width="8" height="76" rx="4"
                       fill="rgba(245,237,214,0.7)"
-                      stroke="#C4A882"
+                      stroke="var(--border)"
                       strokeWidth="1.2"
                     />
                     <rect
@@ -393,16 +347,16 @@ function StepCard({
                       width="5"
                       height={step.confidence * 0.76}
                       rx="2.5"
-                      fill="#C0392B"
+                      fill="var(--accent-clay)"
                       opacity="0.85"
                     />
-                    <circle cx="16" cy="90" r="9" fill="#C0392B" opacity="0.85" stroke="#C4A882" strokeWidth="1" />
+                    <circle cx="16" cy="90" r="9" fill="var(--accent-clay)" opacity="0.85" stroke="var(--border)" strokeWidth="1" />
                     {[25, 50, 75, 100].map(pct => (
                       <line
                         key={pct}
                         x1="22" y1={80 - pct * 0.76}
                         x2="25" y2={80 - pct * 0.76}
-                        stroke="#C4A882"
+                        stroke="var(--border)"
                         strokeWidth="0.8"
                       />
                     ))}
@@ -411,18 +365,18 @@ function StepCard({
                 <div>
                   <div
                     style={{
-                      fontFamily: "'Courier Prime', monospace",
+                      fontFamily: "var(--font-typewriter)",
                       fontSize: '12px',
-                      color: '#6B4C3B',
+                      color: 'var(--ink-secondary)',
                     }}
                   >
                     DIAGNOSTIC CONFIDENCE
                   </div>
                   <div
                     style={{
-                      fontFamily: "'Courier Prime', monospace",
+                      fontFamily: "var(--font-typewriter)",
                       fontSize: '28px',
-                      color: '#C0392B',
+                      color: 'var(--accent-clay)',
                       fontWeight: 700,
                     }}
                   >
@@ -437,7 +391,7 @@ function StepCard({
               <div
                 className="mb-5 p-3"
                 style={{
-                  background: '#FFF9C4',
+                  background: 'var(--bg-highlight)',
                   border: '1px dashed rgba(201,136,42,0.4)',
                   display: 'inline-block',
                 }}
@@ -446,7 +400,7 @@ function StepCard({
                   style={{
                     fontFamily: "'Caveat', cursive",
                     fontSize: '13px',
-                    color: '#6B4C3B',
+                    color: 'var(--ink-secondary)',
                   }}
                 >
                   Complete this case to unlock your diagnostic score →
@@ -459,9 +413,9 @@ function StepCard({
               <div className="mb-4">
                 <div
                   style={{
-                    fontFamily: "'Special Elite', cursive",
+                    fontFamily: "var(--font-typewriter)",
                     fontSize: '11px',
-                    color: '#6B4C3B',
+                    color: 'var(--ink-secondary)',
                     letterSpacing: '0.1em',
                     marginBottom: '8px',
                   }}
@@ -474,8 +428,8 @@ function StepCard({
                       style={{
                         width: '16px',
                         height: '16px',
-                        border: '1.5px solid #6B4C3B',
-                        background: d.checked ? '#7D9B76' : 'transparent',
+                        border: '1.5px solid var(--ink-secondary)',
+                        background: d.checked ? 'var(--accent-sage)' : 'transparent',
                         flexShrink: 0,
                         display: 'flex',
                         alignItems: 'center',
@@ -483,14 +437,14 @@ function StepCard({
                       }}
                     >
                       {d.checked && (
-                        <span style={{ color: '#F5EDD6', fontSize: '10px' }}>✓</span>
+                        <span style={{ color: 'var(--bg-page)', fontSize: '10px' }}>✓</span>
                       )}
                     </div>
                     <span
                       style={{
                         fontFamily: "'Caveat', cursive",
                         fontSize: '14.5px',
-                        color: d.checked ? '#2C1810' : '#8B6355',
+                        color: d.checked ? 'var(--ink)' : 'var(--ink-secondary)',
                         textDecoration: !d.checked ? 'line-through' : 'none',
                       }}
                     >
@@ -510,8 +464,8 @@ function StepCard({
             className="mt-5 px-5 py-2.5 transition-all active:translate-y-1"
             style={{
               background: step.color,
-              color: '#F5EDD6',
-              fontFamily: "'Special Elite', cursive",
+              color: 'var(--bg-page)',
+              fontFamily: "var(--font-typewriter)",
               fontSize: '12px',
               letterSpacing: '0.08em',
               border: `1px solid rgba(0,0,0,0.2)`,
@@ -528,7 +482,7 @@ function StepCard({
             className="mt-4 text-sm"
             style={{
               fontFamily: "'Caveat', cursive",
-              color: '#C4A882',
+              color: 'var(--border)',
               fontSize: '14px',
             }}
           >
@@ -651,7 +605,7 @@ export function AnswerKey() {
 
   // Build visual step cards by merging STEP_CODES + API data
   const stepCards: StepItem[] = STEP_CODES.map((code: string, idx: number) => {
-    const meta   = STEP_VISUAL_META[idx] ?? { num: String(idx + 1), color: '#6B4C3B' };
+    const meta   = STEP_VISUAL_META[idx] ?? { num: String(idx + 1), color: 'var(--ink-secondary)' };
     const ansKey = answerKey[code];
     const detail = details.find((d: any) => d.step === code);
 
@@ -667,22 +621,12 @@ export function AnswerKey() {
           }))
         : [];
 
-    const criterionByStep: Record<string, string> = {
-      OBSERVE: 'Liệt kê đầy đủ cấu trúc nhìn thấy và mô tả dấu hiệu bất thường nổi bật.',
-      DESCRIBE: 'Mô tả đặc điểm tổn thương: vị trí, kích thước, đậm độ/tín hiệu, bờ, phân bố.',
-      INTERPRET: 'Diễn giải ý nghĩa lâm sàng của các dấu hiệu hình ảnh đã mô tả.',
-      HYPOTHESIS: 'Đưa ra chẩn đoán khả dĩ nhất dựa trên toàn bộ bằng chứng hình ảnh.',
-      DDx: 'Nêu chẩn đoán phân biệt hợp lý và lý do giữ/loại từng khả năng.',
-      CONCLUSION: 'Tổng hợp kết luận cuối cùng, mức độ tự tin và hướng xử trí phù hợp.',
-    };
-
     return {
       code,
       num:    meta.num,
       name:   (STEP_LABELS as Record<string, string>)?.[code] ?? code,
       color:  meta.color,
       isFinal: meta.isFinal,
-      criterion: criterionByStep[code],
       // Answer key content
       text:    ansKey?.expected_finding ?? '—',
       keyPoint: rawKeyPoint,
@@ -694,7 +638,7 @@ export function AnswerKey() {
       score: detail?.score ?? null,
       // Conclusion extras
       ...(meta.isFinal && {
-        diagnosis:    ansKey?.expected_finding ?? caseData?.title ?? '—',
+        diagnosis:    caseData?.title ?? ansKey?.expected_finding ?? '—',
         confidence:   isUploadView ? undefined : finalScorePct,
         differentials,
       }),
@@ -711,15 +655,15 @@ export function AnswerKey() {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ background: '#F5EDD6' }}
+        style={{ background: 'var(--bg-page)' }}
       >
         <div className="flex flex-col items-center gap-4">
           {/* Hand-drawn spinner (SVG) */}
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none"
             style={{ animation: 'spin 1.2s linear infinite' }}>
-            <circle cx="24" cy="24" r="20" stroke="#C4A882" strokeWidth="2" strokeDasharray="100 28" />
+            <circle cx="24" cy="24" r="20" stroke="var(--border)" strokeWidth="2" strokeDasharray="100 28" />
           </svg>
-          <p style={{ fontFamily: "'Caveat', cursive", fontSize: '18px', color: '#6B4C3B', fontStyle: 'italic' }}>
+          <p style={{ fontFamily: "'Caveat', cursive", fontSize: '18px', color: 'var(--ink-secondary)', fontStyle: 'italic' }}>
             Developing your case…
           </p>
         </div>
@@ -735,33 +679,33 @@ export function AnswerKey() {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ background: '#F5EDD6' }}
+        style={{ background: 'var(--bg-page)' }}
       >
         <div
           className="flex flex-col items-center gap-5 text-center p-10"
           style={{
-            background: '#EDE0C4',
-            border: '1px solid #C4A882',
+            background: 'var(--bg-surface-alt)',
+            border: '1px solid var(--border)',
             boxShadow: '0 4px 16px rgba(62,31,13,0.14)',
             maxWidth: '360px',
           }}
         >
-          <div style={{ fontFamily: "'Special Elite', cursive", fontSize: '14px', color: '#C0392B', letterSpacing: '0.12em' }}>
+          <div style={{ fontFamily: "var(--font-typewriter)", fontSize: '14px', color: 'var(--accent-clay)', letterSpacing: '0.12em' }}>
             CASE NOT FOUND
           </div>
-          <p style={{ fontFamily: "'Lora', serif", fontSize: '14px', color: '#2C1810', lineHeight: 1.7 }}>
+          <p style={{ fontFamily: "'Lora', serif", fontSize: '14px', color: 'var(--ink)', lineHeight: 1.7 }}>
             {error}
           </p>
           <button
             onClick={() => navigate('/')}
             className="px-6 py-2.5 transition-all active:translate-y-0.5"
             style={{
-              fontFamily: "'Special Elite', cursive",
+              fontFamily: "var(--font-typewriter)",
               fontSize: '13px',
               letterSpacing: '0.08em',
-              background: '#C0392B',
-              color: '#F5EDD6',
-              border: '1px solid #A93226',
+              background: 'var(--accent-clay)',
+              color: 'var(--bg-page)',
+              border: '1px solid var(--accent-clay)',
               borderRadius: '2px',
               boxShadow: '0 2px 6px rgba(192,57,43,0.25)',
             }}
@@ -777,18 +721,18 @@ export function AnswerKey() {
   //  Main view (StepByStepView from UploadPage, real data)
   // ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ background: '#F5EDD6', minHeight: '100vh' }}>
+    <div style={{ background: 'var(--bg-page)', minHeight: '100vh' }}>
 
       {/* ── Page header ── */}
       <div
         className="px-8 py-4 flex justify-between items-center border-b sticky top-0 z-10"
         style={{
-          background: '#F5EDD6',
-          borderColor: '#C4A882',
-          fontFamily: "'Courier Prime', monospace",
+          background: 'var(--bg-page)',
+          borderColor: 'var(--border)',
+          fontFamily: "var(--font-mono)",
         }}
       >
-        <div className="flex items-center gap-2 text-sm" style={{ color: '#6B4C3B' }}>
+        <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--ink-secondary)' }}>
           <Home className="w-4 h-4" />
           <span
             className="cursor-pointer hover:underline"
@@ -804,7 +748,7 @@ export function AnswerKey() {
             Upload
           </span>
           <ChevronRight className="w-3 h-3" />
-          <span style={{ color: '#2C1810' }}>
+          <span style={{ color: 'var(--ink)' }}>
             {isUploadView ? 'AI Answer Key' : 'Case Study'} {caseLabel}
           </span>
         </div>
@@ -814,9 +758,9 @@ export function AnswerKey() {
           <div
             className="px-3 py-1 text-xs"
             style={{
-              fontFamily: "'Special Elite', cursive",
-              color: '#C0392B',
-              border: '1.5px solid #C0392B',
+              fontFamily: "var(--font-typewriter)",
+              color: 'var(--accent-clay)',
+              border: '1.5px solid var(--accent-clay)',
               transform: 'rotate(-2deg)',
               opacity: 0.8,
             }}
@@ -830,17 +774,17 @@ export function AnswerKey() {
               onClick={() => navigate(`/session/${caseId}`)}
               className="flex items-center gap-1.5 hover:opacity-70 transition-opacity"
               style={{
-                fontFamily: "'Special Elite', cursive",
+                fontFamily: "var(--font-typewriter)",
                 fontSize: '11.5px',
                 letterSpacing: '0.06em',
-                color: '#6B4C3B',
+                color: 'var(--ink-secondary)',
               }}
             >
               <RotateCcw className="w-3 h-3" /> RETRY
             </button>
           )}
 
-          <BookMarked className="w-4 h-4" style={{ color: '#C4A882' }} />
+          <BookMarked className="w-4 h-4" style={{ color: 'var(--border)' }} />
         </div>
       </div>
 
@@ -850,7 +794,7 @@ export function AnswerKey() {
         {/* ── LEFT COLUMN: Image + Meta + Step Spine ── */}
         <div
           className="w-[400px] flex-shrink-0 overflow-y-auto border-r p-6"
-          style={{ borderColor: '#C4A882', background: '#F5EDD6' }}
+          style={{ borderColor: 'var(--border)', background: 'var(--bg-page)' }}
         >
           {/* ── Scan image ── */}
           <div className="relative" style={{ marginBottom: '16px' }}>
@@ -858,10 +802,10 @@ export function AnswerKey() {
             <div
               className="absolute top-2 left-2 z-10 px-2 py-0.5"
               style={{
-                fontFamily: "'Special Elite', cursive",
+                fontFamily: "var(--font-typewriter)",
                 fontSize: '10px',
-                color: '#F5EDD6',
-                background: '#C0392B',
+                color: 'var(--bg-page)',
+                background: 'var(--accent-clay)',
                 letterSpacing: '0.1em',
               }}
             >
@@ -872,17 +816,17 @@ export function AnswerKey() {
             <div
               className="relative"
               style={{
-                border: '1px solid #C4A882',
+                border: '1px solid var(--border)',
                 padding: '4px',
                 background: '#1a1a1a',
               }}
             >
               {/* Photo corners */}
               {[
-                'linear-gradient(135deg, #2C1810 50%, transparent 50%)',
-                'linear-gradient(225deg, #2C1810 50%, transparent 50%)',
-                'linear-gradient(45deg,  #2C1810 50%, transparent 50%)',
-                'linear-gradient(315deg, #2C1810 50%, transparent 50%)',
+                'linear-gradient(135deg, var(--ink) 50%, transparent 50%)',
+                'linear-gradient(225deg, var(--ink) 50%, transparent 50%)',
+                'linear-gradient(45deg,  var(--ink) 50%, transparent 50%)',
+                'linear-gradient(315deg, var(--ink) 50%, transparent 50%)',
               ].map((bg, i) => (
                 <div
                   key={i}
@@ -908,9 +852,9 @@ export function AnswerKey() {
             <p
               className="mt-2 text-center"
               style={{
-                fontFamily: "'Courier Prime', monospace",
+                fontFamily: "var(--font-typewriter)",
                 fontSize: '11px',
-                color: '#6B4C3B',
+                color: 'var(--ink-secondary)',
               }}
             >
               Fig. 1 — {caseData?.modality ?? 'Medical Scan'} · Case {caseLabel}
@@ -921,8 +865,8 @@ export function AnswerKey() {
           <div
             className="p-4 border"
             style={{
-              background: '#EDE0C4',
-              borderColor: '#C4A882',
+              background: 'var(--bg-surface-alt)',
+              borderColor: 'var(--border)',
               marginBottom: '16px',
             }}
           >
@@ -964,9 +908,9 @@ export function AnswerKey() {
               <div key={item.label} className="flex items-baseline gap-2 mb-1.5">
                 <span
                   style={{
-                    fontFamily: "'Special Elite', cursive",
+                    fontFamily: "var(--font-typewriter)",
                     fontSize: '10px',
-                    color: '#8B6355',
+                    color: 'var(--ink-secondary)',
                     width: '68px',
                     flexShrink: 0,
                   }}
@@ -975,18 +919,18 @@ export function AnswerKey() {
                 </span>
                 <span
                   style={{
-                    fontFamily: "'Courier Prime', monospace",
+                    fontFamily: "var(--font-typewriter)",
                     fontSize: '10px',
-                    color: '#C4A882',
+                    color: 'var(--border)',
                   }}
                 >
                   ···
                 </span>
                 <span
                   style={{
-                    fontFamily: "'Courier Prime', monospace",
+                    fontFamily: "var(--font-typewriter)",
                     fontSize: '11px',
-                    color: '#2C1810',
+                    color: 'var(--ink)',
                   }}
                 >
                   {item.value}
@@ -1000,7 +944,7 @@ export function AnswerKey() {
                 className="mt-3 inline-block px-3 py-1"
                 style={{
                   background: 'rgba(201,136,42,0.3)',
-                  fontFamily: "'Special Elite', cursive",
+                  fontFamily: "var(--font-typewriter)",
                   fontSize: '9px',
                   color: '#5C3A10',
                   letterSpacing: '0.15em',
@@ -1018,7 +962,7 @@ export function AnswerKey() {
                   style={{
                     fontFamily: "'Caveat', cursive",
                     fontSize: '12px',
-                    color: '#8B6355',
+                    color: 'var(--ink-secondary)',
                     fontStyle: 'italic',
                     lineHeight: 1.5,
                   }}
@@ -1033,7 +977,7 @@ export function AnswerKey() {
           <div className="relative pl-6">
             <div
               className="absolute left-3 top-4 bottom-4 w-px"
-              style={{ background: '#C4A882' }}
+              style={{ background: 'var(--border)' }}
             />
             {stepCards.map((step, idx) => (
               <div key={idx} className="flex items-center gap-3 mb-5 relative">
@@ -1046,8 +990,8 @@ export function AnswerKey() {
                       idx <= unlockedUntil
                         ? 'none'
                         : `2px ${idx === unlockedUntil + 1 ? 'solid' : 'dashed'} rgba(196,168,130,0.6)`,
-                    color: idx <= unlockedUntil ? '#F5EDD6' : '#C4A882',
-                    fontFamily: "'Special Elite', cursive",
+                    color: idx <= unlockedUntil ? 'var(--bg-page)' : 'var(--border)',
+                    fontFamily: "var(--font-typewriter)",
                     fontSize: '10px',
                     boxShadow:
                       idx === unlockedUntil
@@ -1060,9 +1004,9 @@ export function AnswerKey() {
 
                 <span
                   style={{
-                    fontFamily: "'Special Elite', cursive",
+                    fontFamily: "var(--font-typewriter)",
                     fontSize: '10.5px',
-                    color: idx <= unlockedUntil ? step.color : '#C4A882',
+                    color: idx <= unlockedUntil ? step.color : 'var(--border)',
                     letterSpacing: '0.06em',
                   }}
                 >
@@ -1074,7 +1018,7 @@ export function AnswerKey() {
                   <span
                     style={{
                       marginLeft: 'auto',
-                      fontFamily: "'Courier Prime', monospace",
+                      fontFamily: "var(--font-typewriter)",
                       fontSize: '9px',
                       color: scoreColor(step.score),
                       fontWeight: 700,
@@ -1092,15 +1036,15 @@ export function AnswerKey() {
             <div
               className="mt-4 p-4 border"
               style={{
-                background: '#EDE0C4',
-                borderColor: '#C4A882',
+                background: 'var(--bg-surface-alt)',
+                borderColor: 'var(--border)',
               }}
             >
               <div
                 style={{
-                  fontFamily: "'Special Elite', cursive",
+                  fontFamily: "var(--font-typewriter)",
                   fontSize: '10px',
-                  color: '#8B6355',
+                  color: 'var(--ink-secondary)',
                   letterSpacing: '0.1em',
                   marginBottom: '6px',
                 }}
@@ -1109,7 +1053,7 @@ export function AnswerKey() {
               </div>
               <div
                 style={{
-                  fontFamily: "'Courier Prime', monospace",
+                  fontFamily: "var(--font-typewriter)",
                   fontSize: '28px',
                   color: scoreColor(finalScore),
                   fontWeight: 700,
@@ -1120,7 +1064,7 @@ export function AnswerKey() {
                 <span
                   style={{
                     fontSize: '14px',
-                    color: '#8B6355',
+                    color: 'var(--ink-secondary)',
                     fontWeight: 400,
                     marginLeft: '2px',
                   }}
@@ -1137,7 +1081,7 @@ export function AnswerKey() {
               className="text-sm hover:opacity-70"
               style={{
                 fontFamily: "'Caveat', cursive",
-                color: '#C0392B',
+                color: 'var(--accent-clay)',
                 fontSize: '15px',
               }}
               onClick={() => navigate(-1)}
@@ -1148,7 +1092,7 @@ export function AnswerKey() {
               className="text-sm hover:opacity-70"
               style={{
                 fontFamily: "'Caveat', cursive",
-                color: '#C0392B',
+                color: 'var(--accent-clay)',
                 fontSize: '15px',
               }}
               onClick={() => navigate('/cases')}
@@ -1166,7 +1110,7 @@ export function AnswerKey() {
               style={{
                 fontFamily: "'Playfair Display', serif",
                 fontSize: '1.6rem',
-                color: '#2C1810',
+                color: 'var(--ink)',
                 marginBottom: '4px',
               }}
             >
@@ -1176,7 +1120,7 @@ export function AnswerKey() {
               style={{
                 fontFamily: "'Caveat', cursive",
                 fontSize: '15px',
-                color: '#6B4C3B',
+                color: 'var(--ink-secondary)',
               }}
             >
               {isUploadView
@@ -1191,7 +1135,7 @@ export function AnswerKey() {
             <div
               className="relative max-w-xs p-4"
               style={{
-                background: '#FFF9C4',
+                background: 'var(--bg-highlight)',
                 transform: 'rotate(-0.5deg)',
                 boxShadow: '0 2px 6px rgba(62,31,13,0.15)',
                 border: '1px solid rgba(201,136,42,0.2)',
@@ -1202,9 +1146,9 @@ export function AnswerKey() {
               </div>
               <div
                 style={{
-                  fontFamily: "'Special Elite', cursive",
+                  fontFamily: "var(--font-typewriter)",
                   fontSize: '10px',
-                  color: '#C0392B',
+                  color: 'var(--accent-clay)',
                   letterSpacing: '0.12em',
                   marginBottom: '5px',
                   marginTop: '4px',
@@ -1216,13 +1160,13 @@ export function AnswerKey() {
                 style={{
                   fontFamily: "'Caveat', cursive",
                   fontSize: '13px',
-                  color: '#2C1810',
+                  color: 'var(--ink)',
                   lineHeight: 1.65,
                 }}
               >
                 {isUploadView
-                  ? <>6 diagnostic steps: <span style={{ color: '#1B3A5C' }}>OBSERVE</span> → <span style={{ color: '#1B5C4A' }}>DESCRIBE</span> → <span style={{ color: '#C9882A' }}>INTERPRET</span> → <span style={{ color: '#C0392B' }}>HYPOTHESIS</span> → <span style={{ color: '#5C3D2E' }}>DDx</span> → <span style={{ color: '#7D9B76' }}>CONCLUSION</span>. Click each step to unlock the next.</>
-                  : <>AI Reference case — <span style={{ fontWeight: 600 }}>{caseData?.modality}</span>. Detected: {caseData?.title}. Confidence: <span style={{ color: '#C0392B' }}>{finalScorePct}%</span></>
+                  ? <>4 diagnostic steps: <span style={{ color: 'var(--accent-ink)' }}>DESCRIBE</span> → <span style={{ color: 'var(--accent-ochre)' }}>REASONING</span> → <span style={{ color: '#5C3D2E' }}>DDx</span> → <span style={{ color: 'var(--accent-sage)' }}>CONCLUSION</span>. Click each step to unlock the next.</>
+                  : <>AI Reference case — <span style={{ fontWeight: 600 }}>{caseData?.modality}</span>. Detected: {caseData?.title}. Confidence: <span style={{ color: 'var(--accent-clay)' }}>{finalScorePct}%</span></>
                 }
               </p>
             </div>
@@ -1246,8 +1190,8 @@ export function AnswerKey() {
             <div
               className="fixed bottom-0 left-[660px] right-0 flex items-center justify-between px-8 py-4 border-t z-20"
               style={{
-                background: '#F5EDD6',
-                borderColor: '#C4A882',
+                background: 'var(--bg-page)',
+                borderColor: 'var(--border)',
                 boxShadow: '0 -4px 16px rgba(62,31,13,0.1)',
               }}
             >
@@ -1255,7 +1199,7 @@ export function AnswerKey() {
                 className="text-sm hover:underline"
                 style={{
                   fontFamily: "'Caveat', cursive",
-                  color: '#6B4C3B',
+                  color: 'var(--ink-secondary)',
                   fontSize: '15px',
                 }}
                 onClick={() => navigate(`/session/${caseId}`)}
@@ -1269,9 +1213,9 @@ export function AnswerKey() {
                 <button
                   className="px-4 py-2 border flex items-center gap-2 hover:opacity-80 transition-opacity"
                   style={{
-                    borderColor: '#7D9B76',
-                    color: '#7D9B76',
-                    fontFamily: "'Special Elite', cursive",
+                    borderColor: 'var(--accent-sage)',
+                    color: 'var(--accent-sage)',
+                    fontFamily: "var(--font-typewriter)",
                     fontSize: '12px',
                     borderRadius: '2px',
                   }}
@@ -1282,13 +1226,13 @@ export function AnswerKey() {
                 <button
                   className="px-6 py-2 flex items-center gap-2 hover:opacity-90 active:translate-y-px transition-all"
                   style={{
-                    background: '#C0392B',
-                    color: '#F5EDD6',
-                    fontFamily: "'Special Elite', cursive",
+                    background: 'var(--accent-clay)',
+                    color: 'var(--bg-page)',
+                    fontFamily: "var(--font-typewriter)",
                     fontSize: '12px',
                     letterSpacing: '0.06em',
                     borderRadius: '2px',
-                    border: '1px solid #A93226',
+                    border: '1px solid var(--accent-clay)',
                     boxShadow: '0 2px 6px rgba(192,57,43,0.3)',
                   }}
                   onClick={() => navigate('/cases')}

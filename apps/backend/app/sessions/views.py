@@ -1,4 +1,3 @@
-import time
 import logging
 from datetime import timezone as dt_timezone
 from datetime import datetime
@@ -8,31 +7,72 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from app.core.step_codes import STEP_CODES, index_by_canonical_step, normalize_step_code
 from app.core.supabase_client import get_supabase
-from app.ai_services import MockAIAgent, OpenAIAgent
-import os
+from app.agents.ai_services import classify_intent, evaluate_answer, get_socratic_hint, get_step_rubric
 
 from .serializers import StepAnswerSubmitSerializer
 from .services import get_session, get_rubric_id
 
 logger = logging.getLogger(__name__)
 
-STEP_CODES = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
-
 
 def _now_iso() -> str:
     return datetime.now(dt_timezone.utc).isoformat()
 
 
-def _get_ai_agent():
-    use_openai = os.getenv('USE_OPENAI', 'true').lower() == 'true'
-    has_api_key = bool(os.getenv('OPENAI_API_KEY', '').strip())
-    if use_openai and has_api_key:
-        logger.info("Using OpenAI Agent for evaluation")
-        return OpenAIAgent
-    reason = "OpenAI disabled" if not use_openai else "OPENAI_API_KEY not set"
-    logger.info(f"Using Mock Agent ({reason})")
-    return MockAIAgent
+def _pick_hint_error_fragment(
+    rubric: dict,
+    result: dict,
+    hint_number: int,
+    previous_failed_error_counts: dict[str, int] | None = None,
+) -> tuple[str | None, str | None, bool, int]:
+    """
+    Pick exactly one fragment for the current hint.
+    Priority: higher rubric max_score first. If equal, keep rubric order.
+    If an error repeats from the previous failed attempt, keep focus on that
+    repeated error rather than switching to a different one.
+    """
+    if hint_number < 2:
+        return None, None, False, 0
+
+    errors = result.get('errors') or []
+    fragments = result.get('partial_answer_by_error') or []
+    if not errors or not fragments:
+        return None, None, False, 0
+
+    rubric_criteria = rubric.get('criteria') or []
+    rank_map: dict[str, tuple[float, int]] = {}
+    for idx, criterion in enumerate(rubric_criteria):
+        code = criterion.get('error_code')
+        if code and code not in rank_map:
+            rank_map[code] = (float(criterion.get('max_score') or 0), idx)
+
+    fragment_map = {
+        item.get('error_code'): item.get('fragment', '')
+        for item in fragments
+        if isinstance(item, dict) and item.get('error_code')
+    }
+
+    current_errors = [
+        code for code in errors
+        if code in fragment_map
+    ]
+    if not current_errors:
+        return None, None, False
+
+    previous_failed_error_counts = previous_failed_error_counts or {}
+
+    def sort_key(code: str) -> tuple[int, float, int]:
+        repeat_count = previous_failed_error_counts.get(code, 0)
+        weight, idx = rank_map.get(code, (0.0, 10**9))
+        return (-repeat_count, -weight, idx)
+
+    current_errors.sort(key=sort_key)
+    chosen_code = current_errors[0]
+    repeat_depth = previous_failed_error_counts.get(chosen_code, 0) + 1
+    repeat_focus = repeat_depth > 1
+    return fragment_map.get(chosen_code) or None, chosen_code, repeat_focus, repeat_depth
 
 
 class SessionViewSet(viewsets.ViewSet):
@@ -107,9 +147,24 @@ class SessionViewSet(viewsets.ViewSet):
 
         try:
             case_result = sb.table('cases').select(
-                'id, title, modality, difficulty, clinical_history, image_urls, tags'
+                'id, title, modality, difficulty, clinical_history, tags, '
+                'case_images(image_url, slice_index, volume_name)'
             ).eq('id', session['case_id']).single().execute()
-            session['case'] = case_result.data
+            case = case_result.data or {}
+            raw_images = case.pop('case_images', None) or []
+            volumes: dict = {}
+            for img in raw_images:
+                vol = img.get('volume_name') or 'Default'
+                volumes.setdefault(vol, []).append({
+                    'image_url': img['image_url'],
+                    'slice_index': img.get('slice_index'),
+                })
+            case['images'] = [
+                {'volume_name': vol, 'slices': slices}
+                for vol, slices in volumes.items()
+            ]
+            case['image_urls'] = [img['image_url'] for img in raw_images]
+            session['case'] = case
         except Exception:
             session['case'] = None
 
@@ -135,51 +190,100 @@ class SessionViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         student_answer = serializer.validated_data['student_answer']
         current_step = session['current_step']
-        step_code = STEP_CODES[current_step] if current_step < len(STEP_CODES) else 'UNKNOWN'
-
-        rubric_id = get_rubric_id(sb, step_code)
-        if not rubric_id:
+        if not isinstance(current_step, int) or current_step < 0 or current_step >= len(STEP_CODES):
             return Response(
-                {'error': f'No rubric found for step {step_code}. Run the SQL migration first.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                {'error': f'Session current_step ({current_step}) ngoài phạm vi'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
+        step_code = STEP_CODES[current_step]
+        is_last = current_step == len(STEP_CODES) - 1
 
+        # ── 1. Classify intent — handle question/chit-chat without evaluating ──
+        current_question = request.data.get('current_question', '')
+        classified = classify_intent(student_answer, step_code, current_step, current_question)
+        if classified['intent'] in ('question', 'chit-chat'):
+            return Response({'type': 'socratic', 'message': classified['response']})
+
+        # ── 2. Fetch answer key ───────────────────────────────────────────────
         try:
-            case_result = sb.table('cases').select('*').eq('id', session['case_id']).single().execute()
-            case = case_result.data
+            ak_result = sb.table('answer_keys').select('expected_finding').eq(
+                'case_id', session['case_id']
+            ).eq('step_code', step_code).single().execute()
+            answer_key = {'expected_finding': ak_result.data.get('expected_finding', '')}
         except Exception:
-            case = {}
+            answer_key = {'expected_finding': ''}
 
-        prev = sb.table('step_attempts').select('id', count='exact').eq('session_id', pk).eq('step_index', current_step).execute()
-        attempt_number = (prev.count or 0) + 1
+        # ── 3. Build context from DB ──────────────────────────────────────────
+        prev_rows = sb.table('step_attempts').select(
+            'step_index, step_code, student_answer, score, errors'
+        ).eq('session_id', pk).lt('step_index', current_step).order('step_index').execute()
 
-        start_time = time.time()
-        ai_agent = _get_ai_agent()
-        ai_feedback = ai_agent.evaluate_answer(
-            case=case,
-            step_index=current_step,
+        best_prev: dict = {}
+        for a in (prev_rows.data or []):
+            idx = a['step_index']
+            if idx not in best_prev or (a['score'] or 0) > (best_prev[idx].get('_score') or 0):
+                best_prev[idx] = {
+                    'step': a['step_code'],
+                    'answer': a['student_answer'],
+                    'errors': a.get('errors') or [],
+                    '_score': a['score'],
+                }
+        previous_steps = [
+            {'step': v['step'], 'answer': v['answer']}
+            for v in (best_prev[i] for i in sorted(best_prev))
+        ]
+        prior_errors = [
+            {
+                'step': v['step'],
+                'errors': v['errors'],
+            }
+            for v in (best_prev[i] for i in sorted(best_prev))
+            if v.get('errors')
+        ]
+
+        cur_rows = sb.table('step_attempts').select(
+            'student_answer, score, errors'
+        ).eq('session_id', pk).eq('step_index', current_step).order('attempt_number').execute()
+        step_attempts_texts = [a['student_answer'] for a in (cur_rows.data or [])]
+        hint_count = sum(1 for a in (cur_rows.data or []) if a['score'] is not None and a['score'] < 0.6)
+        previous_failed_error_counts: dict[str, int] = {}
+        for a in reversed(cur_rows.data or []):
+            if a.get('score') is not None and a['score'] < 0.6:
+                for code in a.get('errors') or []:
+                    previous_failed_error_counts[code] = previous_failed_error_counts.get(code, 0) + 1
+        step_rubric = get_step_rubric(step_code)
+
+        # ── 4. Evaluate ───────────────────────────────────────────────────────
+        result = evaluate_answer(
             student_answer=student_answer,
+            step_code=step_code,
+            step_index=current_step,
+            answer_key=answer_key,
             cv_findings={},
+            previous_steps=previous_steps,
+            step_attempts=step_attempts_texts,
+            is_last_step=is_last,
         )
-        latency_ms = int((time.time() - start_time) * 1000)
 
-        feedback_text = ai_feedback.get('feedback', {})
-        if isinstance(feedback_text, dict):
-            feedback_text = feedback_text.get('content', str(feedback_text))
+        # ── 5. Save attempt ───────────────────────────────────────────────────
+        attempt_number = len(step_attempts_texts) + 1
+        rubric_id = get_rubric_id(sb, step_code)
+        insert_data = {
+            'session_id': pk,
+            'step_index': current_step,
+            'step_code': step_code,
+            'student_answer': student_answer,
+            'score': result['score'],
+            'errors': result['errors'],
+            'feedback': result['feedback'] if not result['passed'] else result['positive_feedback'],
+            'attempt_number': attempt_number,
+            'latency_ms': result['latency_ms'],
+        }
+        if rubric_id:
+            insert_data['rubric_criterion_id'] = rubric_id
 
         try:
-            attempt_result = sb.table('step_attempts').insert({
-                'session_id': pk,
-                'rubric_criterion_id': rubric_id,
-                'step_index': current_step,
-                'step_code': step_code,
-                'student_answer': student_answer,
-                'score': ai_feedback['score'],
-                'errors': ai_feedback.get('errors', []),
-                'feedback': feedback_text,
-                'attempt_number': attempt_number,
-                'latency_ms': latency_ms,
-            }).execute()
+            attempt_result = sb.table('step_attempts').insert(insert_data).execute()
         except Exception as e:
             err_msg = str(e)
             if 'step_index' in err_msg and 'check constraint' in err_msg:
@@ -193,40 +297,69 @@ class SessionViewSet(viewsets.ViewSet):
             raise
         attempt = attempt_result.data[0]
 
-        passed = ai_feedback['score'] >= 0.6
-        response_data = {'attempt': attempt, 'passed': passed}
+        passed = result['passed']
+        force_advance = not passed and hint_count >= 3
+        next_hint_number = hint_count + 1
+        response_data = {
+            'attempt': attempt,
+            'passed': passed,
+            'positive_feedback': result.get('positive_feedback', ''),
+            'could_add': result.get('could_add', ''),
+        }
 
-        if passed and current_step < 5:
-            sb.table('sessions').update({'current_step': current_step + 1}).eq('id', pk).execute()
-            response_data['next_step'] = current_step + 1
-            response_data['message'] = 'Đáp án số được! Chuyển sang bước tiếp theo.'
-        elif passed and current_step == 5:
-            all_attempts = sb.table('step_attempts').select(
-                'step_index, score'
-            ).eq('session_id', pk).execute()
-            best_by_step: dict = {}
-            for a in (all_attempts.data or []):
-                if a['score'] is None:
-                    continue
-                idx = a['step_index']
-                if idx not in best_by_step or a['score'] > best_by_step[idx]:
-                    best_by_step[idx] = a['score']
-            final_score = round(
-                sum(best_by_step.values()) / len(STEP_CODES), 4
-            ) if best_by_step else 0.0
-            sb.table('sessions').update({
-                'status': 'COMPLETED',
-                'final_score': final_score,
-                'completed_at': _now_iso(),
-            }).eq('id', pk).execute()
-            response_data['message'] = 'Chúc mừng! Hoàn thành case này.'
-            response_data['session_complete'] = True
+        if passed or force_advance:
+            response_data['answer_key_preview'] = answer_key.get('expected_finding', '')
+            if force_advance:
+                response_data['force_advance'] = True
+                response_data['message'] = f'Đã nhận {hint_count} gợi ý. Chuyển bước tiếp theo.'
+            else:
+                response_data['next_step_preview'] = result.get('next_step_preview', '')
+                response_data['message'] = 'Đúng rồi! Chuyển sang bước tiếp theo.'
+
+            if not is_last:
+                sb.table('sessions').update({'current_step': current_step + 1}).eq('id', pk).execute()
+                response_data['next_step'] = current_step + 1
+            else:
+                all_attempts = sb.table('step_attempts').select(
+                    'step_index, score'
+                ).eq('session_id', pk).execute()
+                best_by_step: dict = {}
+                for a in (all_attempts.data or []):
+                    if a['score'] is None:
+                        continue
+                    idx = a['step_index']
+                    if idx not in best_by_step or a['score'] > best_by_step[idx]:
+                        best_by_step[idx] = a['score']
+                final_score = round(
+                    sum(best_by_step.values()) / len(STEP_CODES), 4
+                ) if best_by_step else 0.0
+                sb.table('sessions').update({
+                    'status': 'COMPLETED',
+                    'final_score': final_score,
+                    'completed_at': _now_iso(),
+                }).eq('id', pk).execute()
+                response_data['session_complete'] = True
+                if not force_advance:
+                    response_data['message'] = 'Bạn đã hoàn thành toàn bộ 5 bước phân tích. Chúc mừng!'
         else:
-            hint = ai_agent.generate_socratic_hint(
-                case=case, step_index=current_step, errors=ai_feedback.get('errors', [])
+            partial_answer, focus_error_code, repeat_focus, repeat_depth = _pick_hint_error_fragment(
+                step_rubric,
+                result,
+                next_hint_number,
+                previous_failed_error_counts=previous_failed_error_counts,
+            )
+            hint = get_socratic_hint(
+                step_code, current_step,
+                result['errors'], hint_count + 1,
+                prior_errors=prior_errors,
+                partial_answer=partial_answer,
+                focus_error_code=focus_error_code,
+                repeat_focus=repeat_focus,
+                repeat_depth=repeat_depth,
+                step_attempts=step_attempts_texts + [student_answer],
             )
             response_data['hint'] = hint
-            response_data['message'] = 'Chưa đúng. Hãy xem gợi ý và thử lại.'
+            response_data['message'] = 'Chưa đủ. Hãy xem gợi ý và thử lại.'
 
         return Response(response_data, status=status.HTTP_200_OK)
 
@@ -285,16 +418,19 @@ class SessionViewSet(viewsets.ViewSet):
             case = {}
 
         rubrics_result = sb.table('step_rubrics').select('*').execute()
-        step_templates = {r['step_code']: r for r in (rubrics_result.data or [])}
+        step_templates = {
+            code: row
+            for code, row in index_by_canonical_step(rubrics_result.data or []).items()
+        }
 
         answer_keys_result = sb.table('answer_keys').select('*').eq('case_id', session['case_id']).order('step_order').execute()
         answers = {
-            r['step_code']: {
+            code: {
                 'expected_finding': r.get('expected_finding'),
                 'clinical_explanation': r.get('clinical_explanation'),
                 'key_points': r.get('key_points'),
             }
-            for r in (answer_keys_result.data or [])
+            for code, r in index_by_canonical_step(answer_keys_result.data or []).items()
         }
 
         return Response({
@@ -323,15 +459,15 @@ class SessionViewSet(viewsets.ViewSet):
             )
 
         answer_keys_result = sb.table('answer_keys').select(
-            'step_code, expected_finding, clinical_explanation, key_points'
+            'step_code, step_order, expected_finding, clinical_explanation, key_points'
         ).eq('case_id', session['case_id']).order('step_order').execute()
         answer_key = {
-            r['step_code']: {
+            code: {
                 'expected_finding': r.get('expected_finding'),
                 'clinical_explanation': r.get('clinical_explanation'),
                 'key_points': r.get('key_points', []),
             }
-            for r in (answer_keys_result.data or [])
+            for code, r in index_by_canonical_step(answer_keys_result.data or []).items()
         }
 
         attempts = sb.table('step_attempts').select(
@@ -342,7 +478,7 @@ class SessionViewSet(viewsets.ViewSet):
             'answer_key': answer_key,
             'your_score': session.get('final_score'),
             'details': [
-                {'step': a['step_code'], 'score': a['score'], 'feedback': a['feedback']}
+                {'step': normalize_step_code(a['step_code']), 'score': a['score'], 'feedback': a['feedback']}
                 for a in attempts.data
             ],
         })
@@ -382,8 +518,9 @@ class StudentPerformanceViewSet(viewsets.ViewSet):
 
             step_scores: dict = {code: [] for code in STEP_CODES}
             for a in (attempts.data or []):
-                if a['step_code'] in step_scores and a['score'] is not None:
-                    step_scores[a['step_code']].append(a['score'])
+                code = normalize_step_code(a.get('step_code'))
+                if code in step_scores and a['score'] is not None:
+                    step_scores[code].append(a['score'])
 
             accuracy_by_step = {
                 code: round(sum(scores) / len(scores), 4)

@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+import logging
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -11,8 +12,8 @@ def _ensure_user_profile(sb, user, full_name: str = '') -> None:
     payload = {
         'id': str(user.id),
         'email': user.email,
-        'role': role,
         'full_name': full_name or '',
+        'role': role,
     }
     sb.table('users').upsert(payload, on_conflict='id').execute()
 
@@ -57,10 +58,11 @@ class RegisterView(APIView):
             else:
                 # Email confirmation required
                 return Response({
-                    'message': 'Đăng ký thành công! Vui lòng kiểm tra email để xác nhận tài khoản.',
+                    'message': 'Đăng ký thành công! Vui lòng check email',
                     'requires_confirmation': True,
                 }, status=status.HTTP_201_CREATED)
         except Exception as e:
+            logging.exception('RegisterView: error during sign_up')
             err = str(e).lower()
             if 'already registered' in err or 'already been registered' in err:
                 return Response(
@@ -94,17 +96,27 @@ class LoginView(APIView):
             session = res.session
             _ensure_user_profile(sb, user, (user.user_metadata or {}).get('full_name', ''))
             role = (user.app_metadata or {}).get('role', 'student')
+            profile = sb.table('users').select('is_premium').eq('id', str(user.id)).single().execute()
+            is_premium = bool((profile.data or {}).get('is_premium', False))
             return Response({
                 'user': {
                     'id': str(user.id),
                     'email': user.email,
                     'role': role,
+                    'is_premium': is_premium,
                 },
                 'access_token': session.access_token,
                 'refresh_token': session.refresh_token,
                 'expires_at': session.expires_at,
             })
-        except Exception:
+        except Exception as e:
+            logging.exception('LoginView: error during sign_in_with_password')
+            err = str(e).lower()
+            if 'email not confirmed' in err or 'not confirmed' in err:
+                return Response(
+                    {'error': 'Email chưa được xác nhận', 'requires_confirmation': True},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
             return Response(
                 {'error': 'Email hoặc mật khẩu không đúng'},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -116,12 +128,16 @@ class MeView(APIView):
 
     def get(self, request):
         user = request.user
+        sb = get_supabase()
+        profile = sb.table('users').select('is_premium').eq('id', str(user['id'])).single().execute()
+        is_premium = bool((profile.data or {}).get('is_premium', False))
         return Response({
             'user': {
                 'id': user['id'],
                 'email': user['email'],
                 'full_name': user.get('full_name', ''),
                 'role': user.get('role', 'student'),
+                'is_premium': is_premium,
             }
         })
 

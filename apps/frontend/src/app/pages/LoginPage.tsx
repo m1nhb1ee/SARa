@@ -8,14 +8,14 @@ const NOTES = [
   {
     id: 1, type: 'sticky',
     style: { top: '6%', left: '2%', width: 178, rotate: -7 },
-    tone: '#FFF9C4', border: '#E6D96A',
+    tone: 'var(--bg-highlight)', border: '#E6D96A',
     title: 'Patient #041',
     lines: ['Male, 25 y/o', 'Chief: headache × 3d', 'Brain MRI → WNL*', '─────────────', '*Within Normal Limits'],
   },
   {
     id: 2, type: 'note',
     style: { top: '4%', right: '3%', width: 200, rotate: 6 },
-    tone: '#FEFCF3', border: '#C4A882',
+    tone: 'var(--bg-surface)', border: 'var(--border)',
     title: '',
     lines: ['"SARa is actually', 'pretty good at DDx—', 'better than I expected"', '', '         — Dr. Nguyen T.'],
   },
@@ -29,9 +29,9 @@ const NOTES = [
   {
     id: 4, type: 'torn',
     style: { top: '38%', right: '2%', width: 185, rotate: 9 },
-    tone: '#FEFDF8', border: '#BEB0A0',
-    title: '6-step pipeline',
-    lines: ['① Observe', '② Describe', '③ Interpret', '④ Hypothesis', '⑤ DDx', '⑥ Conclude ✓'],
+    tone: 'var(--bg-surface)', border: 'var(--border)',
+    title: '4-step pipeline',
+    lines: ['① Observe', '② Reasoning', '③ DDx', '④ Conclude ✓'],
   },
   {
     id: 5, type: 'sticky',
@@ -43,7 +43,7 @@ const NOTES = [
   {
     id: 6, type: 'note',
     style: { bottom: '6%', right: '2%', width: 175, rotate: 7 },
-    tone: '#FEFCF3', border: '#C4A882',
+    tone: 'var(--bg-surface)', border: 'var(--border)',
     title: '',
     lines: ['Remember to check', 'lung BASES on every', 'single CXR!!!', '', '  (Dr. Nguyen\'s rule 📌)'],
   },
@@ -57,7 +57,7 @@ const NOTES = [
   {
     id: 8, type: 'torn',
     style: { top: '15%', right: '1%', width: 160, rotate: 11 },
-    tone: '#FEFDF8', border: '#BEB0A0',
+    tone: 'var(--bg-surface)', border: 'var(--border)',
     title: '',
     lines: ['DICOM → AI analysis', '→ Structured report', '', '← this is the', '   future of radiology'],
   },
@@ -103,7 +103,7 @@ function MedNote({ n }: { n: typeof NOTES[0] }) {
         <div style={{
           fontFamily: "'Caveat', cursive",
           fontSize: 15, fontWeight: 700,
-          color: '#2C1810',
+          color: 'var(--ink)',
           marginBottom: 6,
           borderBottom: `1px solid ${n.border}`,
           paddingBottom: 4,
@@ -116,7 +116,7 @@ function MedNote({ n }: { n: typeof NOTES[0] }) {
         <div key={i} style={{
           fontFamily: "'Caveat', cursive",
           fontSize: line.startsWith('─') ? 11 : 13,
-          color: line.startsWith('─') ? n.border : '#3D2810',
+          color: line.startsWith('─') ? n.border : 'var(--ink)',
           lineHeight: 1.55,
           letterSpacing: '0.01em',
           opacity: line === '' ? 1 : 0.88,
@@ -129,7 +129,7 @@ function MedNote({ n }: { n: typeof NOTES[0] }) {
 }
 
 /* ─── Sketch / hand-drawn SVG border for the form ─── */
-function SketchRect({ w, h, color = '#7A6248' }: { w: number; h: number; color?: string }) {
+function SketchRect({ w, h, color = 'var(--ink-secondary)' }: { w: number; h: number; color?: string }) {
   const o = 4; // offset for double-line sketch feel
   return (
     <svg
@@ -158,10 +158,10 @@ const INPUT_BASE: React.CSSProperties = {
   padding: '8px 2px',
   background: 'transparent',
   border: 'none',
-  borderBottom: '1.5px solid #BEB0A0',
+  borderBottom: '1.5px solid var(--border)',
   fontFamily: "'Caveat', cursive",
   fontSize: 17,
-  color: '#2C1810',
+  color: 'var(--ink)',
   outline: 'none',
   boxSizing: 'border-box',
   letterSpacing: '0.02em',
@@ -193,7 +193,7 @@ export function LoginPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: '#F5EDD6',
+      backgroundColor: 'var(--bg-page)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       position: 'relative', overflow: 'hidden',
       backgroundImage: [
@@ -209,7 +209,7 @@ export function LoginPage() {
       <div style={{
         position: 'relative',
         width: W, minHeight: H,
-        backgroundColor: '#FEFDF5',
+        backgroundColor: 'var(--bg-surface)',
         padding: '44px 40px 36px',
         zIndex: 10,
         /* subtle paper shadow */
@@ -226,7 +226,7 @@ export function LoginPage() {
       }}>
 
         {/* Hand-drawn border overlay */}
-        <SketchRect w={W} h={H} color="#7A6248" />
+        <SketchRect w={W} h={H} color="var(--ink-secondary)" />
 
         {/* Red margin line */}
         <div style={{
@@ -238,19 +238,19 @@ export function LoginPage() {
         {/* ── Header ── */}
         <div style={{ textAlign: 'center', marginBottom: 30 }}>
           <div style={{ marginBottom: 8 }}>
-            <BrainLogo size={52} color="#4A3020" filterId="login" opacity={0.82} />
+            <BrainLogo size={52} color="var(--ink)" filterId="login" opacity={0.82} />
           </div>
 
           <div style={{
             fontFamily: "'Caveat', cursive",
             fontSize: 36, fontWeight: 700,
-            color: '#2C1810', lineHeight: 1, letterSpacing: '0.04em',
+            color: 'var(--ink)', lineHeight: 1, letterSpacing: '0.04em',
           }}>
             SARa
           </div>
           <div style={{
             fontFamily: "'Caveat', cursive",
-            fontSize: 13, color: '#8B6355',
+            fontSize: 13, color: 'var(--ink-secondary)',
             letterSpacing: '0.08em', marginTop: 2,
           }}>
             Smart AI Radiology
@@ -262,7 +262,7 @@ export function LoginPage() {
               <feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="3" seed="7" result="n" />
               <feDisplacementMap in="SourceGraphic" in2="n" scale="1.5" xChannelSelector="R" yChannelSelector="G" />
             </filter>
-            <line x1="5" y1="3" x2="115" y2="3" stroke="#C0392B" strokeWidth="1.5" filter="url(#ul-rough)" strokeLinecap="round" opacity="0.7" />
+            <line x1="5" y1="3" x2="115" y2="3" stroke="var(--accent-clay)" strokeWidth="1.5" filter="url(#ul-rough)" strokeLinecap="round" opacity="0.7" />
           </svg>
         </div>
 
@@ -274,7 +274,7 @@ export function LoginPage() {
             <label style={{
               display: 'block',
               fontFamily: "'Caveat', cursive",
-              fontSize: 13, color: '#8B6355',
+              fontSize: 13, color: 'var(--ink-secondary)',
               letterSpacing: '0.08em', marginBottom: 4,
             }}>
               username / email
@@ -285,12 +285,12 @@ export function LoginPage() {
               onChange={e => setUsername(e.target.value)}
               onFocus={() => setFocused('u')}
               onBlur={() => setFocused(null)}
-              placeholder="viết vào đây..."
+              placeholder="sign here..."
               disabled={isLoading}
               autoComplete="username"
               style={{
                 ...INPUT_BASE,
-                borderBottomColor: focused === 'u' ? '#C0392B' : '#BEB0A0',
+                borderBottomColor: focused === 'u' ? 'var(--accent-clay)' : 'var(--border)',
                 borderBottomWidth: focused === 'u' ? '2px' : '1.5px',
               }}
             />
@@ -301,10 +301,10 @@ export function LoginPage() {
             <label style={{
               display: 'block',
               fontFamily: "'Caveat', cursive",
-              fontSize: 13, color: '#8B6355',
+              fontSize: 13, color: 'var(--ink-secondary)',
               letterSpacing: '0.08em', marginBottom: 4,
             }}>
-              mật khẩu
+              password
             </label>
             <input
               type="password"
@@ -317,7 +317,7 @@ export function LoginPage() {
               autoComplete="current-password"
               style={{
                 ...INPUT_BASE,
-                borderBottomColor: focused === 'p' ? '#C0392B' : '#BEB0A0',
+                borderBottomColor: focused === 'p' ? 'var(--accent-clay)' : 'var(--border)',
                 borderBottomWidth: focused === 'p' ? '2px' : '1.5px',
               }}
             />
@@ -327,7 +327,7 @@ export function LoginPage() {
           {error && (
             <div style={{
               fontFamily: "'Caveat', cursive",
-              fontSize: 15, color: '#C0392B',
+              fontSize: 15, color: 'var(--accent-clay)',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <span style={{ fontSize: 18 }}>✗</span> {error}
@@ -342,7 +342,7 @@ export function LoginPage() {
                 <feDisplacementMap in="SourceGraphic" in2="n" scale="2" xChannelSelector="R" yChannelSelector="G" />
               </filter>
               <rect x="2" y="2" width="calc(100% - 4)" height="42" rx="1"
-                fill="none" stroke="#2C1810" strokeWidth="1.8" filter="url(#btn-rough)"
+                fill="none" stroke="var(--ink)" strokeWidth="1.8" filter="url(#btn-rough)"
                 style={{ width: 'calc(100% - 4px)' } as any} opacity="0.7" />
             </svg>
             <button
@@ -354,7 +354,7 @@ export function LoginPage() {
                 border: 'none',
                 fontFamily: "'Caveat', cursive",
                 fontSize: 18, fontWeight: 700,
-                color: '#2C1810',
+                color: 'var(--ink)',
                 letterSpacing: '0.06em',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 opacity: isLoading ? 0.6 : 1,
@@ -374,10 +374,10 @@ export function LoginPage() {
           borderTop: '1px dashed rgba(196,168,130,0.5)',
           textAlign: 'center',
         }}>
-          <span style={{ fontFamily: "'Caveat', cursive", fontSize: 15, color: '#8B6355' }}>
+          <span style={{ fontFamily: "'Caveat', cursive", fontSize: 15, color: 'var(--ink-secondary)' }}>
             don't have an account?{' '}
             <Link to="/register" style={{
-              color: '#C0392B', fontWeight: 700,
+              color: 'var(--accent-clay)', fontWeight: 700,
               textDecoration: 'underline',
               textDecorationStyle: 'wavy',
             }}>

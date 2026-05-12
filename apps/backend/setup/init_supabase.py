@@ -4,8 +4,8 @@ Initialize Supabase — create buckets and set RLS policies.
 Run once to set up the project.
 """
 import os
-import sys
 from dotenv import load_dotenv
+from supabase import create_client
 
 load_dotenv()
 
@@ -16,7 +16,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     print("[ERROR] SUPABASE_URL or SUPABASE_KEY not set in .env")
     exit(1)
 
-from supabase import create_client
+
 
 sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -25,7 +25,7 @@ def create_bucket(name: str, public: bool = True):
     try:
         sb.storage.get_bucket(name)
         print(f"[OK] Bucket '{name}' already exists")
-    except Exception as e:
+    except Exception:
         try:
             sb.storage.create_bucket(name, options={"public": public})
             print(f"[OK] Created bucket '{name}' (public={public})")

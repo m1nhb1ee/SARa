@@ -8,7 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-key-only-for-local-testing-smart-radiology')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1')
-ALLOWED_HOSTS = ['*', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+DATA_UPLOAD_MAX_NUMBER_FILES = None
+DATA_UPLOAD_MAX_MEMORY_SIZE = None
 
 INSTALLED_APPS = [
     'django.contrib.staticfiles',
@@ -22,6 +24,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'app.core.middleware.SupabaseJWTContextMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -41,6 +44,12 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.dummy',
+    }
+}
 
 LANGUAGE_CODE = 'vi'
 TIME_ZONE = 'Asia/Ho_Chi_Minh'
@@ -69,12 +78,8 @@ REST_FRAMEWORK = {
     'UNAUTHENTICATED_USER': None,
 }
 
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:3000',
-]
+_default_cors = 'http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000,http://localhost:2173,http://127.0.0.1:2173'
+CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv('CORS_ALLOWED_ORIGINS', _default_cors).split(',') if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
 LOGGING = {

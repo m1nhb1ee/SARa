@@ -47,10 +47,10 @@ const progressPct: Record<SessionStatus, number> = {
 
 // Stat accent color by key
 const STAT_COLORS = {
-  total:      'var(--ink, #2C1810)',
-  done:       '#7D9B76',
-  inProgress: '#8B6914',
-  notStarted: '#C0392B',
+  total:      'var(--ink)',
+  done:       'var(--accent-sage)',
+  inProgress: 'var(--accent-ochre)',
+  notStarted: 'var(--accent-clay)',
 };
 
 /* ─── Thumbnail SVG by image key ─────────────────────── */
@@ -283,28 +283,28 @@ export function Dashboard() {
         {/* ── Stats ── */}
         <div className={styles.statsRow}>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier" color="#5A4030" opacity={0.7} />
+            <SketchBorder id="prof-dossier" color="var(--ink)" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.total }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.total}</div>
             <div className={styles.statLbl}>Total Cases</div>
             <div className={styles.statSub}>Tổng số ca học</div>
           </div>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier2" color="#5e795d" opacity={0.7} />
+            <SketchBorder id="prof-dossier2" color="var(--accent-sage)" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.done }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.done}</div>
             <div className={styles.statLbl}>Completed</div>
             <div className={styles.statSub}>{completionPct}% completion</div>
           </div>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier3" color="#7A6248" opacity={0.7} />
+            <SketchBorder id="prof-dossier3" color="var(--ink-secondary)" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.inProgress }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.inProgress}</div>
             <div className={styles.statLbl}>In Progress</div>
             <div className={styles.statSub}>Đang làm dở</div>
           </div>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier4" color="#965656" opacity={0.7} />
+            <SketchBorder id="prof-dossier4" color="var(--accent-clay)" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.notStarted }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.notStarted}</div>
             <div className={styles.statLbl}>New Cases</div>
@@ -407,7 +407,7 @@ export function Dashboard() {
                   {/* erase overlay — sweeps across when deleting */}
                   {isErasing && <div className={styles.eraseOverlay} />}
 
-                  <SketchBorder id={`card-${c.id}`} color="#7A6248" opacity={0.5} />
+                  <SketchBorder id={`card-${c.id}`} color="var(--ink-secondary)" opacity={0.5} />
 
                   {/* left accent strip */}
                   <div className={`${styles.cardAccent} ${accentClass[c.modality]}`} />
@@ -426,7 +426,7 @@ export function Dashboard() {
                       onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
                       onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
                     >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#C0392B" strokeWidth="1.6" strokeLinecap="round">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--accent-clay)" strokeWidth="1.6" strokeLinecap="round">
                         <polyline points="1,3 13,3" />
                         <path d="M4,3V2a1,1 0 0,1 1-1h4a1,1 0 0,1 1,1v1" />
                         <rect x="2" y="3" width="10" height="9" rx="1" />
@@ -447,15 +447,15 @@ export function Dashboard() {
                         alignItems: 'center', justifyContent: 'center', gap: 10,
                       }}
                     >
-                      <div style={{ fontFamily: "'Special Elite', cursive", fontSize: 12, color: '#2C1810', letterSpacing: '0.06em' }}>
+                      <div style={{ fontFamily: "var(--font-typewriter)", fontSize: 12, color: 'var(--ink)', letterSpacing: '0.06em' }}>
                         Xóa case này?
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button
                           onClick={e => handleDelete(e, c.id)}
                           style={{
-                            fontFamily: "'Special Elite', cursive", fontSize: 11,
-                            background: '#C0392B', color: '#F5EDD6',
+                            fontFamily: "var(--font-typewriter)", fontSize: 11,
+                            background: 'var(--accent-clay)', color: 'var(--bg-page)',
                             border: 'none', padding: '5px 16px', cursor: 'pointer',
                             letterSpacing: '0.05em',
                           }}
@@ -465,9 +465,9 @@ export function Dashboard() {
                         <button
                           onClick={e => { e.stopPropagation(); setConfirmDeleteId(null); }}
                           style={{
-                            fontFamily: "'Special Elite', cursive", fontSize: 11,
-                            background: 'transparent', color: '#6B4C3B',
-                            border: '1px solid #C4A882', padding: '5px 16px', cursor: 'pointer',
+                            fontFamily: "var(--font-typewriter)", fontSize: 11,
+                            background: 'transparent', color: 'var(--ink-secondary)',
+                            border: '1px solid var(--border)', padding: '5px 16px', cursor: 'pointer',
                           }}
                         >
                           Hủy
@@ -575,33 +575,33 @@ export function Dashboard() {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#F5EDD6',
+              background: 'var(--bg-page)',
               maxWidth: 480, width: '100%',
               position: 'relative',
               boxShadow: '0 8px 40px rgba(44,24,16,0.32)',
             }}
           >
-            <SketchBorder id="resume-modal-border" color="#7A6248" opacity={0.75} />
+            <SketchBorder id="resume-modal-border" color="var(--ink-secondary)" opacity={0.75} />
 
             {/* ── Header strip ── */}
             <div style={{
-              background: '#EDE0C4',
-              borderBottom: '2px solid #C4A882',
+              background: 'var(--bg-surface-alt)',
+              borderBottom: '2px solid var(--border)',
               padding: '18px 28px 14px',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div>
                 <div style={{
-                  fontFamily: "'Courier Prime', monospace",
+                  fontFamily: "var(--font-mono)",
                   fontSize: 10, letterSpacing: '0.22em',
-                  textTransform: 'uppercase', color: '#6B4C3B',
+                  textTransform: 'uppercase', color: 'var(--ink-secondary)',
                   marginBottom: 4,
                 }}>
                   — Session đang làm dở —
                 </div>
                 <div style={{
                   fontFamily: "'Playfair Display', Georgia, serif",
-                  fontSize: 17, fontWeight: 700, color: '#2C1810',
+                  fontSize: 17, fontWeight: 700, color: 'var(--ink)',
                   lineHeight: 1.35,
                 }}>
                   {resumeTarget.title}
@@ -612,9 +612,9 @@ export function Dashboard() {
                 onClick={() => setResumeTarget(null)}
                 style={{
                   background: 'transparent', border: 'none', cursor: 'pointer',
-                  fontFamily: "'Special Elite', cursive",
+                  fontFamily: "var(--font-display)",
                   fontSize: 22, lineHeight: 1,
-                  color: '#C0392B', padding: '0 0 2px 12px',
+                  color: 'var(--accent-clay)', padding: '0 0 2px 12px',
                   flexShrink: 0,
                 }}
                 title="Đóng"
@@ -627,7 +627,7 @@ export function Dashboard() {
             <div style={{ padding: '22px 28px 16px' }}>
               <div style={{
                 fontFamily: "'Lora', Georgia, serif",
-                fontSize: 14, color: '#2C1810', lineHeight: 1.75,
+                fontSize: 14, color: 'var(--ink)', lineHeight: 1.75,
               }}>
                 Bạn đã làm dở case này. Muốn tiếp tục từ bước đang dở, hay xóa và bắt đầu lại từ đầu?
               </div>
@@ -649,17 +649,17 @@ export function Dashboard() {
                 }}
                 style={{
                   flex: 1, position: 'relative',
-                  background: '#2C1810', color: '#F5EDD6',
+                  background: 'var(--ink)', color: 'var(--bg-page)',
                   padding: '13px 0', textAlign: 'center',
-                  fontFamily: "'Special Elite', cursive",
+                  fontFamily: "var(--font-typewriter)",
                   fontSize: 14, letterSpacing: '0.08em',
                   cursor: 'pointer',
                   userSelect: 'none',
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#3D2214'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#2C1810'; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--accent-gold-hover)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--ink)'; }}
               >
-                <SketchBorder id="btn-continue" color="#F5EDD6" opacity={0.4} />
+                <SketchBorder id="btn-continue" color="var(--bg-page)" opacity={0.4} />
                 Tiếp tục
               </div>
 
@@ -677,9 +677,9 @@ export function Dashboard() {
                 }}
                 style={{
                   flex: 1, position: 'relative',
-                  background: 'transparent', color: '#C0392B',
+                  background: 'transparent', color: 'var(--accent-clay)',
                   padding: '13px 0', textAlign: 'center',
-                  fontFamily: "'Special Elite', cursive",
+                  fontFamily: "var(--font-typewriter)",
                   fontSize: 14, letterSpacing: '0.08em',
                   cursor: discarding ? 'not-allowed' : 'pointer',
                   opacity: discarding ? 0.55 : 1,
@@ -689,16 +689,16 @@ export function Dashboard() {
                 onMouseEnter={e => {
                   if (discarding) return;
                   const el = e.currentTarget as HTMLElement;
-                  el.style.background = '#C0392B';
-                  el.style.color = '#F5EDD6';
+                  el.style.background = 'var(--accent-clay)';
+                  el.style.color = 'var(--bg-page)';
                 }}
                 onMouseLeave={e => {
                   const el = e.currentTarget as HTMLElement;
                   el.style.background = 'transparent';
-                  el.style.color = '#C0392B';
+                  el.style.color = 'var(--accent-clay)';
                 }}
               >
-                <SketchBorder id="btn-restart" color="#C0392B" opacity={0.85} />
+                <SketchBorder id="btn-restart" color="var(--accent-clay)" opacity={0.85} />
                 {discarding ? 'Đang xóa...' : 'Làm lại từ đầu'}
               </div>
             </div>

@@ -3,29 +3,40 @@ Upload services — Supabase Storage + HuggingFace image analysis.
 Ported from huggingface_services.py; không còn dependency vào Django ORM.
 """
 import os
-import io
 import uuid
 import tempfile
 import logging
 from typing import Dict, Any, Optional
 
+from app.config.model_config import (
+    MEDGEMMA_GRADIO_SPACE_ID,
+    OPENAI_IMAGE_ANALYSIS_MODEL,
+    OPENAI_IMAGE_VALIDATION_MODEL,
+    OPENAI_STEP_COMPLETION_MODEL,
+)
+from app.core.step_codes import STEP_CODES
 from app.core.supabase_client import get_supabase
+from app.prompt.gpt_prompt import (
+    build_gpt_four_step_analysis_prompt,
+    build_gpt_final_steps_prompt,
+    build_image_validation_prompt,
+)
 from app.prompt.medgemma_prompt import build_analysis_prompt
-from app.prompt.llm_meta_prompt import build_meta_prompt
 
 logger = logging.getLogger(__name__)
 
-GRADIO_SPACE_ID = "ttnguyen6716/MedGemma-1.5-4B"
+ANSWER_KEY_STEP_CODES = STEP_CODES
 
-STEP_CODES = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
-ANSWER_KEY_STEP_CODES = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION']
+
+def _expected_step_codes(prompt_steps: int = 4) -> list[str]:
+    if prompt_steps == 2:
+        return ['DESCRIBE', 'REASONING']
+    return list(STEP_CODES)
 
 STEP_TEMPLATES = {
-    "OBSERVE":    "Quan sát kỹ lưỡng các vùng của ảnh. Xác định vùng bất thường.",
-    "DESCRIBE":   "Mô tả chi tiết các đặc điểm: kích thước, hình dạng, vị trí, mật độ.",
-    "INTERPRET":  "Diễn giải ý nghĩa lâm sàng của các phát hiện.",
-    "HYPOTHESIS": "Đề xuất chẩn đoán dự phòng chính dựa trên hình ảnh.",
-    "DDx":        "Liệt kê chẩn đoán phân biệt cần loại trừ.",
+    "DESCRIBE":   "Quan sát kỹ lưỡng các vùng của ảnh. Xác định vùng bất thường, mô tả chi tiết kích thước, hình dạng, vị trí, mật độ.",
+    "REASONING": "Diễn giải ý nghĩa lâm sàng của các phát hiện và đề xuất chẩn đoán làm việc chính.",
+    "DDx":       "Liệt kê chẩn đoán phân biệt cần loại trừ.",
     "CONCLUSION": "Kết luận chẩn đoán cuối cùng và khuyến cáo tiếp theo.",
 }
 
@@ -60,6 +71,7 @@ def create_case_in_supabase(
     modality: str,
     title: str,
     findings: dict,
+    clinical_history: str = '',
 ) -> dict:
     """
     Ghi case + case_images + answer_keys + upload_session vào Supabase.
@@ -78,7 +90,7 @@ def create_case_in_supabase(
         'title': title,
         'modality': MODALITY_MAP.get(modality, 'X-ray'),
         'difficulty': 'medium',
-        'clinical_history': findings.get('clinical_history', ''),
+        'clinical_history': (clinical_history or '').strip(),
         'status': 'published',
     }).execute()
     case = case_result.data[0]
@@ -263,10 +275,35 @@ def _to_temp_file(image_file) -> tuple:
     raise ValueError(f"Không đọc được ảnh từ kiểu: {type(image_file)}")
 
 
+def _base_modality(type_str: str) -> str:
+    """Collapse a detailed type string into one of: XRAY | CT | MRI | OTHER."""
+    t = type_str.lower()
+    if any(k in t for k in ('x-ray', 'xray', 'radiograph', 'plain film')):
+        return 'XRAY'
+    if 'ct' in t or 'computed tomography' in t:
+        return 'CT'
+    if 'mri' in t or 'magnetic resonance' in t or any(k in t for k in ('t1', 't2', 'flair', 'dwi', 'adc', 'gre', 'stir')):
+        return 'MRI'
+    return 'OTHER'
+
+
+def _has_mixed_region_in_volume(classifications: list, volume_names: list) -> bool:
+    """Return True if any volume group contains images from different anatomical regions."""
+    vol_regions: dict[str, set] = {}
+    for c in classifications:
+        idx = c.get('index')
+        region = (c.get('region') or '').strip().lower()
+        if idx is None or not region or idx >= len(volume_names):
+            continue
+        vol_regions.setdefault(volume_names[idx], set()).add(region)
+    return any(len(regions) > 1 for regions in vol_regions.values())
+
+
 def classify_and_validate_images(
     image_bytes_list: list,
     volume_names: list,
     declared_modality: str,
+    declared_region: str = '',
 ) -> dict:
     """
     Gọi GPT-4o Vision để:
@@ -276,9 +313,10 @@ def classify_and_validate_images(
     Returns:
         {
             'valid': bool,
-            'error_type': None | 'not_medical' | 'inconsistent_volume',
+            'error_type': None | 'not_medical' | 'modality_mismatch' | 'mixed_modality' |
+                          'mixed_region' | 'region_mismatch' | 'inconsistent_volume',
             'issues': [str],   # tiếng Việt, hiển thị thẳng cho user
-            'classifications': [{'index': int, 'volume': str, 'is_medical': bool, 'type': str}]
+            'classifications': [{'index': int, 'volume': str, 'is_medical': bool, 'type': str, 'region': str}]
         }
 
     Nếu không có OPENAI_API_KEY hoặc GPT-4o call thất bại: trả về valid=True (skip validation).
@@ -314,42 +352,17 @@ def classify_and_validate_images(
         f'Image {idx} → volume="{volume_names[idx]}"' for idx in sample_indices
     )
 
-    prompt = f"""Classify each image shown.
-
-Context: a radiology education platform is validating user-uploaded files.
-Declared scan type: {declared_modality}
-Image index → volume group: {volume_info}
-
-Task — for each image:
-1. Identify the imaging technique shown (e.g. "X-ray", "CT axial", "MRI T2", "MRI T1", "Ultrasound", "Pathology slide").
-   If the image is NOT a medical/radiological scan (e.g. a regular photo, screenshot, diagram), set is_medical=false.
-2. Note which volume group it belongs to (given above).
-
-After classifying all images, check: within each volume group, do all images show the same imaging technique and sequence?
-
-Return ONLY valid JSON, no markdown:
-{{
-  "images": [
-    {{"index": 0, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}},
-    {{"index": 1, "volume": "Default", "is_medical": true, "type": "MRI T2 axial brain"}}
-  ],
-  "issues": []
-}}
-
-Populate "issues" (in Vietnamese) only when:
-- An image is not a medical scan: "Ảnh số {{n}} (volume: '{{vol}}') không phải ảnh y tế. Vui lòng chỉ upload ảnh chẩn đoán hình ảnh."
-- A volume group contains images of different types: "Volume '{{vol}}' chứa ảnh không nhất quán: {{types found}}. Vui lòng upload cùng 1 loại ảnh trong 1 volume."
-"""
+    prompt = build_image_validation_prompt(declared_modality, declared_region, volume_info)
 
     try:
         client = OpenAI(api_key=api_key)
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=OPENAI_IMAGE_VALIDATION_MODEL,
             messages=[{
                 "role": "user",
                 "content": [{"type": "text", "text": prompt}, *image_contents],
             }],
-            max_tokens=500,
+            max_tokens=5000,
         )
         raw = (response.choices[0].message.content or '').strip()
         logger.info(f"[image-validation] GPT-4o response: {raw}")
@@ -373,10 +386,26 @@ Populate "issues" (in Vietnamese) only when:
         classifications = parsed.get('images', [])
         issues = [s.strip() for s in parsed.get('issues', []) if s.strip()]
 
-        has_non_medical = any(not c.get('is_medical', True) for c in classifications)
+        has_non_medical       = any(not c.get('is_medical', True) for c in classifications)
+        has_modality_mismatch = any(not c.get('matches_declared_modality', True) for c in classifications)
+        has_mixed_modality    = len({_base_modality(c.get('type', '')) for c in classifications if c.get('is_medical')}) > 1
+        has_mixed_region      = _has_mixed_region_in_volume(classifications, volume_names)
+        has_region_mismatch   = (
+            bool(declared_region) and
+            any(not c.get('matches_declared_region', True) for c in classifications)
+        )
+
         error_type = None
         if has_non_medical:
             error_type = 'not_medical'
+        elif has_region_mismatch:
+            error_type = 'region_mismatch'
+        elif has_modality_mismatch:
+            error_type = 'modality_mismatch'
+        elif has_mixed_modality:
+            error_type = 'mixed_modality'
+        elif has_mixed_region:
+            error_type = 'mixed_region'
         elif issues:
             error_type = 'inconsistent_volume'
 
@@ -392,74 +421,6 @@ Populate "issues" (in Vietnamese) only when:
         return {'valid': True, 'error_type': None, 'issues': [], 'classifications': []}
 
 
-def _preprocess_with_llm(
-    image_files: list,
-    modality: str,
-    region: str,
-    volume_names: list | None = None,
-) -> str:
-    """
-    Use GPT-4o Vision to verify image modality/volume consistency and return
-    a refined analysis prompt tailored to what is actually visible in the images.
-    Falls back to build_analysis_prompt() if OPENAI_API_KEY is not set or call fails.
-    """
-    import base64
-    from openai import OpenAI
-
-    api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
-        logger.warning("OPENAI_API_KEY not set — skipping LLM pre-processing, using default prompt")
-        total_slices = len(image_files) if image_files else None
-        return build_analysis_prompt(modality, region, total_slices, volume_names)
-
-    unique_volumes = list(dict.fromkeys(volume_names or []))
-    volume_info = f" Declared volumes: {', '.join(unique_volumes)}." if unique_volumes else ""
-    total_slices = len(image_files)
-
-    sample_files = image_files[:4]
-    image_contents = []
-    for img_bytes in sample_files:
-        b64 = base64.b64encode(img_bytes).decode('utf-8')
-        image_contents.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"},
-        })
-
-    meta_prompt = build_meta_prompt(modality, region, total_slices, volume_info)
-
-    try:
-        client = OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{
-                "role": "user",
-                "content": [{"type": "text", "text": meta_prompt}, *image_contents],
-            }],
-            max_tokens=600,
-        )
-        refined_prompt = (response.choices[0].message.content or '').strip()
-
-        # Detect content-policy refusal — don't forward garbage as VLM prompt
-        _lower = refined_prompt.lower()
-        is_refusal = (
-            len(refined_prompt) < 80 or
-            "i'm sorry" in _lower or
-            "i can't assist" in _lower or
-            "i cannot assist" in _lower or
-            "unable to assist" in _lower
-        )
-        if is_refusal:
-            logger.warning(f"LLM pre-processing trả về refusal — dùng default prompt: {refined_prompt[:80]}")
-            return build_analysis_prompt(modality, region, total_slices, volume_names)
-
-        logger.info(f"LLM pre-processing complete — refined prompt generated ({len(refined_prompt)} chars)")
-        logger.debug(f"[LLM prompt]\n{refined_prompt}")
-        return refined_prompt
-    except Exception as e:
-        logger.warning(f"LLM pre-processing failed: {e} — falling back to default prompt")
-        return build_analysis_prompt(modality, region, total_slices, volume_names)
-
-
 def _call_gradio(image_files: list, prompt: str, token: str) -> str:
     from gradio_client import Client, handle_file
 
@@ -470,8 +431,8 @@ def _call_gradio(image_files: list, prompt: str, token: str) -> str:
             tmp_paths.append(tmp_path)
 
         gallery = [{"image": handle_file(p), "caption": None} for p in tmp_paths]
-        logger.info(f"Gọi Gradio Space [{GRADIO_SPACE_ID}] — images={len(gallery)}")
-        client = Client(GRADIO_SPACE_ID, token=token, httpx_kwargs={"timeout": 300})
+        logger.info(f"Gọi Gradio Space [{MEDGEMMA_GRADIO_SPACE_ID}] — images={len(gallery)}")
+        client = Client(MEDGEMMA_GRADIO_SPACE_ID, token=token, httpx_kwargs={"timeout": 300})
         job = client.submit(gallery=gallery, question=prompt, api_name="/analyze")
         result = job.result(timeout=300)
         logger.debug(f"[VLM answer]\n{result}")
@@ -485,18 +446,52 @@ def _call_gradio(image_files: list, prompt: str, token: str) -> str:
                     pass
 
 
-def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
+def _call_gpt_vision(image_files: list, prompt: str) -> str:
+    import base64
+    from openai import OpenAI
+
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is required when engine='gpt'")
+
+    image_contents = []
+    for image_file in image_files:
+        if not isinstance(image_file, (bytes, bytearray)):
+            with open(str(image_file), 'rb') as f:
+                image_bytes = f.read()
+        else:
+            image_bytes = image_file
+
+        b64 = base64.b64encode(image_bytes).decode('utf-8')
+        image_contents.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"},
+        })
+
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model=OPENAI_IMAGE_ANALYSIS_MODEL,
+        messages=[{
+            "role": "user",
+            "content": [{"type": "text", "text": prompt}, *image_contents],
+        }],
+        max_completion_tokens=5000,
+    )
+    return (response.choices[0].message.content or '').strip()
+
+
+def _parse_findings(description: str, modality: str, prompt_steps: int = 4, source: str = "MedGemma") -> Dict[str, Any]:
     import json
     import re
 
-    fallback = {
-        "OBSERVE":    "Observation details",
-        "DESCRIBE":   "Description details",
-        "INTERPRET":  "Interpretation details",
-        "HYPOTHESIS": "Hypothesis details",
-        "DDx":        _get_ddx(modality),
+    all_fallback = {
+        "DESCRIBE":   "Observation details",
+        "REASONING": "Reasoning details",
+        "DDx":       _get_ddx(modality),
         "CONCLUSION": _get_conclusion(modality),
     }
+    expected_steps = _expected_step_codes(prompt_steps)
+    fallback = {code: all_fallback[code] for code in expected_steps}
 
     text = (description or '').strip()
     logger.debug(f"[_parse_findings] raw VLM output:\n{text}")
@@ -510,18 +505,16 @@ def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
                 k: str(parsed.get(k, fallback[k])).strip()
                 for k in fallback
             }
-            return _build_response(answer_key, text, modality)
+            return _build_response(answer_key, text, modality, expected_steps, source)
     except Exception:
         pass
 
     try:
         patterns = {
-            "OBSERVE":    r"(?:1\.|OBSERVE|Observation)[:\s]*([\s\S]+?)(?=\n\s*2\.|DESCRIBE|$)",
-            "DESCRIBE":   r"(?:2\.|DESCRIBE|Description)[:\s]*([\s\S]+?)(?=\n\s*3\.|INTERPRET|$)",
-            "INTERPRET":  r"(?:3\.|INTERPRET|Interpretation)[:\s]*([\s\S]+?)(?=\n\s*4\.|HYPOTHESIS|$)",
-            "HYPOTHESIS": r"(?:4\.|HYPOTHESIS|Hypothesis)[:\s]*([\s\S]+?)(?=\n\s*5\.|DDx|$)",
-            "DDx":        r"(?:5\.|DDx|Differential)[:\s]*([\s\S]+?)(?=\n\s*6\.|CONCLUSION|$)",
-            "CONCLUSION": r"(?:6\.|CONCLUSION|Conclusion)[:\s]*([\s\S]+?)$",
+            "DESCRIBE":   r"(?:1\.|DESCRIBE|Describe)[:\s]*([\s\S]+?)(?=\n\s*2\.|REASONING|$)",
+            "REASONING": r"(?:2\.|REASONING|Reasoning)[:\s]*([\s\S]+?)(?=\n\s*3\.|DDx|$)",
+            "DDx":       r"(?:3\.|DDx|Differential)[:\s]*([\s\S]+?)(?=\n\s*4\.|CONCLUSION|$)",
+            "CONCLUSION": r"(?:4\.|CONCLUSION|Conclusion)[:\s]*([\s\S]+?)$",
         }
         sections = {}
         for step, pattern in patterns.items():
@@ -532,19 +525,19 @@ def _parse_findings(description: str, modality: str) -> Dict[str, Any]:
                 sections[step] = content[:500]
         logger.debug(f"[_parse_findings] regex matched sections: {list(sections.keys())}")
         if sections:
-            fallback.update(sections)
-            return _build_response(fallback, text, modality)
+            fallback.update({code: sections[code] for code in expected_steps if code in sections})
+            return _build_response(fallback, text, modality, expected_steps, source)
     except Exception as e:
         logger.debug(f"[_parse_findings] regex parse error: {e}")
 
     logger.warning("[_parse_findings] all parse attempts failed — using fallback")
-    return _build_response(fallback, text, modality)
+    return _build_response(fallback, text, modality, expected_steps, source)
 
 
-def _build_response(answer_key: dict, raw: str, modality: str) -> Dict[str, Any]:
+def _build_response(answer_key: dict, raw: str, modality: str, step_codes: list[str], source: str) -> Dict[str, Any]:
     summary = " ".join([
-        answer_key.get("OBSERVE", "")[:80],
         answer_key.get("DESCRIBE", "")[:80],
+        answer_key.get("REASONING", "")[:80],
     ])[:200]
     return {
         "title":            f"{modality} Case – MedGemma",
@@ -553,8 +546,71 @@ def _build_response(answer_key: dict, raw: str, modality: str) -> Dict[str, Any]
         "raw_findings":     raw,
         "confidence":       0.82,
         "answer_key":       answer_key,
-        "pipeline_rubric":  STEP_TEMPLATES.copy(),
+        "pipeline_rubric":  {code: STEP_TEMPLATES[code] for code in step_codes},
     }
+
+
+def _complete_final_steps_with_llm(findings: Dict[str, Any], modality: str, region: str) -> Dict[str, Any]:
+    """
+    Generate DDx and CONCLUSION from the VLM's DESCRIBE/REASONING output.
+    If the LLM is unavailable, keep the VLM result and fill conservative defaults.
+    """
+    import json
+
+    answer_key = findings.get('answer_key') or {}
+    describe = str(answer_key.get('DESCRIBE', '')).strip()
+    reasoning = str(answer_key.get('REASONING', '')).strip()
+
+    fallback = {
+        'DDx': _get_ddx(modality),
+        'CONCLUSION': _get_conclusion(modality),
+    }
+
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not set — using default DDx/CONCLUSION completion")
+        completed = fallback
+    else:
+        raw_vlm = str(findings.get('raw_findings', '') or f"DESCRIBE: {describe}\nREASONING: {reasoning}").strip()
+        prompt = build_gpt_final_steps_prompt(modality, region, raw_vlm)
+
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model=OPENAI_STEP_COMPLETION_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=800,
+            )
+            raw = (response.choices[0].message.content or '').strip()
+            logger.debug(f"[LLM completion answer]\n{raw}")
+            j_start = raw.find('{')
+            j_end = raw.rfind('}') + 1
+            parsed = json.loads(raw[j_start:j_end])
+            completed = {
+                'DDx': str(parsed.get('DDx') or fallback['DDx']).strip(),
+                'CONCLUSION': str(parsed.get('CONCLUSION') or fallback['CONCLUSION']).strip(),
+            }
+            findings['llm_completion_raw'] = raw
+            logger.info("LLM completion generated DDx and CONCLUSION")
+        except Exception as e:
+            logger.warning(f"LLM completion failed: {e} — using default DDx/CONCLUSION")
+            completed = fallback
+
+    findings['answer_key'] = {
+        'DESCRIBE': describe or 'Observation details',
+        'REASONING': reasoning or 'Reasoning details',
+        **completed,
+    }
+    findings['pipeline_rubric'] = {code: STEP_TEMPLATES[code] for code in STEP_CODES}
+    summary = " ".join([
+        findings['answer_key'].get('DESCRIBE', '')[:80],
+        findings['answer_key'].get('REASONING', '')[:80],
+    ])[:200]
+    findings['description'] = summary
+    findings['clinical_history'] = f"AI (MedGemma + LLM) analyzed {modality}: {summary[:100]}"
+    return findings
 
 
 def _get_ddx(modality: str) -> str:
@@ -575,49 +631,43 @@ def _get_conclusion(modality: str) -> str:
     }.get(modality, "Cần tư vấn bác sĩ chuyên khoa.")
 
 
-def _mock_analyze(modality: str) -> Dict[str, Any]:
+def _mock_analyze(modality: str, prompt_steps: int = 4) -> Dict[str, Any]:
     mock_keys = {
         "XRAY": {
-            "OBSERVE":    "Phổi trái bình thường; phổi phải có mờ phím nhẹ ở thùy dưới.",
-            "DESCRIBE":   "Đám mờ ~3–4 cm, bờ không rõ, vị trí thùy dưới phải.",
-            "INTERPRET":  "Mật độ cao gợi ý infiltrate — viêm phổi hoặc phù.",
-            "HYPOTHESIS": "Viêm phổi thùy dưới phổi phải.",
-            "DDx":        "Lao phổi, ung thư phổi, edema phổi, hemothorax, viêm phổi.",
+            "DESCRIBE":   "Phổi trái bình thường; phổi phải có đám mờ ~3–4 cm, bờ không rõ, vị trí thùy dưới phải.",
+            "REASONING": "Mật độ cao gợi ý infiltrate — viêm phổi hoặc phù. Chẩn đoán làm việc: viêm phổi thùy dưới phổi phải.",
+            "DDx":       "Lao phổi, ung thư phổi, edema phổi, hemothorax, viêm phổi.",
             "CONCLUSION": "Cần xét nghiệm máu CBC, cấy đờm, theo dõi lâm sàng 48–72h.",
         },
         "CT": {
-            "OBSERVE":    "Não bình thường, không thấy máu tụ; cột sống bình thường.",
-            "DESCRIBE":   "Các thất não bình thường, mô trắng không dị thường.",
-            "INTERPRET":  "Không có bất thường bệnh lý rõ ràng.",
-            "HYPOTHESIS": "Não bình thường.",
-            "DDx":        "U não, máu tụ nội sọ, nhồi máu não, viêm màng não.",
+            "DESCRIBE":   "Não bình thường, không thấy máu tụ; các thất não và mô trắng không dị thường; cột sống bình thường.",
+            "REASONING": "Không có bất thường bệnh lý rõ ràng. Chẩn đoán làm việc: não bình thường.",
+            "DDx":       "U não, máu tụ nội sọ, nhồi máu não, viêm màng não.",
             "CONCLUSION": "Tham khảo thần kinh học. Xem xét MRI bổ sung nếu cần.",
         },
         "MRI": {
-            "OBSERVE":    "Tín hiệu T2 tăng ở vùng nghi ngờ.",
-            "DESCRIBE":   "Tổn thương khu trú, bờ rõ, tín hiệu dị thường.",
-            "INTERPRET":  "Gợi ý tổn thương mô mềm hoặc viêm.",
-            "HYPOTHESIS": "Viêm hoặc u lành tính.",
-            "DDx":        "Thoát vị đĩa đệm, u tủy, xơ cứng rải rác, viêm.",
+            "DESCRIBE":   "Tín hiệu T2 tăng ở vùng nghi ngờ; tổn thương khu trú, bờ rõ, tín hiệu dị thường.",
+            "REASONING": "Gợi ý tổn thương mô mềm hoặc viêm. Chẩn đoán làm việc: viêm hoặc u lành tính.",
+            "DDx":       "Thoát vị đĩa đệm, u tủy, xơ cứng rải rác, viêm.",
             "CONCLUSION": "Tư vấn chỉnh hình / thần kinh. Theo dõi định kỳ.",
         },
         "DIFF": {
-            "OBSERVE":    "Cấu trúc cơ quan bình thường; không thấy khối.",
-            "DESCRIBE":   "Kích thước bình thường, echo đồng nhất.",
-            "INTERPRET":  "Không có bất thường rõ.",
-            "HYPOTHESIS": "Bình thường.",
-            "DDx":        "U lành/ác tính, nang, viêm, xơ hóa.",
+            "DESCRIBE":   "Cấu trúc cơ quan bình thường; kích thước bình thường, echo đồng nhất; không thấy khối.",
+            "REASONING": "Không có bất thường rõ. Chẩn đoán làm việc: bình thường.",
+            "DDx":       "U lành/ác tính, nang, viêm, xơ hóa.",
             "CONCLUSION": "Theo dõi siêu âm định kỳ. Sinh thiết nếu nghi ngờ ác tính.",
         },
     }
+    step_codes = _expected_step_codes(prompt_steps)
+    answer_key = mock_keys.get(modality, mock_keys["XRAY"])
     return {
         "title":            f"{modality} Case – Mock",
         "description":      f"Mock analysis of {modality} image.",
         "clinical_history": f"Mock patient — {modality}",
         "raw_findings":     "Mock findings (Gradio call failed or HF_TOKEN not set)",
         "confidence":       0.65,
-        "answer_key":       mock_keys.get(modality, mock_keys["XRAY"]),
-        "pipeline_rubric":  STEP_TEMPLATES.copy(),
+        "answer_key":       {code: answer_key[code] for code in step_codes},
+        "pipeline_rubric":  {code: STEP_TEMPLATES[code] for code in step_codes},
     }
 
 
@@ -626,21 +676,43 @@ def analyze_medical_image(
     modality: str = "XRAY",
     region: str = "unspecified",
     volume_names: list | None = None,
+    prompt_steps: int = 4,
+    complete_final_steps_with_llm: bool = False,
+    engine: str = "vlm",
 ) -> Dict[str, Any]:
     """Entry point: phân tích ảnh y tế, trả về findings dict."""
     total_slices = len(image_files) if image_files else None
-    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}, total_slices={total_slices}, volumes={list(dict.fromkeys(volume_names or []))}")
+    if engine == "gpt":
+        prompt = build_gpt_four_step_analysis_prompt(modality, region, total_slices, volume_names)
+        raw = _call_gpt_vision(image_files, prompt)
+        logger.debug(f"[GPT vision answer]\n{raw}")
+        return _parse_findings(raw, modality, 4, source="GPT")
+
+    prompt = build_analysis_prompt(modality, region, total_slices, volume_names, steps=prompt_steps)
+    logger.info(f"Bắt đầu phân tích — modality={modality}, region={region}, total_slices={total_slices}, prompt_steps={prompt_steps}, volumes={list(dict.fromkeys(volume_names or []))}")
     token = _get_hf_token()
     if not token:
-        return _mock_analyze(modality)
+        findings = _mock_analyze(modality, prompt_steps)
+        if complete_final_steps_with_llm:
+            return _complete_final_steps_with_llm(findings, modality, region)
+        return findings
     try:
-        prompt = _preprocess_with_llm(image_files, modality, region, volume_names)
+        logger.debug(f"[MedGemma prompt]\n{prompt}")
         raw = _call_gradio(image_files, prompt, token)
         logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
-        return _parse_findings(raw, modality)
+        findings = _parse_findings(raw, modality, prompt_steps)
+        if complete_final_steps_with_llm:
+            return _complete_final_steps_with_llm(findings, modality, region)
+        return findings
     except ImportError:
         logger.error("gradio_client chưa được cài. Chạy: pip install gradio-client")
-        return _mock_analyze(modality)
+        findings = _mock_analyze(modality, prompt_steps)
+        if complete_final_steps_with_llm:
+            return _complete_final_steps_with_llm(findings, modality, region)
+        return findings
     except Exception as e:
         logger.error(f"Gradio call thất bại: {e}", exc_info=True)
-        return _mock_analyze(modality)
+        findings = _mock_analyze(modality, prompt_steps)
+        if complete_final_steps_with_llm:
+            return _complete_final_steps_with_llm(findings, modality, region)
+        return findings

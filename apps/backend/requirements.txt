@@ -11,3 +11,4 @@ huggingface-hub>=0.20.0
 gradio_client
 supabase
 Pillow==11.2.1
+whitenoise==6.6.0
