@@ -20,6 +20,9 @@ SWAP_VLM_MAX_IMAGES = max(1, int(os.getenv('SWAP_VLM_MAX_IMAGES', '12')))
 SWAP_PHASE_DEBATING = 'DEBATING'
 SWAP_PHASE_AWAITING_CONFIRMATION = 'AWAITING_CONFIRMATION'
 SWAP_PHASE_CONFIRMED = 'CONFIRMED'
+SWAP_FINAL_DEBATE_WEIGHT = float(os.getenv('SWAP_FINAL_DEBATE_WEIGHT', '0.3333333333'))
+SWAP_FINAL_KNOWLEDGE_WEIGHT = float(os.getenv('SWAP_FINAL_KNOWLEDGE_WEIGHT', '0.3333333333'))
+SWAP_FINAL_ACCURACY_WEIGHT = float(os.getenv('SWAP_FINAL_ACCURACY_WEIGHT', '0.3333333333'))
 
 
 MODALITY_TO_UPLOAD = {
@@ -160,7 +163,12 @@ def _default_step_state(session_id: str, step_index: int) -> dict:
         'agreed_answer': None,
         'debate_score': None,
         'knowledge_score': None,
+        'debate_score_online': None,
+        'knowledge_score_final': None,
+        'accuracy_score_final': None,
         'reasoning': '',
+        'reasoning_online': '',
+        'reasoning_final': '',
     }
 
 
@@ -194,6 +202,32 @@ def _combined_score(result: dict[str, Any]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def _weight_sum() -> float:
+    total = SWAP_FINAL_DEBATE_WEIGHT + SWAP_FINAL_KNOWLEDGE_WEIGHT + SWAP_FINAL_ACCURACY_WEIGHT
+    return total if total > 0 else 1.0
+
+
+def _weighted_final_score(debate_score: float, knowledge_score: float, accuracy_score: float) -> float:
+    total = _weight_sum()
+    return (
+        SWAP_FINAL_DEBATE_WEIGHT * _clamp_score(debate_score)
+        + SWAP_FINAL_KNOWLEDGE_WEIGHT * _clamp_score(knowledge_score)
+        + SWAP_FINAL_ACCURACY_WEIGHT * _clamp_score(accuracy_score)
+    ) / total
+
+
+def _is_exact_step_answer(agreed_answer: str, target: dict[str, Any]) -> bool:
+    target_text = " ".join(
+        [
+            str(target.get('expected_finding') or ''),
+            str(target.get('clinical_explanation') or ''),
+            " ".join(str(k) for k in (target.get('key_points') or [])),
+        ]
+    ).strip().lower()
+    agreed = (agreed_answer or '').strip().lower()
+    return bool(agreed) and bool(target_text) and agreed in target_text
+
+
 def _clamp_score(value: Any) -> float:
     try:
         score = float(value)
@@ -202,6 +236,18 @@ def _clamp_score(value: Any) -> float:
     if score > 1:
         score = score / 100.0
     return max(0.0, min(score, 1.0))
+
+
+def _sanitize_consensus_summary(text: str) -> str:
+    summary = (text or '').strip()
+    if not summary:
+        return ''
+    lower = summary.lower()
+    markers = [' tuy nhiên', '. tuy nhiên', ' nhưng ', '. nhưng ', ' however ']
+    cut_positions = [lower.find(marker) for marker in markers if lower.find(marker) > 0]
+    if cut_positions:
+        summary = summary[:min(cut_positions)].rstrip(' ,;:.')
+    return summary.strip()
 
 
 def _get_openai_client() -> OpenAI:
@@ -265,6 +311,7 @@ def _summarize_agreed_answer_from_conversation(
     session: dict,
     messages: list[dict],
     user_message: str,
+    doctor_message: str = '',
     states: list[dict] | None = None,
 ) -> str:
     step_index = session['current_step']
@@ -277,8 +324,13 @@ Rules:
 - Use ONLY the visible conversation below and the latest user answer.
 - Do NOT use or infer from any hidden answer key, rubric, target answer, or model diagnosis.
 - The agreed answer should reflect what the user and doctor have actually discussed.
-- If the conversation contains conflicting statements, summarize only the part the doctor has accepted or the user's latest corrected position.
+- The doctor has already conceded for this step. The agreed answer must reflect the final accepted position only.
+- Do not include unresolved disagreement, contrast clauses, or "however/but" style contradictions.
+- Do not mention both sides if they conflict; keep only the final consensus statement.
 - Respond in Vietnamese.
+- Avoid repetitive openings like "Tôi hiểu rằng", "Tôi biết rằng", "Tôi đồng ý rằng".
+- Use natural Vietnamese phrasing with varied sentence openings.
+- Keep an annoyed-doctor tone: direct, concise, slightly sharp, but still professional.
 - Return ONLY valid JSON.
 - Do not prefix the answer with the step code.
 
@@ -288,6 +340,9 @@ Previous agreed answers, for context only:
 
 Visible conversation for current step:
 {_current_step_visible_history(messages, step_index, user_message)}
+
+Doctor's latest conceded reply:
+{doctor_message}
 
 Return JSON:
 {{
@@ -308,14 +363,13 @@ Return JSON:
 def _doctor_reply(
     session: dict,
     case: dict,
-    answer_key: dict[str, dict[str, Any]],
+    describe_key: dict[str, Any],
     messages: list[dict],
     user_message: str,
     states: list[dict] | None = None,
 ) -> dict[str, Any]:
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
-    target = answer_key.get(step_code, {})
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
     doctor_step = doctor_diagnosis.get(step_code, '')
     previous_agreed = _previous_agreed_answers(states or [], step_index)
@@ -331,14 +385,15 @@ You are roleplaying a radiologist in a medical education debate.
 Persona:
 - You are knowledgeable, senior, stubborn, conservative, and easily annoyed.
 - You often work too quickly and defend your first impression.
-- You can be convinced only by strong imaging reasoning aligned with the answer key.
-- Do not mention that you are an AI, a roleplay system, or that you can see a hidden answer key.
+- You can be convinced only by strong imaging reasoning based on visible case context and transcript.
+- Do not mention that you are an AI or a roleplay system.
 
 Conversation rules:
 - Discuss ONLY the current step: {step_code}.
 - Do not reveal future steps.
 - Current mode: {step_mode}
-- Use only previous agreed answers as context. Do not reveal or use later-step answers.
+- Use only previous agreed answers as context.
+- For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
 - If the user's argument is weak, push back confidently.
 - If the user's argument touches the main expected finding(s) and good reasoning — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording.
 - Respond in Vietnamese.
@@ -351,10 +406,10 @@ Clinical history: {case.get('clinical_history', '')}
 Your initial diagnosis for this step:
 {doctor_step}
 
-Hidden target answer for this step:
-Expected finding: {target.get('expected_finding', '')}
-Clinical explanation: {target.get('clinical_explanation', '')}
-Key points: {target.get('key_points', [])}
+DESCRIBE answer key (only this key is visible online for grounding):
+Expected finding: {describe_key.get('expected_finding', '')}
+Clinical explanation: {describe_key.get('clinical_explanation', '')}
+Key points: {describe_key.get('key_points', [])}
 
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
@@ -402,14 +457,13 @@ Note: Leave "pending_summary" empty. The system will build the user-visible agre
 def _doctor_text_prompt(
     session: dict,
     case: dict,
-    answer_key: dict[str, dict[str, Any]],
+    describe_key: dict[str, Any],
     messages: list[dict],
     user_message: str,
     states: list[dict] | None = None,
 ) -> str:
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
-    target = answer_key.get(step_code, {})
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
     doctor_step = doctor_diagnosis.get(step_code, '')
     previous_agreed = _previous_agreed_answers(states or [], step_index)
@@ -425,18 +479,22 @@ You are roleplaying a radiologist in a medical education debate.
 Persona:
 - You are knowledgeable, senior, stubborn, conservative, and easily annoyed.
 - You often work too quickly and defend your first impression.
-- You can be convinced only by strong imaging reasoning aligned with the answer key.
-- Do not mention that you are an AI, a roleplay system, or that you can see a hidden answer key.
+- You can be convinced only by strong imaging reasoning based on visible case context and transcript.
+- Do not mention that you are an AI or a roleplay system.
 
 Conversation rules:
 - Discuss ONLY the current step: {step_code}.
 - Do not reveal future steps.
 - Current mode: {step_mode}
-- Use only previous agreed answers as context. Do not reveal or use later-step answers.
+- Use only previous agreed answers as context.
+- For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
 - If the user's argument is weak, push back confidently.
 - If the user's argument touches the main expected finding(s) and good reasoning — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording but also do not let the user get away with weak arguments.
-- Weak arguments might be vague, off-topic, or miss the key expected findings. Strong arguments will clearly reference specific imaging findings and align with the expected answer key or be logically sound even if wording differs.
+- Weak arguments might be vague or off-topic. Strong arguments clearly reference specific imaging findings with coherent logic.
 - Respond in Vietnamese as the doctor only. Do not return JSON.
+- Avoid repetitive openings like "Tôi hiểu rằng", "Tôi biết rằng", "Tôi đồng ý rằng".
+- Use natural Vietnamese phrasing with varied sentence openings.
+- Keep an annoyed-doctor tone: direct, concise, slightly sharp, but still professional.
 
 Case:
 Title: {case.get('title', '')}
@@ -446,10 +504,10 @@ Clinical history: {case.get('clinical_history', '')}
 Your initial diagnosis for this step:
 {doctor_step}
 
-Hidden target answer for this step:
-Expected finding: {target.get('expected_finding', '')}
-Clinical explanation: {target.get('clinical_explanation', '')}
-Key points: {target.get('key_points', [])}
+DESCRIBE answer key (only this key is visible online for grounding):
+Expected finding: {describe_key.get('expected_finding', '')}
+Clinical explanation: {describe_key.get('clinical_explanation', '')}
+Key points: {describe_key.get('key_points', [])}
 
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
@@ -476,7 +534,6 @@ def _stream_doctor_text(prompt: str) -> Iterator[str]:
 
 def _judge_doctor_text(
     session: dict,
-    answer_key: dict[str, dict[str, Any]],
     messages: list[dict],
     user_message: str,
     doctor_message: str,
@@ -484,26 +541,21 @@ def _judge_doctor_text(
 ) -> dict[str, Any]:
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
-    target = answer_key.get(step_code, {})
     previous_agreed = _previous_agreed_answers(states or [], step_index)
     prompt = f"""
-You are the hidden grader for a medical roleplay debate.
+You are the online self-judge for a medical roleplay debate.
 
 Decide whether the user's latest argument should convince the doctor for the current step.
-Use the hidden target answer as ground truth. Return ONLY valid JSON.
+Use only visible conversation context. Return ONLY valid JSON.
 
 Scoring rubric (0.0-1.0):
 - 0.0-0.3: argument is irrelevant, wrong, or empty (e.g. only "tiếng việt", off-topic).
 - 0.4-0.5: partially correct — touches one relevant finding/term but misses points.
-- 0.6-0.8: covers the main expected finding(s) with adequate reasoning, even if wording differs.
-  Reward arguments that hit ANY 1-2 of the target key points AND also must have a good logical flow or strong relevant knowledge. The doctor should concede here.
+- 0.6-0.8: covers the main arguments with adequate reasoning, even if wording differs.
 - 0.9-1.0: argument is precise, complete, and uses correct radiological terminology.
 Set "convinced": true whenever persuasion_score >= 0.7.
 
 Current step: {step_code}
-Target expected finding: {target.get('expected_finding', '')}
-Target clinical explanation: {target.get('clinical_explanation', '')}
-Target key points: {target.get('key_points', [])}
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
 
@@ -523,7 +575,7 @@ Return ONLY valid JSON:
   "reasoning_for_grader": "short private grading reason"
 }}
 
-Important: Leave "pending_summary" empty. Do not summarize from the hidden target answer.
+Important: Leave "pending_summary" empty.
 """
     response = _get_openai_client().chat.completions.create(
         model='gpt-4o',
@@ -565,7 +617,14 @@ def _final_grade(case: dict, answer_key: dict[str, dict[str, Any]], messages: li
 You are grading a medical debate training session.
 
 Read the full transcript and score the user for each diagnostic step.
-Score 0.0-1.0. debate_score rewards persuasive rebuttal and correction. knowledge_score rewards medical accuracy against the ground truth.
+Score 0.0-1.0:
+- debate_score: argumentative quality and rebuttal quality.
+- knowledge_score: medical correctness against ground truth.
+- accuracy_score: step-level exactness score.
+Accuracy scoring rule (semantic exactness, not string match):
+- 1.0: meaning is essentially equivalent to ground truth for that step.
+- 0.5: partially correct meaning, but missing or incorrect important elements.
+- 0.0: meaning does not match the expected step conclusion.
 Return Vietnamese reasoning, but only valid JSON.
 
 Case:
@@ -581,10 +640,10 @@ Transcript:
 Return ONLY valid JSON:
 {{
   "scores": [
-    {{"step_code": "DESCRIBE", "debate_score": 0.0, "knowledge_score": 0.0, "reasoning": "short reason"}},
-    {{"step_code": "REASONING", "debate_score": 0.0, "knowledge_score": 0.0, "reasoning": "short reason"}},
-    {{"step_code": "DDx", "debate_score": 0.0, "knowledge_score": 0.0, "reasoning": "short reason"}},
-    {{"step_code": "CONCLUSION", "debate_score": 0.0, "knowledge_score": 0.0, "reasoning": "short reason"}}
+    {{"step_code": "DESCRIBE", "debate_score": 0.0, "knowledge_score": 0.0, "accuracy_score": 0.0, "reasoning": "short reason"}},
+    {{"step_code": "REASONING", "debate_score": 0.0, "knowledge_score": 0.0, "accuracy_score": 0.0, "reasoning": "short reason"}},
+    {{"step_code": "DDx", "debate_score": 0.0, "knowledge_score": 0.0, "accuracy_score": 0.0, "reasoning": "short reason"}},
+    {{"step_code": "CONCLUSION", "debate_score": 0.0, "knowledge_score": 0.0, "accuracy_score": 0.0, "reasoning": "short reason"}}
   ]
 }}
 """
@@ -603,6 +662,7 @@ Return ONLY valid JSON:
             'step_code': code,
             'debate_score': _clamp_score(by_code.get(code, {}).get('debate_score', by_code.get(code, {}).get('persuasion_score', 0))),
             'knowledge_score': _clamp_score(by_code.get(code, {}).get('knowledge_score', by_code.get(code, {}).get('persuasion_score', 0))),
+            'accuracy_score': _clamp_score(by_code.get(code, {}).get('accuracy_score', by_code.get(code, {}).get('persuasion_score', 0))),
             'reasoning': str(by_code.get(code, {}).get('reasoning') or '').strip(),
         }
         for idx, code in enumerate(STEP_CODES)
@@ -641,13 +701,56 @@ def _serialize_session(session: dict) -> dict:
     states = sb.table('swap_step_states').select('*').eq(
         'swap_session_id', session['id']
     ).order('step_index').execute().data or []
+    state_by_step = _step_state_map(states)
+    scores_out: list[dict[str, Any]] = []
+    for idx, code in enumerate(STEP_CODES):
+        state = state_by_step.get(idx) or {}
+        debate_score = state.get('debate_score')
+        knowledge_score = state.get('knowledge_score_final')
+        accuracy_score = state.get('accuracy_score_final')
+        if debate_score is None:
+            debate_score = state.get('debate_score_online')
+        if knowledge_score is None:
+            knowledge_score = state.get('knowledge_score')
+        persuasion_alias = _combined_score({
+            'debate_score': debate_score,
+            'knowledge_score': knowledge_score,
+        })
+        scores_out.append({
+            'step_index': idx,
+            'step_code': code,
+            'debate_score': _clamp_score(debate_score),
+            'knowledge_score': _clamp_score(knowledge_score),
+            'accuracy_score': _clamp_score(accuracy_score),
+            'persuasion_score': persuasion_alias,
+            'reasoning_online': state.get('reasoning_online') or '',
+            'reasoning_final': state.get('reasoning_final') or '',
+        })
+
+    final_debate = sum(s['debate_score'] for s in scores_out) / len(STEP_CODES)
+    final_knowledge = sum(s['knowledge_score'] for s in scores_out) / len(STEP_CODES)
+    final_accuracy = sum(s['accuracy_score'] for s in scores_out) / len(STEP_CODES)
+    final_breakdown = {
+        'debate_score': round(final_debate, 4),
+        'knowledge_score': round(final_knowledge, 4),
+        'accuracy_score': round(final_accuracy, 4),
+        'weights': {
+            'debate': SWAP_FINAL_DEBATE_WEIGHT,
+            'knowledge': SWAP_FINAL_KNOWLEDGE_WEIGHT,
+            'accuracy': SWAP_FINAL_ACCURACY_WEIGHT,
+        },
+    }
+    final_score = _weighted_final_score(final_debate, final_knowledge, final_accuracy)
+
     return {
         **session,
         'case': _case_summary(case or {}),
         'messages': messages,
-        'scores': scores,
+        'scores': scores_out or scores,
         'step_states': states,
         'step_codes': STEP_CODES,
+        'final_score': round(final_score, 4) if session.get('status') == 'COMPLETED' else session.get('final_score'),
+        'final_score_breakdown': final_breakdown,
     }
 
 
@@ -763,11 +866,13 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
                 session,
                 data['messages'],
                 message,
+                result.get('doctor_message') or '',
                 data.get('step_states'),
             )
         except Exception as exc:
             logger.exception("swap: failed to summarize agreed answer from conversation: %s", exc)
             pending_summary = message
+        pending_summary = _sanitize_consensus_summary(pending_summary)
         result['pending_summary'] = pending_summary
         result['doctor_message'] = (
             f"{result['doctor_message']}\n\n"
@@ -811,6 +916,8 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             'debate_score': result.get('debate_score', combined_score),
             'knowledge_score': result.get('knowledge_score', combined_score),
             'reasoning': result.get('reasoning_for_grader', ''),
+            'debate_score_online': result.get('debate_score', combined_score),
+            'reasoning_online': result.get('reasoning_for_grader', ''),
             'updated_at': datetime.now(timezone.utc).isoformat(),
         }, on_conflict='swap_session_id,step_index').execute()
         result['awaiting_confirmation'] = True
@@ -827,6 +934,8 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             'debate_score': result.get('debate_score'),
             'knowledge_score': result.get('knowledge_score'),
             'reasoning': result.get('reasoning_for_grader', ''),
+            'debate_score_online': result.get('debate_score'),
+            'reasoning_online': result.get('reasoning_for_grader', ''),
             'updated_at': datetime.now(timezone.utc).isoformat(),
         }, on_conflict='swap_session_id,step_index').execute()
 
@@ -993,16 +1102,18 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
             final_scores = _final_grade(data['case'], answer_key, full_messages)
         except Exception:
             states = sb.table('swap_step_states').select('*').eq('swap_session_id', session_id).execute().data or []
-            final_scores = [
-                {
+            final_scores = []
+            for idx in range(len(STEP_CODES)):
+                current_state = (_step_state_map(states).get(idx) or {})
+                code = STEP_CODES[idx]
+                final_scores.append({
                     'step_index': idx,
-                    'step_code': STEP_CODES[idx],
-                    'debate_score': _clamp_score((_step_state_map(states).get(idx) or {}).get('debate_score', 0)),
-                    'knowledge_score': _clamp_score((_step_state_map(states).get(idx) or {}).get('knowledge_score', 0)),
-                    'reasoning': (_step_state_map(states).get(idx) or {}).get('reasoning') or '',
-                }
-                for idx in range(len(STEP_CODES))
-            ]
+                    'step_code': code,
+                    'debate_score': _clamp_score(current_state.get('debate_score_online', current_state.get('debate_score', 0))),
+                    'knowledge_score': _clamp_score(current_state.get('knowledge_score', 0)),
+                    'accuracy_score': 1.0 if _is_exact_step_answer(current_state.get('agreed_answer') or '', answer_key.get(code, {})) else 0.0,
+                    'reasoning': current_state.get('reasoning_online') or current_state.get('reasoning') or '',
+                })
         for score in final_scores:
             combined = (_clamp_score(score.get('debate_score')) + _clamp_score(score.get('knowledge_score'))) / 2
             sb.table('swap_step_scores').upsert({
@@ -1022,9 +1133,15 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
                 'debate_score': _clamp_score(score.get('debate_score')),
                 'knowledge_score': _clamp_score(score.get('knowledge_score')),
                 'reasoning': score.get('reasoning') or '',
+                'knowledge_score_final': _clamp_score(score.get('knowledge_score')),
+                'accuracy_score_final': _clamp_score(score.get('accuracy_score')),
+                'reasoning_final': score.get('reasoning') or '',
                 'updated_at': datetime.now(timezone.utc).isoformat(),
             }, on_conflict='swap_session_id,step_index').execute()
-        final_score = sum((_clamp_score(s.get('debate_score')) + _clamp_score(s.get('knowledge_score'))) / 2 for s in final_scores) / len(STEP_CODES)
+        final_debate = sum(_clamp_score(s.get('debate_score')) for s in final_scores) / len(STEP_CODES)
+        final_knowledge = sum(_clamp_score(s.get('knowledge_score')) for s in final_scores) / len(STEP_CODES)
+        final_accuracy = sum(_clamp_score(s.get('accuracy_score')) for s in final_scores) / len(STEP_CODES)
+        final_score = _weighted_final_score(final_debate, final_knowledge, final_accuracy)
         sb.table('swap_sessions').update({
             'status': 'COMPLETED',
             'final_score': round(final_score, 4),
@@ -1063,9 +1180,9 @@ def submit_swap_message(session_id: str, user_id: str, message: str) -> tuple[di
     if state.get('phase') == SWAP_PHASE_AWAITING_CONFIRMATION and _is_confirmation_message(message):
         return _confirm_swap_step(data, message)
 
-    answer_key = _answer_key_for_case(session['case_id'])
+    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {})
     try:
-        result = _doctor_reply(session, data['case'], answer_key, data['messages'], message, data.get('step_states'))
+        result = _doctor_reply(session, data['case'], describe_key, data['messages'], message, data.get('step_states'))
     except Exception as exc:
         return None, Response({'error': 'Doctor model failed', 'message': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
@@ -1095,15 +1212,15 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
         yield _sse('done', {'session': updated, 'last_result': updated.get('last_result', {})})
         return
 
-    answer_key = _answer_key_for_case(session['case_id'])
+    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {})
     doctor_message = ''
     try:
-        prompt = _doctor_text_prompt(session, data['case'], answer_key, data['messages'], message, data.get('step_states'))
+        prompt = _doctor_text_prompt(session, data['case'], describe_key, data['messages'], message, data.get('step_states'))
         for delta in _stream_doctor_text(prompt):
             doctor_message += delta
             yield _sse('delta', {'delta': delta})
 
-        result = _judge_doctor_text(session, answer_key, data['messages'], message, doctor_message, data.get('step_states'))
+        result = _judge_doctor_text(session, data['messages'], message, doctor_message, data.get('step_states'))
         updated, store_err = _store_swap_exchange(data, message, result)
         if store_err:
             yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
