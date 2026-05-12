@@ -95,4 +95,4 @@ jobs:
         run: python manage.py check
 
       - name: Run tests
-        run: python manage.py test app.test.test_api_endpoints --verbosity=2
+        run: python manage.py test apps.backend.app.test.test_api_endpoints --verbosity=2
