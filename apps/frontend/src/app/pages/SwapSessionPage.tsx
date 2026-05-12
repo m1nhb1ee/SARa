@@ -390,10 +390,13 @@ export function SwapSessionPage() {
 
             <div className={styles.exitModalFooter}>
               <button
-                onClick={() => { setShowCompletion(false); navigate('/swap'); }}
+                onClick={() => {
+                  setShowCompletion(false);
+                  setActiveTab('chat');
+                }}
                 className={styles.exitModalCancelBtn}
               >
-                Lưu & Thoát
+                Xem lại cuộc trò chuyện
               </button>
               <button
                 onClick={() => { setShowCompletion(false); navigate('/swap'); }}

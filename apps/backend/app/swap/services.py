@@ -250,6 +250,42 @@ def _sanitize_consensus_summary(text: str) -> str:
     return summary.strip()
 
 
+def _strip_describe_diagnostic_leak(text: str, step_code: str) -> str:
+    if step_code != 'DESCRIBE':
+        return (text or '').strip()
+    raw = (text or '').strip()
+    if not raw:
+        return raw
+
+    leak_terms = (
+        'chẩn đoán',
+        'kết luận',
+        'viêm xương tủy',
+        'osteomyelitis',
+        'sarcoma',
+        'u xương',
+        'ác tính',
+        'lành tính',
+        'ddx',
+        'differential',
+    )
+    normalized = raw.lower()
+    if not any(term in normalized for term in leak_terms):
+        return raw
+
+    sentences = [s.strip() for s in raw.replace('\n', ' ').split('.') if s.strip()]
+    kept: list[str] = []
+    for sentence in sentences:
+        lowered = sentence.lower()
+        if any(term in lowered for term in leak_terms):
+            continue
+        kept.append(sentence)
+
+    if kept:
+        return ". ".join(kept).strip() + "."
+    return "Mình đang ở bước DESCRIBE nên chỉ tập trung mô tả dấu hiệu hình ảnh, chưa kết luận chẩn đoán."
+
+
 def _get_openai_client() -> OpenAI:
     api_key = os.getenv('OPENAI_API_KEY', '').strip()
     if not api_key:
@@ -392,7 +428,11 @@ Conversation rules:
 - Discuss ONLY the current step: {step_code}.
 - Do not reveal future steps.
 - Current mode: {step_mode}
+- If current step is DESCRIBE: discuss imaging findings only. Do not mention diagnosis, differential diagnosis, etiology, or treatment.
+- If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
+- The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
+- You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
 - If the user's argument is weak, push back confidently.
 - If the user's argument touches the main expected finding(s) and good reasoning — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording.
@@ -403,19 +443,14 @@ Title: {case.get('title', '')}
 Modality: {case.get('modality', '')}
 Clinical history: {case.get('clinical_history', '')}
 
-Your initial diagnosis for this step:
+Your current stance for this step:
 {doctor_step}
-
-DESCRIBE answer key (only this key is visible online for grounding):
-Expected finding: {describe_key.get('expected_finding', '')}
-Clinical explanation: {describe_key.get('clinical_explanation', '')}
-Key points: {describe_key.get('key_points', [])}
 
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
 
-Conversation history:
-{_format_history(messages, user_message)}
+Current-step conversation:
+{_current_step_visible_history(messages, step_index, user_message)}
 
 Return ONLY valid JSON:
 {{
@@ -429,6 +464,7 @@ Return ONLY valid JSON:
 }}
 
 Note: Set "convinced": true ONLY IF persuasion_score >= 0.7. If less than 0.7, set "convinced": false.
+Note: For DESCRIBE, semantic overlap on core visible findings is enough to concede; do not force hidden-key style strictness.
 Note: Leave "pending_summary" empty. The system will build the user-visible agreed answer from the visible conversation only.
 """
     response = _get_openai_client().chat.completions.create(
@@ -442,16 +478,13 @@ Note: Leave "pending_summary" empty. The system will build the user-visible agre
         parsed = _json_from_text(response.choices[0].message.content or '')
     except Exception:
         parsed = {}
-    persuasion_score = _clamp_score(parsed.get('persuasion_score', 0))
-    return {
-        'doctor_message': str(parsed.get('doctor_message') or '').strip() or 'Tôi chưa bị thuyết phục.',
-        'convinced': bool(parsed.get('convinced', False)) and persuasion_score >= 0.7,
-        'persuasion_score': persuasion_score,
-        'debate_score': _clamp_score(parsed.get('debate_score', persuasion_score)),
-        'knowledge_score': _clamp_score(parsed.get('knowledge_score', persuasion_score)),
-        'pending_summary': str(parsed.get('pending_summary') or '').strip(),
-        'reasoning_for_grader': str(parsed.get('reasoning_for_grader') or '').strip(),
-    }
+    doctor_message = _strip_describe_diagnostic_leak(
+        str(parsed.get('doctor_message') or '').strip() or 'Tôi chưa bị thuyết phục.',
+        step_code,
+    )
+    result = _judge_doctor_text(session, messages, user_message, doctor_message, describe_key, states)
+    result['doctor_message'] = doctor_message
+    return result
 
 
 def _doctor_text_prompt(
@@ -486,7 +519,11 @@ Conversation rules:
 - Discuss ONLY the current step: {step_code}.
 - Do not reveal future steps.
 - Current mode: {step_mode}
+- If current step is DESCRIBE: discuss imaging findings only. Do not mention diagnosis, differential diagnosis, etiology, or treatment.
+- If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
+- The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
+- You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
 - If the user's argument is weak, push back confidently.
 - If the user's argument touches the main expected finding(s) and good reasoning — concede with mild reluctance and move the discussion forward. Do not demand textbook-perfect wording but also do not let the user get away with weak arguments.
@@ -501,19 +538,14 @@ Title: {case.get('title', '')}
 Modality: {case.get('modality', '')}
 Clinical history: {case.get('clinical_history', '')}
 
-Your initial diagnosis for this step:
+Your current stance for this step:
 {doctor_step}
-
-DESCRIBE answer key (only this key is visible online for grounding):
-Expected finding: {describe_key.get('expected_finding', '')}
-Clinical explanation: {describe_key.get('clinical_explanation', '')}
-Key points: {describe_key.get('key_points', [])}
 
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
 
-Conversation history:
-{_format_history(messages, user_message)}
+Current-step conversation:
+{_current_step_visible_history(messages, step_index, user_message)}
 """
 
 
@@ -537,11 +569,17 @@ def _judge_doctor_text(
     messages: list[dict],
     user_message: str,
     doctor_message: str,
+    describe_key: dict[str, Any] | None = None,
     states: list[dict] | None = None,
 ) -> dict[str, Any]:
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
+    describe_convinced_threshold = 0.62
+    default_convinced_threshold = 0.70
     previous_agreed = _previous_agreed_answers(states or [], step_index)
+    doctor_diagnosis = session.get('doctor_diagnosis') or {}
+    doctor_step_seed = doctor_diagnosis.get(step_code, '')
+    describe_target = describe_key or {}
     prompt = f"""
 You are the online self-judge for a medical roleplay debate.
 
@@ -555,12 +593,29 @@ Scoring rubric (0.0-1.0):
 - 0.9-1.0: argument is precise, complete, and uses correct radiological terminology.
 Set "convinced": true whenever persuasion_score >= 0.7.
 
+Special rule for DESCRIBE:
+- This is an agreement gate, not a strict answer-key grader.
+- If the user agrees with, accepts, or gives a description semantically close to the doctor's current stance, set convinced=true because there is no remaining debate.
+- If the user gives a different observation than the doctor, set convinced=true only when BOTH are true:
+  1) the user's argument is persuasive enough to make the doctor revise the stance;
+  2) the user's direction has at least 0.20 semantic overlap with the DESCRIBE answer key.
+- If the user gives a different direction with less than 0.20 overlap with the DESCRIBE answer key, keep convinced=false even if the prose sounds confident.
+- Do not require perfect wording or complete checklist coverage in DESCRIBE.
+
 Current step: {step_code}
+Doctor's initial stance for this step:
+{doctor_step_seed}
+DESCRIBE answer key for overlap check only:
+{json.dumps({
+    'expected_finding': describe_target.get('expected_finding', ''),
+    'clinical_explanation': describe_target.get('clinical_explanation', ''),
+    'key_points': describe_target.get('key_points', []),
+}, ensure_ascii=False) if step_code == 'DESCRIBE' else '{}'}
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
 
-Previous conversation:
-{_format_history(messages, user_message)}
+Current-step conversation:
+{_current_step_visible_history(messages, step_index, user_message)}
 
 Doctor's streamed reply:
 {doctor_message}
@@ -571,6 +626,9 @@ Return ONLY valid JSON:
   "persuasion_score": 0.0,
   "debate_score": 0.0,
   "knowledge_score": 0.0,
+  "agreement_with_doctor": false,
+  "user_challenges_doctor": false,
+  "answer_key_overlap": 0.0,
   "pending_summary": "",
   "reasoning_for_grader": "short private grading reason"
 }}
@@ -589,9 +647,21 @@ Important: Leave "pending_summary" empty.
     except Exception:
         parsed = {}
     persuasion_score = _clamp_score(parsed.get('persuasion_score', 0))
+    answer_key_overlap = _clamp_score(parsed.get('answer_key_overlap', 0))
+    convinced_threshold = describe_convinced_threshold if step_code == 'DESCRIBE' else default_convinced_threshold
+    convinced = bool(parsed.get('convinced', False)) and persuasion_score >= convinced_threshold
+    if step_code == 'DESCRIBE':
+        agreement_with_doctor = bool(parsed.get('agreement_with_doctor', False))
+        user_challenges_doctor = bool(parsed.get('user_challenges_doctor', False))
+        if agreement_with_doctor and persuasion_score >= describe_convinced_threshold:
+            convinced = True
+        elif user_challenges_doctor:
+            convinced = bool(parsed.get('convinced', False)) and persuasion_score >= default_convinced_threshold and answer_key_overlap >= 0.20
+        elif not convinced and answer_key_overlap >= 0.20 and persuasion_score >= default_convinced_threshold:
+            convinced = True
     return {
         'doctor_message': doctor_message,
-        'convinced': bool(parsed.get('convinced', False)) and persuasion_score >= 0.7,
+        'convinced': convinced,
         'persuasion_score': persuasion_score,
         'debate_score': _clamp_score(parsed.get('debate_score', persuasion_score)),
         'knowledge_score': _clamp_score(parsed.get('knowledge_score', persuasion_score)),
@@ -874,11 +944,18 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             pending_summary = message
         pending_summary = _sanitize_consensus_summary(pending_summary)
         result['pending_summary'] = pending_summary
+        base_doctor_message = result['doctor_message']
         result['doctor_message'] = (
             f"{result['doctor_message']}\n\n"
             f"Phần thống nhất cho bước {step_code}: {pending_summary}\n"
             "Bạn có đồng ý với kết luận này để chuyển sang bước tiếp theo không?"
         )
+        if step_index >= len(STEP_CODES) - 1:
+            result['doctor_message'] = (
+                f"{base_doctor_message}\n\n"
+                f"Phần thống nhất cho bước {step_code}: {pending_summary}\n"
+                "Bạn có đồng ý chốt kết luận này để hoàn thành case không?"
+            )
 
     sb.table('swap_messages').insert([
         {
@@ -1213,14 +1290,19 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
         return
 
     describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {})
+    step_code = STEP_CODES[session['current_step']]
     doctor_message = ''
     try:
         prompt = _doctor_text_prompt(session, data['case'], describe_key, data['messages'], message, data.get('step_states'))
         for delta in _stream_doctor_text(prompt):
             doctor_message += delta
-            yield _sse('delta', {'delta': delta})
+            if step_code != 'DESCRIBE':
+                yield _sse('delta', {'delta': delta})
 
-        result = _judge_doctor_text(session, data['messages'], message, doctor_message, data.get('step_states'))
+        doctor_message = _strip_describe_diagnostic_leak(doctor_message, step_code)
+        if step_code == 'DESCRIBE' and doctor_message:
+            yield _sse('delta', {'delta': doctor_message})
+        result = _judge_doctor_text(session, data['messages'], message, doctor_message, describe_key, data.get('step_states'))
         updated, store_err = _store_swap_exchange(data, message, result)
         if store_err:
             yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
