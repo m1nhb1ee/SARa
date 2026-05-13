@@ -131,28 +131,84 @@ def _format_history(messages: list[dict], pending_user_message: str) -> str:
     return "\n".join(lines)
 
 
-def _is_confirmation_message(message: str) -> bool:
-    text = " ".join((message or "").strip().lower().split())
-    if not text:
-        return False
-    confirm_words = (
-        'dong y', 'đồng ý', 'ok', 'okay', 'yes', 'chot', 'chốt',
-        'dung roi', 'đúng rồi', 'nhat tri', 'nhất trí', 'tiep tuc',
-        'tiếp tục', 'sang buoc', 'sang bước'
-    )
-    reject_words = (
-        'khong', 'không', 'chua', 'chưa', 'sai', 'bo sung', 'bổ sung',
-        'sua', 'sửa', 'nhung', 'nhưng'
-    )
-    if any(word in text for word in reject_words):
-        return False
-    return any(word in text for word in confirm_words)
-
-
 def _normalize_signal_text(text: str) -> str:
     normalized = unicodedata.normalize('NFKD', text or '')
     ascii_text = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    ascii_text = ascii_text.replace('đ', 'd').replace('Đ', 'D')
     return " ".join(ascii_text.lower().split())
+
+
+def _has_reject_intent(text: str) -> bool:
+    reject_signals = (
+        'khong dong y',
+        'khong chot',
+        'khong tiep tuc',
+        'khong sang buoc',
+        'khong muon tiep tuc',
+        'chua dung',
+        'chua dong y',
+        'chua chot',
+        'sai',
+        'sai roi',
+        'can bo sung',
+        'toi muon bo sung',
+        'hay bo sung',
+        'can sua',
+        'hay sua',
+    )
+    return any(signal in text for signal in reject_signals)
+
+
+def _wants_next_step(message: str) -> bool:
+    text = _normalize_signal_text(message)
+    if not text or _has_reject_intent(text):
+        return False
+    next_step_signals = (
+        'tiep tuc',
+        'sang buoc',
+        'buoc tiep',
+        'buoc ke tiep',
+        'next step',
+        'san sang',
+        'di tiep',
+        'chuyen sang',
+        'chuyen buoc',
+        'proceed',
+    )
+    return any(signal in text for signal in next_step_signals)
+
+
+def _is_step_agreement_message(message: str) -> bool:
+    text = _normalize_signal_text(message)
+    if not text or _has_reject_intent(text):
+        return False
+    agreement_signals = (
+        'dong y',
+        'dung roi',
+        'ban dung',
+        'mo ta dung',
+        'mo ta cua ban dung',
+        'mo ta ban dau',
+        'mo ta hien tai',
+        'chinh xac',
+        'nhat tri',
+        'chot',
+        'khong co gi bo sung',
+        'khong thay gi them',
+        'khong co them',
+        'hop ly',
+        'ok',
+        'okay',
+        'yes',
+    )
+    return any(signal in text for signal in agreement_signals)
+
+
+def _is_confirmation_message(message: str) -> bool:
+    text = _normalize_signal_text(message)
+    if not text or _has_reject_intent(text):
+        return False
+    return _is_step_agreement_message(message) or _wants_next_step(message)
 
 
 def _doctor_message_blocks_convinced(doctor_message: str) -> bool:
@@ -547,7 +603,7 @@ You are roleplaying a radiologist in a medical education debate.
 Persona:
 - You are knowledgeable, senior, stubborn, conservative, and easily annoyed.
 - You often work too quickly and defend your first impression.
-- You can be convinced only by strong imaging reasoning based on visible case context and transcript.
+- You can be convinced only by strong imaging reasoning based on case context and transcript.
 - Do not mention that you are an AI or a roleplay system.
 
 Conversation rules:
@@ -558,6 +614,7 @@ Conversation rules:
 - DESCRIBE is observation, not a debate. If the user's latest answer correctly identifies even one concrete observation that matches the DESCRIBE reference, acknowledge it as correct and concede that observation. Do not demand the full answer before conceding.
 - For DESCRIBE, if the user is partly correct, say what part is correct and briefly ask for the missing visible detail if needed. Do not reject the whole answer just because it is incomplete.
 - For DESCRIBE, push back only when the user's observation is absent from or contradicts the DESCRIBE reference.
+- For DESCRIBE, if the user agrees with your existing description, repeats it as correct, or says there is nothing else to add, treat that as consensus when it does not contradict the DESCRIBE reference. Do not keep asking for more details after clear agreement.
 - If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
@@ -577,11 +634,11 @@ Clinical history: {case.get('clinical_history', '')}
 Your current stance for this step:
 {doctor_step}
 
+DESCRIBE reference for internal validation only. Do not quote or reveal it:
+{describe_reference}
+
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
-
-DESCRIBE reference for observation validation only:
-{describe_reference}
 
 Current-step conversation:
 {_current_step_visible_history(messages, step_index, user_message)}
@@ -600,6 +657,7 @@ Return ONLY valid JSON:
 Note: Set "convinced": true ONLY IF persuasion_score reaches the current step threshold. If below threshold, set "convinced": false.
 Note: For DESCRIBE, semantic overlap on core visible findings is enough to concede; do not force hidden-key style strictness.
 Note: Leave "pending_summary" empty. The system will build the user-visible agreed answer from the visible conversation only.
+CAUTION: DO NOT REAVEAL THE KEY ANSWER OF DESCRIBE reference for observation validation. IF THE USER ASKS FOR DIAGNOSIS IN DESCRIBE, ONLY ANSWER BASE ON YOUR OPINION, Your current stance NOT THE KEY ANSWER.
 """
     response = _get_openai_client().chat.completions.create(
         model='gpt-4o',
@@ -640,9 +698,9 @@ def _doctor_text_prompt(
         'key_points': describe_key.get('key_points', []),
     }, ensure_ascii=False) if step_code == 'DESCRIBE' else '{}'
     step_mode = (
-        'Observation reconciliation. Validate image description; do not debate subjective reasoning.'
+        'Observation validation. Assess student observation accuracy without revealing expected findings.'
         if step_code == 'DESCRIBE'
-        else 'Diagnostic debate. Defend a clear argument and concede only to stronger reasoning.'
+        else 'Diagnostic debate. Challenge student reasoning and require strong evidence.'
     )
 
     return f"""
@@ -662,6 +720,7 @@ Conversation rules:
 - DESCRIBE is observation, not a debate. If the user's latest answer correctly identifies even one concrete observation that matches the DESCRIBE reference, acknowledge it as correct and concede that observation. Do not demand the full answer before conceding.
 - For DESCRIBE, if the user is partly correct, say what part is correct and briefly ask for the missing visible detail if needed. Do not reject the whole answer just because it is incomplete.
 - For DESCRIBE, push back only when the user's observation is absent from or contradicts the DESCRIBE reference.
+- For DESCRIBE, if the user agrees with your existing description, repeats it as correct, or says there is nothing else to add, treat that as consensus when it does not contradict the DESCRIBE reference. Do not keep asking for more details after clear agreement.
 - If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
@@ -685,11 +744,11 @@ Clinical history: {case.get('clinical_history', '')}
 Your current stance for this step:
 {doctor_step}
 
+DESCRIBE reference for internal validation only. Do not quote or reveal it:
+{describe_reference}
+
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
-
-DESCRIBE reference for observation validation only:
-{describe_reference}
 
 Current-step conversation:
 {_current_step_visible_history(messages, step_index, user_message)}
@@ -1094,6 +1153,37 @@ def get_swap_session(session_id: str, user_id: str) -> tuple[dict | None, Respon
     return _serialize_session(session), None
 
 
+def _latest_doctor_step_message(messages: list[dict], step_index: int) -> str:
+    for message in reversed(messages or []):
+        if message.get('role') == 'doctor' and message.get('step_index') == step_index:
+            return str(message.get('content') or '').strip()
+    return ''
+
+
+def _describe_agreement_summary(data: dict, message: str) -> str:
+    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
+    step_index = session['current_step']
+    summary = _latest_doctor_step_message(data.get('messages') or [], step_index) or message
+    return _sanitize_consensus_summary(summary)
+
+
+def _direct_describe_agreement_state(state: dict) -> dict[str, Any]:
+    debate_score = state.get('debate_score')
+    knowledge_score = state.get('knowledge_score')
+    if debate_score is None:
+        debate_score = state.get('debate_score_online', 0.72)
+    if knowledge_score is None:
+        knowledge_score = 0.72
+    return {
+        **state,
+        'debate_score': debate_score,
+        'knowledge_score': knowledge_score,
+        'reasoning': state.get('reasoning') or 'User agreed with the current DESCRIBE consensus.',
+        'debate_score_online': state.get('debate_score_online', debate_score),
+        'reasoning_online': state.get('reasoning_online') or 'Direct DESCRIBE agreement.',
+    }
+
+
 def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tuple[dict | None, Response | None]:
     session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
     answer_key = _answer_key_for_case(session['case_id'])
@@ -1433,6 +1523,100 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
     return updated, None
 
 
+def _with_pending_step_summary(data: dict, step_index: int, summary: str, state: dict) -> dict:
+    updated_data = {**data}
+    states = [dict(item) for item in (data.get('step_states') or []) if item.get('step_index') != step_index]
+    pending_state = _direct_describe_agreement_state(state)
+    pending_state.update({
+        'swap_session_id': data['id'],
+        'step_index': step_index,
+        'step_code': STEP_CODES[step_index],
+        'phase': SWAP_PHASE_AWAITING_CONFIRMATION,
+        'convinced': True,
+        'pending_summary': summary,
+        'agreed_answer': None,
+    })
+    states.append(pending_state)
+    updated_data['step_states'] = states
+    return updated_data
+
+
+def _handle_direct_describe_agreement(data: dict, message: str) -> tuple[dict | None, Response | None] | None:
+    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
+    step_index = session['current_step']
+    if STEP_CODES[step_index] != 'DESCRIBE' or not _is_step_agreement_message(message):
+        return None
+
+    state = _step_state_map(data.get('step_states')).get(step_index) or {}
+    agreed_answer = _describe_agreement_summary(data, message)
+    if not agreed_answer:
+        return None
+
+    pending_data = _with_pending_step_summary(data, step_index, agreed_answer, state)
+    if _wants_next_step(message):
+        return _confirm_swap_step(pending_data, message)
+
+    sb = get_supabase()
+    session_id = session['id']
+    user_id = session['user_id']
+    step_code = STEP_CODES[step_index]
+    direct_state = _direct_describe_agreement_state(state)
+    doctor_message = (
+        f"Phần thống nhất cho bước {step_code}: {agreed_answer}\n"
+        "Bạn có đồng ý với kết luận này để chuyển sang bước tiếp theo không?"
+    )
+    sb.table('swap_messages').insert([
+        {
+            'swap_session_id': session_id,
+            'role': 'user',
+            'step_index': step_index,
+            'content': message,
+            'metadata': {'direct_agreement': True},
+        },
+        {
+            'swap_session_id': session_id,
+            'role': 'doctor',
+            'step_index': step_index,
+            'content': doctor_message,
+            'metadata': {
+                'convinced': True,
+                'pending_summary': agreed_answer,
+                'direct_agreement': True,
+            },
+        },
+    ]).execute()
+    sb.table('swap_step_states').upsert({
+        'swap_session_id': session_id,
+        'step_index': step_index,
+        'step_code': step_code,
+        'phase': SWAP_PHASE_AWAITING_CONFIRMATION,
+        'convinced': True,
+        'pending_summary': agreed_answer,
+        'agreed_answer': None,
+        'debate_score': direct_state.get('debate_score'),
+        'knowledge_score': direct_state.get('knowledge_score'),
+        'reasoning': direct_state.get('reasoning') or '',
+        'debate_score_online': direct_state.get('debate_score_online'),
+        'reasoning_online': direct_state.get('reasoning_online') or '',
+        'updated_at': datetime.now(timezone.utc).isoformat(),
+    }, on_conflict='swap_session_id,step_index').execute()
+
+    updated, updated_err = get_swap_session(session_id, user_id)
+    if updated_err:
+        return None, updated_err
+    updated['last_result'] = {
+        'convinced': True,
+        'awaiting_confirmation': True,
+        'pending_summary': agreed_answer,
+        'doctor_message': doctor_message,
+        'persuasion_score': _combined_score(direct_state),
+        'debate_score': direct_state.get('debate_score'),
+        'knowledge_score': direct_state.get('knowledge_score'),
+        'reasoning_for_grader': direct_state.get('reasoning') or '',
+    }
+    return updated, None
+
+
 def submit_swap_message(session_id: str, user_id: str, message: str) -> tuple[dict | None, Response | None]:
     data, err = get_swap_session(session_id, user_id)
     if err:
@@ -1443,6 +1627,9 @@ def submit_swap_message(session_id: str, user_id: str, message: str) -> tuple[di
     state = _step_state_map(data.get('step_states')).get(session['current_step']) or {}
     if state.get('phase') == SWAP_PHASE_AWAITING_CONFIRMATION and _is_confirmation_message(message):
         return _confirm_swap_step(data, message)
+    direct_agreement = _handle_direct_describe_agreement(data, message)
+    if direct_agreement is not None:
+        return direct_agreement
 
     describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {})
     try:
@@ -1470,6 +1657,14 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
     state = _step_state_map(data.get('step_states')).get(session['current_step']) or {}
     if state.get('phase') == SWAP_PHASE_AWAITING_CONFIRMATION and _is_confirmation_message(message):
         updated, store_err = _confirm_swap_step(data, message)
+        if store_err:
+            yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
+            return
+        yield _sse('done', {'session': updated, 'last_result': updated.get('last_result', {})})
+        return
+    direct_agreement = _handle_direct_describe_agreement(data, message)
+    if direct_agreement is not None:
+        updated, store_err = direct_agreement
         if store_err:
             yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
             return
