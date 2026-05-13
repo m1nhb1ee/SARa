@@ -10,11 +10,14 @@ from app.sessions.views import SessionViewSet, StudentPerformanceViewSet
 from app.swap.services import (
     SWAP_PHASE_AWAITING_CONFIRMATION,
     SWAP_PHASE_DEBATING,
+    _describe_agreement_summary,
     _doctor_message_blocks_convinced,
     _doctor_text_prompt,
+    _consensus_summary_step_rules,
     _handle_direct_describe_agreement,
     _is_confirmation_message,
     _is_step_agreement_message,
+    _sanitize_doctor_persona_text,
     _wants_next_step,
     submit_swap_message,
 )
@@ -832,6 +835,20 @@ class SwapEndpointTests(SimpleTestCase):
             for call in supabase.calls
         ))
 
+    def test_direct_describe_agreement_summary_uses_initial_description_not_latest_prompt(self):
+        data = self.make_swap_data()
+        data['messages'].append({
+            'role': 'doctor',
+            'step_index': 0,
+            'content': 'Nếu bạn không thấy gì, có thể cần xem xét kỹ hơn quanh vùng xương bàn chân.',
+        })
+
+        summary = _describe_agreement_summary(data, 'tôi nghĩ ý kiến ban đầu của bạn là chính xác')
+
+        self.assertIn('X-quang bàn chân phải', summary)
+        self.assertIn('Không thấy gãy xương', summary)
+        self.assertNotIn('xem xét kỹ hơn', summary)
+
     def test_direct_describe_agreement_ignores_off_topic_message(self):
         result = _handle_direct_describe_agreement(self.make_swap_data(), 'tôi thấy con vịt')
 
@@ -884,4 +901,26 @@ class SwapEndpointTests(SimpleTestCase):
 
         self.assertIn("Dr. Swap's initial opinion, not established fact", prompt)
         self.assertIn('do not assert new imaging findings', prompt)
+        self.assertIn('Never mention VLM, model, AI', prompt)
+        self.assertIn('1-on-1 chat with the user', prompt)
         self.assertIn('Previous agreed answers', prompt)
+
+    def test_doctor_persona_sanitizer_removes_model_terms(self):
+        text = 'Chào các đồng nghiệp, Mặc dù VLM có thể gợi ý bình thường, model vẫn cần được kiểm tra. Trân trọng, Bác sĩ [Tên]'
+
+        sanitized = _sanitize_doctor_persona_text(text)
+
+        self.assertNotIn('VLM', sanitized)
+        self.assertNotIn('model', sanitized)
+        self.assertNotIn('Chào các đồng nghiệp', sanitized)
+        self.assertNotIn('Trân trọng', sanitized)
+        self.assertIn('ấn tượng ban đầu của tôi', sanitized)
+
+    def test_ddx_consensus_rules_keep_diagnoses_not_risk_factor_title(self):
+        rules = _consensus_summary_step_rules('DDx')
+
+        self.assertIn('differential diagnoses', rules)
+        self.assertIn('Risk factors', rules)
+        self.assertIn('supporting context only', rules)
+        self.assertIn('osteomyelitis', rules)
+        self.assertIn('Charcot foot', rules)

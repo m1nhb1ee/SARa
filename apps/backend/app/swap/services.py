@@ -410,6 +410,34 @@ def _strip_describe_diagnostic_leak(text: str, step_code: str) -> str:
     return "Mình đang ở bước DESCRIBE nên chỉ tập trung mô tả dấu hiệu hình ảnh, chưa kết luận chẩn đoán."
 
 
+def _sanitize_doctor_persona_text(text: str) -> str:
+    replacements = {
+        'VLM': 'ấn tượng ban đầu của tôi',
+        'vlm': 'ấn tượng ban đầu của tôi',
+        'AI': 'tôi',
+        'ai': 'tôi',
+        'model': 'đánh giá ban đầu của tôi',
+        'Model': 'đánh giá ban đầu của tôi',
+        'current stance': 'ấn tượng ban đầu của tôi',
+    }
+    sanitized = text or ''
+    for source, replacement in replacements.items():
+        sanitized = sanitized.replace(source, replacement)
+    formal_phrases = (
+        'Chào các đồng nghiệp,',
+        'Chào các đồng nghiệp',
+        'Kính gửi các đồng nghiệp,',
+        'Kính gửi các đồng nghiệp',
+        'Trong buổi thảo luận hôm nay,',
+        'Trân trọng,',
+        'Trân trọng',
+        'Bác sĩ [Tên]',
+    )
+    for phrase in formal_phrases:
+        sanitized = sanitized.replace(phrase, '').strip()
+    return sanitized.strip()
+
+
 def _get_openai_client() -> OpenAI:
     api_key = os.getenv('OPENAI_API_KEY', '').strip()
     if not api_key:
@@ -467,6 +495,34 @@ Return JSON shape:
     return translated
 
 
+def _consensus_summary_step_rules(step_code: str) -> str:
+    if step_code == 'DDx':
+        return """
+Step-specific rules for DDx:
+- The agreed answer must name the differential diagnoses being considered.
+- Risk factors such as age, diabetes, ulcer history, immune status, or healing capacity are supporting context only; do not make them the differential diagnosis.
+- If the conversation mentions diagnoses such as soft-tissue infection, osteomyelitis, peripheral arterial disease, Charcot foot, arthritis, tendinitis, pressure injury, or mechanical ulcer, preserve those diagnoses in the agreed answer.
+- Write the summary as a ranked or grouped differential diagnosis list with brief rationale when possible.
+"""
+    if step_code == 'REASONING':
+        return """
+Step-specific rules for REASONING:
+- The agreed answer must summarize the causal/clinical reasoning from agreed imaging findings and clinical context.
+- Do not summarize the step as only an observation; explain why the agreed findings affect next diagnostic thinking.
+"""
+    if step_code == 'CONCLUSION':
+        return """
+Step-specific rules for CONCLUSION:
+- The agreed answer must state the final diagnostic conclusion or next diagnostic decision.
+- Include confidence/uncertainty only if it was actually discussed.
+"""
+    return """
+Step-specific rules for DESCRIBE:
+- The agreed answer must summarize visible imaging observations only.
+- Do not include diagnosis, differential diagnosis, etiology, or management.
+"""
+
+
 def _summarize_agreed_answer_from_conversation(
     session: dict,
     messages: list[dict],
@@ -477,6 +533,7 @@ def _summarize_agreed_answer_from_conversation(
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
     previous_agreed = _previous_agreed_answers(states or [], step_index)
+    step_rules = _consensus_summary_step_rules(step_code)
     prompt = f"""
 Create the agreed answer for the current radiology debate step.
 
@@ -493,6 +550,8 @@ Rules:
 - Keep an annoyed-doctor tone: direct, concise, slightly sharp, but still professional.
 - Return ONLY valid JSON.
 - Do not prefix the answer with the step code.
+
+{step_rules}
 
 Current step: {step_code}
 Previous agreed answers, for context only:
@@ -546,9 +605,12 @@ Rules:
 - If the VLM/current stance conflicts with the agreed observations, revise it so the next-step reasoning follows the agreed observations.
 - Treat the VLM/current stance as Dr. Swap's initial opinion, not as established fact.
 - Do not assert new imaging findings unless they already appear in the agreed observations. If the VLM/current stance mentions an unagreed finding, frame it as something to verify on the image.
-- Do not mention VLM, model, answer key, or hidden reference.
+- Do not mention VLM, model, AI, answer key, hidden reference, or "current stance" in the doctor-facing message. Refer to it only as your own clinical impression if needed.
 - Discuss ONLY the next step: {next_code}.
 - Keep the stubborn senior radiologist persona, but do not reopen already agreed observations.
+- This is a 1-on-1 chat with the user, not a lecture, email, report, or conference.
+- Do not greet colleagues, sign off, write "Trân trọng", use "chúng ta trong buổi thảo luận hôm nay", or address a group.
+- Keep it short, conversational, and direct. Address the user as "bạn"; speak as "tôi".
 - Respond in Vietnamese as the doctor only. Do not return JSON.
 
 Previous agreed observations/answers:
@@ -567,7 +629,7 @@ Secondary VLM/current stance for {next_code}:
         )
         message = (response.choices[0].message.content or '').strip()
         if message:
-            return message
+            return _sanitize_doctor_persona_text(message)
     except Exception as exc:
         logger.warning("swap: failed to generate next-step opening from agreed answer: %s", exc)
 
@@ -626,6 +688,10 @@ Conversation rules:
 - For REASONING, DDx, CONCLUSION: every challenge, objection, or concession must explicitly connect back to Previous agreed answers or the user's latest message.
 - For REASONING, DDx, CONCLUSION: do not assert new imaging findings such as erosion, cortical destruction, density change, or soft-tissue abnormality unless those findings are already in Previous agreed answers or the user's latest message.
 - If your current stance contains findings that were not agreed earlier, ask the user to verify those possible findings on the image instead of presenting them as facts.
+- Never mention VLM, model, AI, answer key, hidden reference, prompt, or "current stance" in your reply. Speak as Dr. Swap using first-person clinical phrasing such as "tôi nghĩ" or "ấn tượng của tôi".
+- This is a 1-on-1 chat with the user, not a lecture, email, report, or conference.
+- Do not greet colleagues, sign off, write "Trân trọng", use "chúng ta trong buổi thảo luận hôm nay", or address a group.
+- Keep it short, conversational, and direct. Address the user as "bạn"; speak as "tôi".
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
 - You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
@@ -683,6 +749,7 @@ CAUTION: DO NOT REAVEAL THE KEY ANSWER OF DESCRIBE reference for observation val
         str(parsed.get('doctor_message') or '').strip() or 'Tôi chưa bị thuyết phục.',
         step_code,
     )
+    doctor_message = _sanitize_doctor_persona_text(doctor_message)
     result = _judge_doctor_text(session, messages, user_message, doctor_message, describe_key, states)
     result['doctor_message'] = doctor_message
     return result
@@ -736,6 +803,7 @@ Conversation rules:
 - For REASONING, DDx, CONCLUSION: every challenge, objection, or concession must explicitly connect back to Previous agreed answers or the user's latest message.
 - For REASONING, DDx, CONCLUSION: do not assert new imaging findings such as erosion, cortical destruction, density change, or soft-tissue abnormality unless those findings are already in Previous agreed answers or the user's latest message.
 - If your current stance contains findings that were not agreed earlier, ask the user to verify those possible findings on the image instead of presenting them as facts.
+- Never mention VLM, model, AI, answer key, hidden reference, prompt, or "current stance" in your reply. Speak as Dr. Swap using first-person clinical phrasing such as "tôi nghĩ" or "ấn tượng của tôi".
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
 - You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
@@ -748,6 +816,9 @@ Conversation rules:
 - Avoid repetitive openings like "Tôi hiểu rằng", "Tôi biết rằng", "Tôi đồng ý rằng".
 - Use natural Vietnamese phrasing with varied sentence openings.
 - Keep an annoyed-doctor tone: direct, concise, slightly sharp, but still professional.
+- This is a 1-on-1 chat with the user, not a lecture, email, report, or conference.
+- Do not greet colleagues, sign off, write "Trân trọng", use "chúng ta trong buổi thảo luận hôm nay", or address a group.
+- Keep it short, conversational, and direct. Address the user as "bạn"; speak as "tôi".
 
 Case:
 Title: {case.get('title', '')}
@@ -825,6 +896,7 @@ Caps:
 - If the answer is partly correct but misses a major required element, cap debate_score/knowledge_score strictly even if persuasion_score passes the convinced threshold.
 - For REASONING, DDx, CONCLUSION, a merely plausible answer without explicit link to agreed findings cannot exceed 0.69.
 - For REASONING, DDx, CONCLUSION, judge the latest answer against the agreed prior findings and visible current-step exchange. Do not reward arguments that rely on unagreed imaging findings introduced only by the doctor's initial stance.
+- For DDx, risk factors alone are not differential diagnoses. The answer should name plausible diagnostic entities; examples include infection, osteomyelitis, peripheral arterial disease, Charcot foot, arthritis, tendinitis, pressure injury, or mechanical ulcer when supported by the conversation.
 Set "convinced": true only when the doctor's streamed reply explicitly accepts, concedes, or revises toward the user's position.
 If the doctor still asks for proof, says they still do not see the finding, or requests more specific evidence, set "convinced": false even when persuasion_score is high.
 
@@ -1174,10 +1246,23 @@ def _latest_doctor_step_message(messages: list[dict], step_index: int) -> str:
     return ''
 
 
+def _first_doctor_step_message(messages: list[dict], step_index: int) -> str:
+    for message in messages or []:
+        if message.get('role') == 'doctor' and message.get('step_index') == step_index:
+            return str(message.get('content') or '').strip()
+    return ''
+
+
 def _describe_agreement_summary(data: dict, message: str) -> str:
     session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
     step_index = session['current_step']
-    summary = _latest_doctor_step_message(data.get('messages') or [], step_index) or message
+    doctor_diagnosis = session.get('doctor_diagnosis') or {}
+    summary = (
+        str(doctor_diagnosis.get('DESCRIBE') or doctor_diagnosis.get('OBSERVE') or '').strip()
+        or _first_doctor_step_message(data.get('messages') or [], step_index)
+        or _latest_doctor_step_message(data.get('messages') or [], step_index)
+        or message
+    )
     return _sanitize_consensus_summary(summary)
 
 
@@ -1708,6 +1793,7 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
                 yield _sse('delta', {'delta': delta})
 
         doctor_message = _strip_describe_diagnostic_leak(doctor_message, step_code)
+        doctor_message = _sanitize_doctor_persona_text(doctor_message)
         result = _judge_doctor_text(session, data['messages'], message, doctor_message, describe_key, data.get('step_states'))
         updated, store_err = _store_swap_exchange(data, message, result)
         if store_err:
