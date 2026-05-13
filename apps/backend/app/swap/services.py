@@ -190,6 +190,9 @@ def _is_step_agreement_message(message: str) -> bool:
         'mo ta cua ban dung',
         'mo ta ban dau',
         'mo ta hien tai',
+        'hinh anh binh thuong',
+        'co ve binh thuong',
+        'tat ca moi thu deu binh thuong',
         'chinh xac',
         'nhat tri',
         'chot',
@@ -541,6 +544,8 @@ Rules:
 - The agreed answers are authoritative clinical context.
 - The VLM/current stance is only a secondary hint. Use it only if it fits the agreed observations.
 - If the VLM/current stance conflicts with the agreed observations, revise it so the next-step reasoning follows the agreed observations.
+- Treat the VLM/current stance as Dr. Swap's initial opinion, not as established fact.
+- Do not assert new imaging findings unless they already appear in the agreed observations. If the VLM/current stance mentions an unagreed finding, frame it as something to verify on the image.
 - Do not mention VLM, model, answer key, or hidden reference.
 - Discuss ONLY the next step: {next_code}.
 - Keep the stubborn senior radiologist persona, but do not reopen already agreed observations.
@@ -617,6 +622,10 @@ Conversation rules:
 - For DESCRIBE, if the user agrees with your existing description, repeats it as correct, or says there is nothing else to add, treat that as consensus when it does not contradict the DESCRIBE reference. Do not keep asking for more details after clear agreement.
 - If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
+- Your current stance is Dr. Swap's initial opinion, not established fact.
+- For REASONING, DDx, CONCLUSION: every challenge, objection, or concession must explicitly connect back to Previous agreed answers or the user's latest message.
+- For REASONING, DDx, CONCLUSION: do not assert new imaging findings such as erosion, cortical destruction, density change, or soft-tissue abnormality unless those findings are already in Previous agreed answers or the user's latest message.
+- If your current stance contains findings that were not agreed earlier, ask the user to verify those possible findings on the image instead of presenting them as facts.
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
 - You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
@@ -723,6 +732,10 @@ Conversation rules:
 - For DESCRIBE, if the user agrees with your existing description, repeats it as correct, or says there is nothing else to add, treat that as consensus when it does not contradict the DESCRIBE reference. Do not keep asking for more details after clear agreement.
 - If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
+- Your current stance is Dr. Swap's initial opinion, not established fact.
+- For REASONING, DDx, CONCLUSION: every challenge, objection, or concession must explicitly connect back to Previous agreed answers or the user's latest message.
+- For REASONING, DDx, CONCLUSION: do not assert new imaging findings such as erosion, cortical destruction, density change, or soft-tissue abnormality unless those findings are already in Previous agreed answers or the user's latest message.
+- If your current stance contains findings that were not agreed earlier, ask the user to verify those possible findings on the image instead of presenting them as facts.
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
 - You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
@@ -811,6 +824,7 @@ Caps:
 - If terminology is wrong or anatomy/location is imprecise, cap knowledge_score at 0.65.
 - If the answer is partly correct but misses a major required element, cap debate_score/knowledge_score strictly even if persuasion_score passes the convinced threshold.
 - For REASONING, DDx, CONCLUSION, a merely plausible answer without explicit link to agreed findings cannot exceed 0.69.
+- For REASONING, DDx, CONCLUSION, judge the latest answer against the agreed prior findings and visible current-step exchange. Do not reward arguments that rely on unagreed imaging findings introduced only by the doctor's initial stance.
 Set "convinced": true only when the doctor's streamed reply explicitly accepts, concedes, or revises toward the user's position.
 If the doctor still asks for proof, says they still do not see the finding, or requests more specific evidence, set "convinced": false even when persuasion_score is high.
 
@@ -1186,7 +1200,6 @@ def _direct_describe_agreement_state(state: dict) -> dict[str, Any]:
 
 def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tuple[dict | None, Response | None]:
     session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
-    answer_key = _answer_key_for_case(session['case_id'])
     sb = get_supabase()
     session_id = session['id']
     user_id = session['user_id']
@@ -1307,6 +1320,7 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             full_messages = sb.table('swap_messages').select('*').eq(
                 'swap_session_id', session_id
             ).order('created_at').execute().data or []
+            answer_key = _answer_key_for_case(session['case_id'])
             try:
                 final_scores = _final_grade(data['case'], answer_key, full_messages)
             except Exception:
@@ -1402,6 +1416,7 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
     agreed_answer = state.get('pending_summary') or ''
     if not agreed_answer:
         return None, Response({'error': 'No pending step summary to confirm'}, status=status.HTTP_400_BAD_REQUEST)
+    confirm_message = f'Thống nhất bước {step_code}: {agreed_answer}'
 
     sb.table('swap_messages').insert([
         {
@@ -1415,7 +1430,7 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
             'swap_session_id': session_id,
             'role': 'doctor',
             'step_index': step_index,
-            'content': f'Thống nhất bước {step_code}: {agreed_answer}',
+            'content': confirm_message,
             'metadata': {'confirmed': True},
         },
     ]).execute()
@@ -1441,7 +1456,7 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
         'reasoning': state.get('reasoning') or '',
     }, on_conflict='swap_session_id,step_index').execute()
 
-    result: dict[str, Any] = {'confirmed': True}
+    result: dict[str, Any] = {'confirmed': True, 'doctor_message': confirm_message}
     if step_index >= len(STEP_CODES) - 1:
         full_messages = sb.table('swap_messages').select('*').eq(
             'swap_session_id', session_id
@@ -1515,6 +1530,7 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
                 'content': next_message,
                 'metadata': {'source': 'agreed_context_plus_vlm'},
             }).execute()
+            result['next_step_message'] = next_message
 
     updated, updated_err = get_swap_session(session_id, user_id)
     if updated_err:
@@ -1561,6 +1577,7 @@ def _handle_direct_describe_agreement(data: dict, message: str) -> tuple[dict | 
     user_id = session['user_id']
     step_code = STEP_CODES[step_index]
     direct_state = _direct_describe_agreement_state(state)
+    persuasion_score = _combined_score(direct_state)
     doctor_message = (
         f"Phần thống nhất cho bước {step_code}: {agreed_answer}\n"
         "Bạn có đồng ý với kết luận này để chuyển sang bước tiếp theo không?"
@@ -1580,6 +1597,9 @@ def _handle_direct_describe_agreement(data: dict, message: str) -> tuple[dict | 
             'content': doctor_message,
             'metadata': {
                 'convinced': True,
+                'persuasion_score': persuasion_score,
+                'debate_score': direct_state.get('debate_score'),
+                'knowledge_score': direct_state.get('knowledge_score'),
                 'pending_summary': agreed_answer,
                 'direct_agreement': True,
             },
@@ -1609,7 +1629,7 @@ def _handle_direct_describe_agreement(data: dict, message: str) -> tuple[dict | 
         'awaiting_confirmation': True,
         'pending_summary': agreed_answer,
         'doctor_message': doctor_message,
-        'persuasion_score': _combined_score(direct_state),
+        'persuasion_score': persuasion_score,
         'debate_score': direct_state.get('debate_score'),
         'knowledge_score': direct_state.get('knowledge_score'),
         'reasoning_for_grader': direct_state.get('reasoning') or '',
@@ -1631,7 +1651,7 @@ def submit_swap_message(session_id: str, user_id: str, message: str) -> tuple[di
     if direct_agreement is not None:
         return direct_agreement
 
-    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {})
+    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {}) if STEP_CODES[session['current_step']] == 'DESCRIBE' else {}
     try:
         result = _doctor_reply(session, data['case'], describe_key, data['messages'], message, data.get('step_states'))
     except Exception as exc:
@@ -1660,6 +1680,9 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
         if store_err:
             yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
             return
+        doctor_message = (updated.get('last_result') or {}).get('doctor_message')
+        if doctor_message:
+            yield _sse('delta', {'delta': doctor_message})
         yield _sse('done', {'session': updated, 'last_result': updated.get('last_result', {})})
         return
     direct_agreement = _handle_direct_describe_agreement(data, message)
@@ -1668,11 +1691,14 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
         if store_err:
             yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
             return
+        doctor_message = (updated.get('last_result') or {}).get('doctor_message')
+        if doctor_message:
+            yield _sse('delta', {'delta': doctor_message})
         yield _sse('done', {'session': updated, 'last_result': updated.get('last_result', {})})
         return
 
-    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {})
     step_code = STEP_CODES[session['current_step']]
+    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {}) if step_code == 'DESCRIBE' else {}
     doctor_message = ''
     try:
         prompt = _doctor_text_prompt(session, data['case'], describe_key, data['messages'], message, data.get('step_states'))
@@ -1682,13 +1708,13 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
                 yield _sse('delta', {'delta': delta})
 
         doctor_message = _strip_describe_diagnostic_leak(doctor_message, step_code)
-        if step_code == 'DESCRIBE' and doctor_message:
-            yield _sse('delta', {'delta': doctor_message})
         result = _judge_doctor_text(session, data['messages'], message, doctor_message, describe_key, data.get('step_states'))
         updated, store_err = _store_swap_exchange(data, message, result)
         if store_err:
             yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
             return
+        if step_code == 'DESCRIBE' and result.get('doctor_message'):
+            yield _sse('delta', {'delta': result['doctor_message']})
         yield _sse('done', {'session': updated, 'last_result': result})
     except Exception as exc:
         logger.exception("swap stream failed: %s", exc)
