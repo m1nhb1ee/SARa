@@ -11,6 +11,7 @@ from app.swap.services import (
     SWAP_PHASE_AWAITING_CONFIRMATION,
     SWAP_PHASE_DEBATING,
     _doctor_message_blocks_convinced,
+    _doctor_text_prompt,
     _handle_direct_describe_agreement,
     _is_confirmation_message,
     _is_step_agreement_message,
@@ -752,6 +753,7 @@ class SwapEndpointTests(SimpleTestCase):
         self.assertTrue(_is_confirmation_message('tôi sẵn sàng, hãy sang bước tiếp'))
         self.assertTrue(_is_confirmation_message('mô tả đúng rồi, tiếp tục'))
         self.assertTrue(_is_step_agreement_message('tôi đồng ý với mô tả ban đầu'))
+        self.assertTrue(_is_step_agreement_message('tôi không thấy gì, tôi thấy hình ảnh bình thường'))
         self.assertTrue(_wants_next_step('hãy sang bước kế tiếp'))
 
     def test_confirmation_message_does_not_reject_medical_negative_finding(self):
@@ -819,6 +821,12 @@ class SwapEndpointTests(SimpleTestCase):
             and call['payload']['phase'] == SWAP_PHASE_AWAITING_CONFIRMATION
             for call in supabase.calls
         ))
+        consensus_messages = [
+            call['payload'][1]
+            for call in supabase.calls
+            if call['table'] == 'swap_messages' and call['operation'] == 'insert'
+        ]
+        self.assertEqual(consensus_messages[0]['metadata']['persuasion_score'], 0.72)
         self.assertFalse(any(
             call['table'] == 'swap_sessions' and call['operation'] == 'update'
             for call in supabase.calls
@@ -828,3 +836,52 @@ class SwapEndpointTests(SimpleTestCase):
         result = _handle_direct_describe_agreement(self.make_swap_data(), 'tôi thấy con vịt')
 
         self.assertIsNone(result)
+
+    def test_reasoning_step_does_not_read_database_answer_key(self):
+        initial = self.make_swap_data(current_step=1)
+        initial['step_states'].append({
+            'swap_session_id': 'swap-1',
+            'step_index': 1,
+            'step_code': 'REASONING',
+            'phase': SWAP_PHASE_DEBATING,
+            'convinced': False,
+            'pending_summary': None,
+            'agreed_answer': None,
+            'debate_score': None,
+            'knowledge_score': None,
+            'reasoning': '',
+        })
+        result_payload = {
+            'doctor_message': 'Hãy lập luận dựa trên phần đã thống nhất và lập trường của Dr. Swap.',
+            'convinced': False,
+            'persuasion_score': 0.4,
+            'debate_score': 0.4,
+            'knowledge_score': 0.4,
+            'reasoning_for_grader': '',
+        }
+
+        with patch('app.swap.services.get_swap_session', return_value=(initial, None)), \
+             patch('app.swap.services._answer_key_for_case', side_effect=AssertionError('answer key leak')), \
+             patch('app.swap.services._doctor_reply', return_value=result_payload), \
+             patch('app.swap.services._store_swap_exchange', return_value=({'last_result': result_payload}, None)):
+            result, err = submit_swap_message('swap-1', 'user-1', 'tôi cũng nghĩ vậy')
+
+        self.assertIsNone(err)
+        self.assertEqual(result['last_result']['doctor_message'], result_payload['doctor_message'])
+
+    def test_reasoning_prompt_keeps_vlm_stance_tied_to_agreed_findings(self):
+        data = self.make_swap_data(current_step=1)
+        data['step_states'][0]['agreed_answer'] = 'X-quang bàn chân phải không thấy gãy xương hay trật khớp rõ ràng.'
+
+        prompt = _doctor_text_prompt(
+            data,
+            data['case'],
+            {},
+            data['messages'],
+            'tôi nghĩ hình ảnh bình thường',
+            data['step_states'],
+        )
+
+        self.assertIn("Dr. Swap's initial opinion, not established fact", prompt)
+        self.assertIn('do not assert new imaging findings', prompt)
+        self.assertIn('Previous agreed answers', prompt)

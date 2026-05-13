@@ -240,11 +240,6 @@ export function SwapSessionPage() {
                     <p className={isUser ? styles.studentMessageText : styles.aiMessageText}>
                       {message.content}
                     </p>
-                    {message.metadata?.convinced && (
-                      <div style={{ marginTop: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: 'var(--accent-sage)' }}>
-                        CONVINCED / {Math.round((message.metadata.persuasion_score ?? 0) * 100)}%
-                      </div>
-                    )}
                   </div>
                 </div>
               );
