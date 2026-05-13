@@ -15,8 +15,11 @@ from app.swap.services import (
     _doctor_text_prompt,
     _consensus_summary_step_rules,
     _handle_direct_describe_agreement,
+    _is_direct_stance_agreement_message,
     _is_confirmation_message,
     _is_step_agreement_message,
+    _next_step_opening_message,
+    _sanitize_consensus_summary,
     _sanitize_doctor_persona_text,
     _wants_next_step,
     submit_swap_message,
@@ -659,6 +662,7 @@ class SwapEndpointTests(SimpleTestCase):
             'doctor_diagnosis': {
                 'DESCRIBE': 'Hình ảnh cho thấy X-quang bàn chân phải. Không thấy gãy xương hoặc trật khớp rõ ràng.',
                 'REASONING': 'Các cấu trúc xương bảo tồn nên ít nghĩ tổn thương cấp.',
+                'DDx': 'Chẩn đoán phân biệt ưu tiên tổn thương phần mềm hoặc loét cơ học hơn là gãy xương cấp.',
             },
             'case': {'id': 'case-1', 'title': 'Foot X-ray'},
             'messages': [
@@ -757,6 +761,10 @@ class SwapEndpointTests(SimpleTestCase):
         self.assertTrue(_is_confirmation_message('mô tả đúng rồi, tiếp tục'))
         self.assertTrue(_is_step_agreement_message('tôi đồng ý với mô tả ban đầu'))
         self.assertTrue(_is_step_agreement_message('tôi không thấy gì, tôi thấy hình ảnh bình thường'))
+        self.assertTrue(_is_direct_stance_agreement_message('tôi nghĩ ý kiến ban đầu của bạn là chính xác'))
+        self.assertFalse(_is_direct_stance_agreement_message('tôi xin ý kiến của bạn'))
+        self.assertFalse(_is_direct_stance_agreement_message('bạn nghĩ sao về trường hợp này'))
+        self.assertFalse(_is_direct_stance_agreement_message('oke'))
         self.assertTrue(_wants_next_step('hãy sang bước kế tiếp'))
 
     def test_confirmation_message_does_not_reject_medical_negative_finding(self):
@@ -830,6 +838,7 @@ class SwapEndpointTests(SimpleTestCase):
             if call['table'] == 'swap_messages' and call['operation'] == 'insert'
         ]
         self.assertEqual(consensus_messages[0]['metadata']['persuasion_score'], 0.72)
+        self.assertIn('Bạn có đồng ý', consensus_messages[0]['content'])
         self.assertFalse(any(
             call['table'] == 'swap_sessions' and call['operation'] == 'update'
             for call in supabase.calls
@@ -849,12 +858,24 @@ class SwapEndpointTests(SimpleTestCase):
         self.assertIn('Không thấy gãy xương', summary)
         self.assertNotIn('xem xét kỹ hơn', summary)
 
+    def test_reasoning_consensus_sanitizer_preserves_clinical_caveat(self):
+        summary = (
+            'Không thấy bất thường xương rõ trên X-quang hiện tại; tuy nhiên không loại trừ '
+            'viêm xương tủy sớm hoặc bệnh lý mô mềm trong bối cảnh lâm sàng phù hợp.'
+        )
+
+        sanitized = _sanitize_consensus_summary(summary, 'REASONING')
+
+        self.assertIn('tuy nhiên không loại trừ', sanitized)
+        self.assertIn('viêm xương tủy sớm', sanitized)
+
     def test_direct_describe_agreement_ignores_off_topic_message(self):
         result = _handle_direct_describe_agreement(self.make_swap_data(), 'tôi thấy con vịt')
 
         self.assertIsNone(result)
 
-    def test_reasoning_step_does_not_read_database_answer_key(self):
+    def test_reasoning_direct_stance_agreement_awaits_confirmation_without_answer_key(self):
+        supabase = FakeSupabase()
         initial = self.make_swap_data(current_step=1)
         initial['step_states'].append({
             'swap_session_id': 'swap-1',
@@ -868,23 +889,22 @@ class SwapEndpointTests(SimpleTestCase):
             'knowledge_score': None,
             'reasoning': '',
         })
-        result_payload = {
-            'doctor_message': 'Hãy lập luận dựa trên phần đã thống nhất và lập trường của Dr. Swap.',
-            'convinced': False,
-            'persuasion_score': 0.4,
-            'debate_score': 0.4,
-            'knowledge_score': 0.4,
-            'reasoning_for_grader': '',
-        }
+        updated = {**initial, 'last_result': {'awaiting_confirmation': True}}
 
-        with patch('app.swap.services.get_swap_session', return_value=(initial, None)), \
-             patch('app.swap.services._answer_key_for_case', side_effect=AssertionError('answer key leak')), \
-             patch('app.swap.services._doctor_reply', return_value=result_payload), \
-             patch('app.swap.services._store_swap_exchange', return_value=({'last_result': result_payload}, None)):
+        with patch('app.swap.services.get_swap_session', side_effect=[(initial, None), (updated, None)]), \
+             patch('app.swap.services.get_supabase', return_value=supabase), \
+             patch('app.swap.services._answer_key_for_case', side_effect=AssertionError('answer key leak')):
             result, err = submit_swap_message('swap-1', 'user-1', 'tôi cũng nghĩ vậy')
 
         self.assertIsNone(err)
-        self.assertEqual(result['last_result']['doctor_message'], result_payload['doctor_message'])
+        self.assertTrue(result['last_result']['awaiting_confirmation'])
+        self.assertTrue(any(
+            call['table'] == 'swap_step_states'
+            and call['operation'] == 'upsert'
+            and call['payload']['step_code'] == 'REASONING'
+            and call['payload']['phase'] == SWAP_PHASE_AWAITING_CONFIRMATION
+            for call in supabase.calls
+        ))
 
     def test_reasoning_prompt_keeps_vlm_stance_tied_to_agreed_findings(self):
         data = self.make_swap_data(current_step=1)
@@ -904,6 +924,16 @@ class SwapEndpointTests(SimpleTestCase):
         self.assertIn('Never mention VLM, model, AI', prompt)
         self.assertIn('1-on-1 chat with the user', prompt)
         self.assertIn('Previous agreed answers', prompt)
+
+    def test_next_step_opening_combines_agreed_answer_with_vlm_stance(self):
+        data = self.make_swap_data()
+        agreed = 'X-quang bàn chân phải không thấy gãy xương hay trật khớp rõ ràng.'
+
+        with patch('app.swap.services._get_openai_client', side_effect=RuntimeError('no api key')):
+            message = _next_step_opening_message(data, data['step_states'], 1, agreed)
+
+        self.assertIn(agreed, message)
+        self.assertIn('Các cấu trúc xương bảo tồn', message)
 
     def test_doctor_persona_sanitizer_removes_model_terms(self):
         text = 'Chào các đồng nghiệp, Mặc dù VLM có thể gợi ý bình thường, model vẫn cần được kiểm tra. Trân trọng, Bác sĩ [Tên]'

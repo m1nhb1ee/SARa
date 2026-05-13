@@ -207,6 +207,34 @@ def _is_step_agreement_message(message: str) -> bool:
     return any(signal in text for signal in agreement_signals)
 
 
+def _is_direct_stance_agreement_message(message: str) -> bool:
+    text = _normalize_signal_text(message)
+    if not text or _has_reject_intent(text):
+        return False
+    if any(signal in text for signal in ('xin y kien', 'hoi y kien', 'ban nghi sao', 'nghi sao ve')):
+        return False
+    agreement_signals = (
+        'dong y',
+        'dung roi',
+        'ban dung',
+        'y kien cua ban dung',
+        'y kien ban dau cua ban dung',
+        'quan diem cua ban dung',
+        'quan diem ban dau cua ban dung',
+        'nhan dinh cua ban dung',
+        'nhan dinh ban dau cua ban dung',
+        'mo ta cua ban dung',
+        'chan doan cua ban',
+        'toi cung nghi vay',
+        'toi cung thay vay',
+        'chinh xac',
+        'nhat tri',
+        'chot',
+        'hop ly',
+    )
+    return any(signal in text for signal in agreement_signals)
+
+
 def _is_confirmation_message(message: str) -> bool:
     text = _normalize_signal_text(message)
     if not text or _has_reject_intent(text):
@@ -362,10 +390,12 @@ def _strict_final_component_scores(score: dict[str, Any]) -> tuple[float, float,
     return debate_score, knowledge_score, accuracy_score
 
 
-def _sanitize_consensus_summary(text: str) -> str:
+def _sanitize_consensus_summary(text: str, step_code: str | None = None) -> str:
     summary = (text or '').strip()
     if not summary:
         return ''
+    if step_code and step_code != 'DESCRIBE':
+        return summary
     lower = summary.lower()
     markers = [' tuy nhiên', '. tuy nhiên', ' nhưng ', '. nhưng ', ' however ']
     cut_positions = [lower.find(marker) for marker in markers if lower.find(marker) > 0]
@@ -509,6 +539,7 @@ Step-specific rules for DDx:
 Step-specific rules for REASONING:
 - The agreed answer must summarize the causal/clinical reasoning from agreed imaging findings and clinical context.
 - Do not summarize the step as only an observation; explain why the agreed findings affect next diagnostic thinking.
+- Preserve clinically agreed caution or uncertainty, especially statements such as "X-ray is negative but does not exclude early osteomyelitis, deep soft-tissue infection, or Charcot foot when clinical context supports it."
 """
     if step_code == 'CONCLUSION':
         return """
@@ -543,6 +574,7 @@ Rules:
 - The agreed answer should reflect what the user and doctor have actually discussed.
 - The doctor has already conceded for this step. The agreed answer must reflect the final accepted position only.
 - Do not include unresolved disagreement, contrast clauses, or "however/but" style contradictions.
+- Preserve resolved clinical caveats that both sides accepted; do not remove cautious wording just because it uses "tuy nhiên" or "không loại trừ".
 - Do not mention both sides if they conflict; keep only the final consensus statement.
 - Respond in Vietnamese.
 - Avoid repetitive openings like "Tôi hiểu rằng", "Tôi biết rằng", "Tôi đồng ý rằng".
@@ -602,6 +634,7 @@ Write the doctor's opening message for the next step in a Vietnamese radiology t
 Rules:
 - The agreed answers are authoritative clinical context.
 - The VLM/current stance is only a secondary hint. Use it only if it fits the agreed observations.
+- Build the next-step stance by combining the agreed answers with the VLM/current stance into one coherent clinical opinion.
 - If the VLM/current stance conflicts with the agreed observations, revise it so the next-step reasoning follows the agreed observations.
 - Treat the VLM/current stance as Dr. Swap's initial opinion, not as established fact.
 - Do not assert new imaging findings unless they already appear in the agreed observations. If the VLM/current stance mentions an unagreed finding, frame it as something to verify on the image.
@@ -1253,20 +1286,30 @@ def _first_doctor_step_message(messages: list[dict], step_index: int) -> str:
     return ''
 
 
-def _describe_agreement_summary(data: dict, message: str) -> str:
+def _step_stance_agreement_summary(data: dict, message: str) -> str:
     session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
     step_index = session['current_step']
+    step_code = STEP_CODES[step_index]
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
+    diagnosis_stance = str(
+        doctor_diagnosis.get(step_code)
+        or doctor_diagnosis.get('OBSERVE' if step_code == 'DESCRIBE' else step_code)
+        or ''
+    ).strip()
     summary = (
-        str(doctor_diagnosis.get('DESCRIBE') or doctor_diagnosis.get('OBSERVE') or '').strip()
-        or _first_doctor_step_message(data.get('messages') or [], step_index)
+        _first_doctor_step_message(data.get('messages') or [], step_index)
+        or diagnosis_stance
         or _latest_doctor_step_message(data.get('messages') or [], step_index)
         or message
     )
-    return _sanitize_consensus_summary(summary)
+    return _sanitize_consensus_summary(summary, step_code)
 
 
-def _direct_describe_agreement_state(state: dict) -> dict[str, Any]:
+def _describe_agreement_summary(data: dict, message: str) -> str:
+    return _step_stance_agreement_summary(data, message)
+
+
+def _direct_stance_agreement_state(state: dict) -> dict[str, Any]:
     debate_score = state.get('debate_score')
     knowledge_score = state.get('knowledge_score')
     if debate_score is None:
@@ -1277,9 +1320,9 @@ def _direct_describe_agreement_state(state: dict) -> dict[str, Any]:
         **state,
         'debate_score': debate_score,
         'knowledge_score': knowledge_score,
-        'reasoning': state.get('reasoning') or 'User agreed with the current DESCRIBE consensus.',
+        'reasoning': state.get('reasoning') or "User agreed with Dr. Swap's current stance.",
         'debate_score_online': state.get('debate_score_online', debate_score),
-        'reasoning_online': state.get('reasoning_online') or 'Direct DESCRIBE agreement.',
+        'reasoning_online': state.get('reasoning_online') or 'Direct stance agreement.',
     }
 
 
@@ -1307,7 +1350,7 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
         except Exception as exc:
             logger.exception("swap: failed to summarize agreed answer from conversation: %s", exc)
             pending_summary = message
-        pending_summary = _sanitize_consensus_summary(pending_summary)
+        pending_summary = _sanitize_consensus_summary(pending_summary, step_code)
         result['pending_summary'] = pending_summary
         base_doctor_message = result['doctor_message']
         result['doctor_message'] = (
@@ -1627,7 +1670,7 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
 def _with_pending_step_summary(data: dict, step_index: int, summary: str, state: dict) -> dict:
     updated_data = {**data}
     states = [dict(item) for item in (data.get('step_states') or []) if item.get('step_index') != step_index]
-    pending_state = _direct_describe_agreement_state(state)
+    pending_state = _direct_stance_agreement_state(state)
     pending_state.update({
         'swap_session_id': data['id'],
         'step_index': step_index,
@@ -1642,14 +1685,14 @@ def _with_pending_step_summary(data: dict, step_index: int, summary: str, state:
     return updated_data
 
 
-def _handle_direct_describe_agreement(data: dict, message: str) -> tuple[dict | None, Response | None] | None:
+def _handle_direct_stance_agreement(data: dict, message: str) -> tuple[dict | None, Response | None] | None:
     session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
     step_index = session['current_step']
-    if STEP_CODES[step_index] != 'DESCRIBE' or not _is_step_agreement_message(message):
+    if not _is_direct_stance_agreement_message(message):
         return None
 
     state = _step_state_map(data.get('step_states')).get(step_index) or {}
-    agreed_answer = _describe_agreement_summary(data, message)
+    agreed_answer = _step_stance_agreement_summary(data, message)
     if not agreed_answer:
         return None
 
@@ -1661,7 +1704,7 @@ def _handle_direct_describe_agreement(data: dict, message: str) -> tuple[dict | 
     session_id = session['id']
     user_id = session['user_id']
     step_code = STEP_CODES[step_index]
-    direct_state = _direct_describe_agreement_state(state)
+    direct_state = _direct_stance_agreement_state(state)
     persuasion_score = _combined_score(direct_state)
     doctor_message = (
         f"Phần thống nhất cho bước {step_code}: {agreed_answer}\n"
@@ -1722,6 +1765,10 @@ def _handle_direct_describe_agreement(data: dict, message: str) -> tuple[dict | 
     return updated, None
 
 
+def _handle_direct_describe_agreement(data: dict, message: str) -> tuple[dict | None, Response | None] | None:
+    return _handle_direct_stance_agreement(data, message)
+
+
 def submit_swap_message(session_id: str, user_id: str, message: str) -> tuple[dict | None, Response | None]:
     data, err = get_swap_session(session_id, user_id)
     if err:
@@ -1732,7 +1779,7 @@ def submit_swap_message(session_id: str, user_id: str, message: str) -> tuple[di
     state = _step_state_map(data.get('step_states')).get(session['current_step']) or {}
     if state.get('phase') == SWAP_PHASE_AWAITING_CONFIRMATION and _is_confirmation_message(message):
         return _confirm_swap_step(data, message)
-    direct_agreement = _handle_direct_describe_agreement(data, message)
+    direct_agreement = _handle_direct_stance_agreement(data, message)
     if direct_agreement is not None:
         return direct_agreement
 
@@ -1770,7 +1817,7 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
             yield _sse('delta', {'delta': doctor_message})
         yield _sse('done', {'session': updated, 'last_result': updated.get('last_result', {})})
         return
-    direct_agreement = _handle_direct_describe_agreement(data, message)
+    direct_agreement = _handle_direct_stance_agreement(data, message)
     if direct_agreement is not None:
         updated, store_err = direct_agreement
         if store_err:
