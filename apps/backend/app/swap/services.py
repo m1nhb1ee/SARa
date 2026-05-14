@@ -25,6 +25,8 @@ SWAP_PHASE_CONFIRMED = 'CONFIRMED'
 SWAP_FINAL_DEBATE_WEIGHT = float(os.getenv('SWAP_FINAL_DEBATE_WEIGHT', '0.3333333333'))
 SWAP_FINAL_KNOWLEDGE_WEIGHT = float(os.getenv('SWAP_FINAL_KNOWLEDGE_WEIGHT', '0.3333333333'))
 SWAP_FINAL_ACCURACY_WEIGHT = float(os.getenv('SWAP_FINAL_ACCURACY_WEIGHT', '0.3333333333'))
+SWAP_LOG_PROMPTS = os.getenv('SWAP_LOG_PROMPTS', '1').strip().lower() not in {'0', 'false', 'no', 'off'}
+SWAP_LOG_PROMPT_MAX_CHARS = int(os.getenv('SWAP_LOG_PROMPT_MAX_CHARS', '0') or '0')
 
 
 MODALITY_TO_UPLOAD = {
@@ -35,6 +37,30 @@ MODALITY_TO_UPLOAD = {
     'Difference': 'DIFF',
     'DIFF': 'DIFF',
 }
+
+
+def _log_swap_prompt(name: str, prompt: str, *, session: dict | None = None, step_code: str | None = None) -> None:
+    if not SWAP_LOG_PROMPTS:
+        return
+    text = prompt or ''
+    truncated = False
+    if SWAP_LOG_PROMPT_MAX_CHARS > 0 and len(text) > SWAP_LOG_PROMPT_MAX_CHARS:
+        text = text[:SWAP_LOG_PROMPT_MAX_CHARS]
+        truncated = True
+    logger.info(
+        "\n========== SWAP PROMPT START ==========\n"
+        "name=%s session_id=%s user_id=%s case_id=%s step_code=%s length=%s truncated=%s\n"
+        "%s\n"
+        "========== SWAP PROMPT END ==========",
+        name,
+        (session or {}).get('id'),
+        (session or {}).get('user_id'),
+        (session or {}).get('case_id'),
+        step_code,
+        len(prompt or ''),
+        truncated,
+        text,
+    )
 
 
 def _parse_uuid(value: str) -> bool:
@@ -511,6 +537,7 @@ Return JSON shape:
   "CONCLUSION": "..."
 }}
 """
+    _log_swap_prompt("swap.translate_doctor_diagnosis", prompt)
     response = _get_openai_client().chat.completions.create(
         model='gpt-4o',
         messages=[{'role': 'user', 'content': prompt}],
@@ -601,6 +628,7 @@ Return JSON:
   "agreed_answer": "one concise Vietnamese paragraph based only on the conversation"
 }}
 """
+    _log_swap_prompt("swap.consensus_summary", prompt, session=session, step_code=step_code)
     response = _get_openai_client().chat.completions.create(
         model='gpt-4o',
         messages=[{'role': 'user', 'content': prompt}],
@@ -614,6 +642,7 @@ Return JSON:
 
 def _next_step_opening_message(
     session: dict,
+    case: dict,
     states: list[dict] | None,
     next_step: int,
     just_agreed_answer: str,
@@ -632,28 +661,46 @@ def _next_step_opening_message(
     prompt = f"""
 Write the doctor's opening message for the next step in a Vietnamese radiology teaching debate.
 
+This is debate, not tutoring. Dr. Swap must open by stating his own current clinical opinion for the step. Do not ask the user what to check, inspect, verify, or answer.
+
+Build that opinion from exactly these sources:
+1. Previous agreed answers, especially the conclusion from the immediately previous step.
+2. Dr. Swap's initial opinion for the current step.
+3. Patient clinical history, if present.
+
 Rules:
+- Start with Dr. Swap's hypothesis/opinion for {next_code}.
+- Explain why that hypothesis follows from the previous agreed answer(s), the initial opinion, and the clinical history.
+- State the suitable next clinical/debate direction as Dr. Swap's position, not as an assignment for the user.
+- Do not write a Socratic prompt. Do not end with a question.
+- Do not say "bạn hãy", "tôi đề nghị bạn", "kiểm tra kỹ hơn", "xem xét thêm", "hãy trình bày", or equivalent teaching prompts.
 - The agreed answers are authoritative clinical context.
-- The VLM/current stance is only a secondary hint. Use it only if it fits the agreed observations.
-- Build the next-step stance by combining the agreed answers with the VLM/current stance into one coherent clinical opinion.
-- If the VLM/current stance conflicts with the agreed observations, revise it so the next-step reasoning follows the agreed observations.
-- Treat the VLM/current stance as Dr. Swap's initial opinion, not as established fact.
-- Do not assert new imaging findings unless they already appear in the agreed observations. If the VLM/current stance mentions an unagreed finding, frame it as something to verify on the image.
-- Do not mention VLM, model, AI, answer key, hidden reference, or "current stance" in the doctor-facing message. Refer to it only as your own clinical impression if needed.
+- Dr. Swap's initial opinion is a required input, but it is not automatically established fact.
+- Build the next-step stance by combining the agreed answers with Dr. Swap's initial opinion into one coherent clinical opinion.
+- If the initial opinion conflicts with the agreed observations, revise it so the next-step reasoning follows the agreed observations.
+- Do not assert new imaging findings unless they already appear in the agreed observations. If the initial opinion mentions an unagreed finding, downgrade it to a cautious hypothesis based on agreed evidence.
+- Do not mention VLM, model, AI, answer key, hidden reference, prompt, or "current stance" in the doctor-facing message.
 - Discuss ONLY the next step: {next_code}.
 - Keep the stubborn senior radiologist persona, but do not reopen already agreed observations.
 - This is a 1-on-1 chat with the user, not a lecture, email, report, or conference.
 - Do not greet colleagues, sign off, write "Trân trọng", use "chúng ta trong buổi thảo luận hôm nay", or address a group.
 - Keep it short, conversational, and direct. Address the user as "bạn"; speak as "tôi".
 - Respond in Vietnamese as the doctor only. Do not return JSON.
+- Keep it to 3-5 sentences.
+
+Case:
+Title: {case.get('title', '')}
+Modality: {case.get('modality', '')}
+Clinical history: {case.get('clinical_history', '')}
 
 Previous agreed observations/answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
 
-Secondary VLM/current stance for {next_code}:
+Dr. Swap's initial opinion for {next_code}:
 {vlm_stance}
 """
     try:
+        _log_swap_prompt("swap.next_step_opening", prompt, session=session, step_code=next_code)
         response = _get_openai_client().chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
@@ -666,6 +713,20 @@ Secondary VLM/current stance for {next_code}:
             return _sanitize_doctor_persona_text(message)
     except Exception as exc:
         logger.warning("swap: failed to generate next-step opening from agreed answer: %s", exc)
+
+    history = str(case.get('clinical_history') or '').strip()
+    history_clause = f" Bệnh sử hiện có củng cố hướng này: {history}" if history else ""
+    if just_agreed_answer and vlm_stance:
+        return (
+            f"Ở bước {next_code}, lập trường của tôi là: {vlm_stance} "
+            f"Tôi dựa trên phần đã thống nhất trước đó: {just_agreed_answer}.{history_clause} "
+            "Đó là hướng giải thích hợp lý nhất để tôi bảo vệ trong phần tranh luận tiếp theo."
+        )
+    if just_agreed_answer:
+        return (
+            f"Ở bước {next_code}, tôi sẽ xây dựng lập luận từ kết luận đã thống nhất: {just_agreed_answer}.{history_clause} "
+            "Quan điểm của tôi là hướng giải thích tiếp theo phải bám chặt vào điểm đó, thay vì mở rộng sang những giả định chưa có cơ sở."
+        )
 
     if just_agreed_answer and vlm_stance:
         return f"Dựa trên phần đã thống nhất: {just_agreed_answer}\n\nỞ bước {next_code}, quan điểm ban đầu của tôi là: {vlm_stance}"
@@ -768,6 +829,7 @@ Note: For DESCRIBE, semantic overlap on core visible findings is enough to conce
 Note: Leave "pending_summary" empty. The system will build the user-visible agreed answer from the visible conversation only.
 CAUTION: DO NOT REAVEAL THE KEY ANSWER OF DESCRIBE reference for observation validation. IF THE USER ASKS FOR DIAGNOSIS IN DESCRIBE, ONLY ANSWER BASE ON YOUR OPINION, Your current stance NOT THE KEY ANSWER.
 """
+    _log_swap_prompt("swap.doctor_reply", prompt, session=session, step_code=step_code)
     import time
 
     start = time.time()
@@ -846,7 +908,7 @@ def _doctor_text_prompt(
         else 'Diagnostic debate. Challenge student reasoning and require strong evidence.'
     )
 
-    return f"""
+    prompt = f"""
 You are roleplaying a radiologist in a medical education debate.
 
 Persona:
@@ -904,6 +966,8 @@ Previous agreed answers:
 Current-step conversation:
 {_current_step_visible_history(messages, step_index, user_message)}
 """
+    _log_swap_prompt("swap.doctor_stream", prompt, session=session, step_code=step_code)
+    return prompt
 
 
 def _stream_doctor_text(prompt: str) -> Iterator[str]:
@@ -1008,6 +1072,7 @@ Return ONLY valid JSON:
 
 Important: Leave "pending_summary" empty.
 """
+    _log_swap_prompt("swap.judge_reply", prompt, session=session, step_code=step_code)
     import time
 
     start = time.time()
@@ -1152,6 +1217,7 @@ Return ONLY valid JSON:
   ]
 }}
 """
+    _log_swap_prompt("swap.final_grade", prompt, session={'case_id': case.get('id')}, step_code=None)
     import time
 
     start = time.time()
@@ -1620,6 +1686,7 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             result['next_step'] = next_step
             next_message = _next_step_opening_message(
                 session,
+                data.get('case') or {},
                 data.get('step_states'),
                 next_step,
                 result.get('pending_summary') or '',
@@ -1758,6 +1825,7 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
         result['next_step'] = next_step
         next_message = _next_step_opening_message(
             session,
+            data.get('case') or {},
             data.get('step_states'),
             next_step,
             agreed_answer,
