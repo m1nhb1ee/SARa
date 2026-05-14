@@ -602,3 +602,96 @@ class StudentPerformanceViewSet(viewsets.ViewSet):
             'exam_accuracy_by_step': exam_accuracy_by_step,
             'last_activity': last_activity,
         })
+
+    @action(detail=False, methods=['get'])
+    def leaderboard(self, request):
+        """GET /api/v1/performance/leaderboard/?type=exam|case&limit=50
+
+        Returns ranked users by avg score. Minimum 3 completed items.
+        Each row: {rank, user_id, display_name, avg_score, total_completed, is_self}.
+        Display name = user_name || 'Student #<id4>'.
+        """
+        sb = get_supabase()
+        board_type = request.query_params.get('type', 'case').lower()
+        try:
+            limit = max(1, min(int(request.query_params.get('limit', 50)), 100))
+        except (TypeError, ValueError):
+            limit = 50
+        min_completed = 3
+
+        table = 'exam_sessions' if board_type == 'exam' else 'sessions'
+        rows = sb.table(table).select(
+            'user_id, final_score'
+        ).eq('status', 'COMPLETED').not_.is_('final_score', 'null').execute().data or []
+
+        agg: dict = {}
+        for row in rows:
+            uid = row.get('user_id')
+            if not uid:
+                continue
+            bucket = agg.setdefault(uid, {'sum': 0.0, 'count': 0})
+            bucket['sum'] += float(row.get('final_score') or 0)
+            bucket['count'] += 1
+
+        qualified = [
+            (uid, b['sum'] / b['count'], b['count'])
+            for uid, b in agg.items() if b['count'] >= min_completed
+        ]
+        qualified.sort(key=lambda r: (-r[1], -r[2]))
+        top = qualified[:limit]
+
+        user_ids = [uid for uid, _, _ in top]
+        profiles: dict = {}
+        if user_ids:
+            profile_rows = sb.table('users').select(
+                'id, user_name, full_name, university'
+            ).in_('id', user_ids).execute().data or []
+            profiles = {p['id']: p for p in profile_rows}
+
+        me = str(request.user['id'])
+        def _display(uid: str, profile: dict) -> str:
+            if profile.get('user_name'):
+                return profile['user_name']
+            short = uid.split('-')[0][:4].upper() if uid else 'XXXX'
+            return f'Student #{short}'
+
+        entries = []
+        for idx, (uid, avg, count) in enumerate(top):
+            profile = profiles.get(uid, {})
+            entries.append({
+                'rank': idx + 1,
+                'user_id': uid,
+                'display_name': _display(uid, profile),
+                'university': profile.get('university'),
+                'avg_score': round(avg, 4),
+                'total_completed': count,
+                'is_self': uid == me,
+            })
+
+        self_entry = next((e for e in entries if e['is_self']), None)
+        if not self_entry:
+            my_bucket = agg.get(me)
+            if my_bucket and my_bucket['count'] >= min_completed:
+                my_avg = my_bucket['sum'] / my_bucket['count']
+                my_rank = sum(1 for _, a, _ in qualified if a > my_avg) + 1
+                my_profile_res = sb.table('users').select(
+                    'id, user_name, full_name, university'
+                ).eq('id', me).single().execute()
+                my_profile = my_profile_res.data or {}
+                self_entry = {
+                    'rank': my_rank,
+                    'user_id': me,
+                    'display_name': _display(me, my_profile),
+                    'university': my_profile.get('university'),
+                    'avg_score': round(my_avg, 4),
+                    'total_completed': my_bucket['count'],
+                    'is_self': True,
+                }
+
+        return Response({
+            'type': board_type,
+            'entries': entries,
+            'self': self_entry,
+            'min_required': min_completed,
+            'total_qualified': len(qualified),
+        })
