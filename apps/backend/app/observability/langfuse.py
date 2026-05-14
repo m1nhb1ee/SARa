@@ -7,12 +7,17 @@ from typing import Any, Iterator
 logger = logging.getLogger(__name__)
 
 
-LANGFUSE_ENABLED = os.getenv("LANGFUSE_ENABLED", "false").lower() in ("1", "true", "yes")
-CAPTURE_RAW_IO = os.getenv("LANGFUSE_CAPTURE_RAW_IO", "false").lower() in ("1", "true", "yes")
+LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "").strip()
+LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "").strip()
+LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").strip()
+CAPTURE_RAW_IO = False
+
+if LANGFUSE_HOST:
+    os.environ.setdefault("LANGFUSE_HOST", LANGFUSE_HOST)
 
 
 def _load_client():
-    if not LANGFUSE_ENABLED:
+    if not (LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY):
         return None
     try:
         from langfuse import get_client
