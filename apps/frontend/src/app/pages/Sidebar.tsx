@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router';
 import {
-  Home, Upload, FolderOpen, User, Settings, LogOut, MessagesSquare, ClipboardList
+  Home, Upload, FolderOpen, User, Settings, LogOut, MessagesSquare, ClipboardList, Trophy
 } from 'lucide-react';
 import { useAuth } from '@/api/authContext';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: 'Upload',   path: '/upload',      icon: Upload,         accent: 'var(--accent-clay)' },
   { name: 'Swap',     path: '/swap',        icon: MessagesSquare, accent: 'var(--accent-sage)' },
   { name: 'Exam',     path: '/exam',        icon: ClipboardList,  accent: 'var(--accent-ink)' },
+  { name: 'BXH',      path: '/leaderboard', icon: Trophy,         accent: 'var(--accent-clay)' },
   { name: 'Profile',  path: '/performance', icon: User,           accent: 'var(--accent-gold)' },
   { name: 'Settings', path: '/settings',    icon: Settings,       accent: 'var(--ink-secondary)' },
 ];
@@ -311,7 +312,7 @@ export function Sidebar() {
           boxShadow: '0 -2px 12px rgba(74,64,50,0.08)',
         }}
       >
-        {NAV_ITEMS.slice(0, 5).map((item) => {
+        {NAV_ITEMS.slice(0, 6).map((item) => {
           const active = isActive(item);
           return (
             <button

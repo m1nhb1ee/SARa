@@ -248,6 +248,11 @@ class APIClient {
   async getMyStats() {
     return this.request<any>('/performance/my_stats/');
   }
+
+  async getLeaderboard(type: 'exam' | 'case', limit = 50) {
+    const queryString = new URLSearchParams({ type, limit: String(limit) }).toString();
+    return this.request<any>(`/performance/leaderboard/?${queryString}`);
+  }
 }
 
 export const apiClient = new APIClient();
