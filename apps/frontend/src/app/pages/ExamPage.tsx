@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Activity, ArrowRight, CheckCircle2, ClipboardList, FileCheck2, Loader2, PlayCircle, SearchX, TimerReset, Trophy } from 'lucide-react';
+import { Activity, ArrowRight, CheckCircle2, ClipboardList, Clock3, FileCheck2, Loader2, PlayCircle, SearchX, TimerReset, Trophy } from 'lucide-react';
 import { apiClient } from '@/api/client';
 import { useExamCases } from '@/api/hooks';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
@@ -35,20 +35,35 @@ export function ExamPage() {
 
   const loadSessions = async () => {
     const res = await apiClient.listExamSessions();
-    if (!res.error && res.data?.sessions) setSessions(res.data.sessions);
+    if (res.error) {
+      console.warn('[ExamPage] listExamSessions failed:', res.error, 'status:', res.status);
+      return;
+    }
+    const list = res.data?.sessions ?? [];
+    console.log('[ExamPage] loaded sessions:', list.length, list);
+    setSessions(list);
   };
 
   useEffect(() => { loadSessions(); }, []);
 
-  const bestByCase = new Map<string, any>();
+  const stateByCase = new Map<string, { best?: any; inProgress?: any }>();
   for (const session of sessions) {
-    if (session.status !== 'COMPLETED') continue;
-    const existing = bestByCase.get(session.case_id);
-    if (!existing || (session.final_score ?? 0) > (existing.final_score ?? 0)) {
-      bestByCase.set(session.case_id, session);
+    const entry = stateByCase.get(session.case_id) ?? {};
+    if (session.status === 'COMPLETED') {
+      if (!entry.best || (session.final_score ?? 0) > (entry.best.final_score ?? 0)) {
+        entry.best = session;
+      }
+    } else if (session.status === 'IN_PROGRESS') {
+      const current = entry.inProgress;
+      if (!current || (session.started_at ?? '') > (current.started_at ?? '')) {
+        entry.inProgress = session;
+      }
     }
+    stateByCase.set(session.case_id, entry);
   }
-  const activeBest = activeCaseId ? bestByCase.get(activeCaseId) : null;
+  const activeEntry = activeCaseId ? stateByCase.get(activeCaseId) : null;
+  const activeBest = activeEntry?.best ?? null;
+  const activeInProgress = activeEntry?.inProgress ?? null;
   const activeCase = activeCaseId ? cases.find((c: any) => c.id === activeCaseId) : null;
 
   return (
@@ -118,8 +133,12 @@ export function ExamPage() {
             {cases.map((caseItem: any, idx: number) => {
               const firstImage = caseItem.images?.[0]?.slices?.[0]?.image_url;
               const isStarting = startingCaseId === caseItem.id;
-              const best = bestByCase.get(caseItem.id);
+              const entry = stateByCase.get(caseItem.id);
+              const best = entry?.best;
+              const inProgress = entry?.inProgress;
               const isDone = !!best;
+              const hasInProgress = !!inProgress;
+              const hasAny = isDone || hasInProgress;
               const scorePct = best?.final_score != null ? Math.round(best.final_score * 100) : null;
               return (
                 <div key={caseItem.id} className={styles.cardWrap}>
@@ -141,12 +160,17 @@ export function ExamPage() {
                       </div>
                     </div>
                     <div className={styles.body}>
-                      {isDone && (
+                      {isDone ? (
                         <div className={styles.doneBadge}>
                           <CheckCircle2 size={12} />
                           {scorePct != null ? `${scorePct}%` : 'Done'}
                         </div>
-                      )}
+                      ) : hasInProgress ? (
+                        <div className={styles.doneBadge} style={{ background: 'var(--accent-clay)', color: '#fff' }}>
+                          <Clock3 size={12} />
+                          In progress
+                        </div>
+                      ) : null}
                       <div className={styles.chips}>
                         <span className={`${styles.chip} ${styles.chipMod}`}>
                         {caseItem.modality || 'CASE'}
@@ -163,13 +187,13 @@ export function ExamPage() {
                       </p>
                       <button
                         type="button"
-                        onClick={() => (isDone ? setActiveCaseId(caseItem.id) : startExam(caseItem.id))}
+                        onClick={() => (hasAny ? setActiveCaseId(caseItem.id) : startExam(caseItem.id))}
                         disabled={isStarting}
                         className={styles.startBtn}
                         aria-busy={isStarting}
                       >
                         {isStarting ? <Loader2 size={16} className={styles.spin} /> : <PlayCircle size={16} />}
-                        {isStarting ? 'Starting...' : isDone ? 'View Score' : 'Start Exam'}
+                        {isStarting ? 'Starting...' : isDone ? 'View Score' : hasInProgress ? 'Resume' : 'Start Exam'}
                         {!isStarting && <ArrowRight size={15} />}
                       </button>
                     </div>
@@ -180,19 +204,28 @@ export function ExamPage() {
           </div>
         )}
       </div>
-      {activeCase && activeBest && (
+      {activeCase && (activeBest || activeInProgress) && (
         <div className={styles.modalOverlay} onClick={() => setActiveCaseId(null)}>
           <div className={styles.modalCard} onClick={(event) => event.stopPropagation()}>
             <div className={styles.modalHead}>
-              <Trophy size={20} color="var(--accent-sage)" />
-              <h3 className={styles.modalTitle}>Exam Completed</h3>
+              {activeBest ? <Trophy size={20} color="var(--accent-sage)" /> : <Clock3 size={20} color="var(--accent-clay)" />}
+              <h3 className={styles.modalTitle}>{activeBest ? 'Exam Completed' : 'Exam In Progress'}</h3>
             </div>
             <p className={styles.modalCase}>{activeCase.title}</p>
-            <p className={styles.modalScore}>Final Score: {Math.round((activeBest.final_score ?? 0) * 100)}%</p>
+            {activeBest ? (
+              <p className={styles.modalScore}>Final Score: {Math.round((activeBest.final_score ?? 0) * 100)}%</p>
+            ) : (
+              <p className={styles.modalScore}>Bạn có 1 session đang dở. Tiếp tục hoặc bắt đầu lại?</p>
+            )}
             <div className={styles.modalActions}>
               <button type="button" className={styles.modalGhost} onClick={() => setActiveCaseId(null)}>Close</button>
-              <button type="button" className={styles.modalSecondary} onClick={() => navigate(`/exam/session/${activeBest.id}`)}>View Session</button>
-              <button type="button" className={styles.modalPrimary} onClick={() => { const id = activeCaseId; setActiveCaseId(null); if (id) startExam(id); }}>Retake</button>
+              {activeBest && (
+                <button type="button" className={styles.modalSecondary} onClick={() => navigate(`/exam/session/${activeBest.id}`)}>View Session</button>
+              )}
+              {activeInProgress && (
+                <button type="button" className={styles.modalSecondary} onClick={() => navigate(`/exam/session/${activeInProgress.id}`)}>Resume</button>
+              )}
+              <button type="button" className={styles.modalPrimary} onClick={() => { const id = activeCaseId; setActiveCaseId(null); if (id) startExam(id); }}>{activeBest ? 'Retake' : 'Restart'}</button>
             </div>
           </div>
         </div>

@@ -21,7 +21,10 @@ export function SwapSessionPage() {
   const [pendingUserMessage, setPendingUserMessage] = useState('');
   const [streamingDoctorText, setStreamingDoctorText] = useState('');
   const [showCompletion, setShowCompletion] = useState(false);
+  const [showFinalizing, setShowFinalizing] = useState(false);
+  const [finalizingProgress, setFinalizingProgress] = useState(0);
   const completionShownRef = useRef(false);
+  const finalizingRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const loadSession = async () => {
@@ -42,22 +45,38 @@ export function SwapSessionPage() {
   }, [session?.messages?.length, streamingDoctorText, pendingUserMessage]);
 
   useEffect(() => {
-    if (session?.status === 'COMPLETED' && !completionShownRef.current) {
+    if (session?.status === 'COMPLETED' && !completionShownRef.current && !finalizingRef.current) {
       completionShownRef.current = true;
       setShowCompletion(true);
     }
   }, [session?.status]);
 
-  const sendMessage = async () => {
-    const message = input.trim();
+  useEffect(() => {
+    if (!showFinalizing) return;
+    setFinalizingProgress(0);
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      setFinalizingProgress(Math.min(90, Math.round((elapsed / 15000) * 90)));
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [showFinalizing]);
+
+  const sendMessage = async (messageOverride?: string, options?: { finalize?: boolean }) => {
+    const message = (messageOverride ?? input).trim();
     if (!sessionId || !message || sending || session?.status === 'COMPLETED') return;
 
-    setInput('');
+    if (!messageOverride) setInput('');
     setError(null);
     setSending(true);
     setActiveTab('chat');
     setPendingUserMessage(message);
     setStreamingDoctorText('');
+    if (options?.finalize) {
+      finalizingRef.current = true;
+      setShowFinalizing(true);
+      setFinalizingProgress(0);
+    }
 
     const res = await apiClient.streamSwapMessage(sessionId, message, (delta) => {
       setStreamingDoctorText(prev => prev + delta);
@@ -69,10 +88,25 @@ export function SwapSessionPage() {
 
     if (res.error) {
       setError(res.error);
-      setInput(message);
+      if (!messageOverride) setInput(message);
+      if (options?.finalize) {
+        finalizingRef.current = false;
+        setShowFinalizing(false);
+      }
       return;
     }
     setSession(res.data);
+    if (options?.finalize) {
+      setFinalizingProgress(90);
+      window.setTimeout(() => {
+        finalizingRef.current = false;
+        setShowFinalizing(false);
+        if (res.data?.status === 'COMPLETED' && !completionShownRef.current) {
+          completionShownRef.current = true;
+          setShowCompletion(true);
+        }
+      }, 350);
+    }
   };
 
   if (loading) {
@@ -98,6 +132,7 @@ export function SwapSessionPage() {
   const stepName = STEPS[currentStep] ?? 'DESCRIBE';
   const isComplete = session.status === 'COMPLETED';
   const scorePct = session.final_score != null ? Math.round(session.final_score * 100) : null;
+  const isConclusionStep = stepName === 'CONCLUSION' || currentStep === STEPS.length - 1;
 
   return (
     <div className={styles.session}>
@@ -240,6 +275,17 @@ export function SwapSessionPage() {
                     <p className={isUser ? styles.studentMessageText : styles.aiMessageText}>
                       {message.content}
                     </p>
+                    {!isUser && message.metadata?.convinced && message.step_index === currentStep && !isComplete && (
+                      <button
+                        type="button"
+                        onClick={() => sendMessage('Oke', { finalize: isConclusionStep })}
+                        disabled={sending}
+                        className={styles.swapAgreeButton}
+                      >
+                        <CheckCircle2 size={14} />
+                        {isConclusionStep ? 'Thống nhất chẩn đoán' : 'Đồng ý'}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -312,7 +358,7 @@ export function SwapSessionPage() {
                   className={styles.textarea}
                 />
                 <button
-                  onClick={sendMessage}
+                  onClick={() => sendMessage()}
                   disabled={sending || !input.trim()}
                   className={styles.sendButton}
                 >
@@ -324,6 +370,41 @@ export function SwapSessionPage() {
           </div>
         </div>
       </div>
+
+      {showFinalizing && (
+        <div className={styles.exitModalOverlay}>
+          <div className={styles.exitModalCard} onClick={e => e.stopPropagation()}>
+            <div className={styles.exitModalHeader}>
+              <div className={styles.exitModalHeaderRow}>
+                <div className={styles.exitModalIcon} style={{ background: 'rgba(125,155,118,0.15)', border: '1px solid var(--accent-sage)' }}>
+                  <CheckCircle2 size={20} color="var(--accent-sage)" />
+                </div>
+                <div>
+                  <h3 className={styles.exitModalTitle}>Đang tổng hợp chẩn đoán</h3>
+                  <p className={styles.exitModalSubtitle}>Dr. Swap đang chấm lại từng phần tranh luận</p>
+                </div>
+              </div>
+            </div>
+            <div className={styles.exitModalBody}>
+              <div className={styles.exitModalNote} style={{ transform: 'rotate(0deg)' }}>
+                <p className={styles.exitModalNoteText}>
+                  Placeholder: hệ thống đang khóa kết luận, tổng hợp điểm từng bước và chuẩn bị bảng kết quả.
+                </p>
+              </div>
+              <div className={styles.swapFinalizingTrack}>
+                <div
+                  className={styles.swapFinalizingFill}
+                  style={{ width: `${finalizingProgress}%` }}
+                />
+              </div>
+              <div className={styles.swapFinalizingMeta}>
+                <span>Đang xử lý</span>
+                <span>{finalizingProgress}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCompletion && (
         <div className={styles.exitModalOverlay}>
