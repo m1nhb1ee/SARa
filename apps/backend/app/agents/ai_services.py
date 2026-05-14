@@ -100,6 +100,7 @@ def classify_intent(
     step_code: str,
     step_index: int,
     current_question: str,
+    trace_metadata: dict | None = None,
 ) -> dict:
     """
     Classify student intent before evaluation.
@@ -115,6 +116,7 @@ def classify_intent(
             step_name=step_code,
             step_index=step_index,
             current_question=current_question,
+            trace_metadata=trace_metadata,
         )
     except Exception as e:
         logger.error(f"classify_intent error: {e}")
@@ -130,6 +132,7 @@ def evaluate_answer(
     previous_steps: list | None = None,
     step_attempts: list | None = None,
     is_last_step: bool = False,
+    trace_metadata: dict | None = None,
 ) -> dict:
     """
     Evaluate student answer using the SARa rubric loaded from Supabase.
@@ -153,6 +156,7 @@ def evaluate_answer(
         previous_steps=previous_steps,
         step_attempts=step_attempts,
         is_last_step=is_last_step,
+        trace_metadata=trace_metadata,
     )
 
 
@@ -167,6 +171,7 @@ def get_socratic_hint(
     repeat_focus: bool = False,
     repeat_depth: int = 0,
     step_attempts: list | None = None,
+    trace_metadata: dict | None = None,
 ) -> str:
     """
     Generate a Socratic hint after a failed evaluation.
@@ -186,6 +191,7 @@ def get_socratic_hint(
             repeat_focus=repeat_focus,
             repeat_depth=repeat_depth,
             step_attempts=step_attempts,
+            trace_metadata=trace_metadata,
         )
     except Exception as e:
         logger.error(f"get_socratic_hint error: {e}")

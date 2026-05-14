@@ -3,6 +3,7 @@ import time
 from openai import OpenAI
 from .debug.logger import logger
 from .config import LLM_PROVIDER, SOCRATIC_MODEL
+from app.observability import langfuse_obs
 
 
 def _sanitize(s: str) -> str:
@@ -177,7 +178,7 @@ STEP_TEMPLATES = {
 
 # ── Agent ─────────────────────────────────────────────────────────────────────
 
-def get_opening_question(step_name: str, step_index: int) -> str:
+def get_opening_question(step_name: str, step_index: int, trace_metadata: dict | None = None) -> str:
     """Câu hỏi mở đầu bước mới. Không cần errors[], không cần answer_key."""
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -191,24 +192,51 @@ def get_opening_question(step_name: str, step_index: int) -> str:
 
     start = time.time()
     try:
-        response = client.chat.completions.create(
+        with langfuse_obs.generation(
+            "socratic.opening_question",
             model=SOCRATIC_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_OPENING},
-                {"role": "user",   "content": user_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=150
-        )
+            metadata=langfuse_obs.common_metadata(
+                feature="practice",
+                agent_name="socratic",
+                provider=LLM_PROVIDER,
+                model=SOCRATIC_MODEL,
+                step_code=step_name,
+                step_index=step_index,
+                extra=trace_metadata,
+            ),
+            input={"step_name": step_name},
+        ) as lf_generation:
+            response = client.chat.completions.create(
+                model=SOCRATIC_MODEL,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT_OPENING},
+                    {"role": "user",   "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=150
+            )
         latency_ms = int((time.time() - start) * 1000)
+        usage_metrics = langfuse_obs.usage_from_openai(response)
         usage = response.usage
-        cost = (usage.prompt_tokens * 0.000005) + (usage.completion_tokens * 0.000015)
+        cost = langfuse_obs.openai_cost_estimate(
+            SOCRATIC_MODEL,
+            usage_metrics["prompt_tokens"],
+            usage_metrics["completion_tokens"],
+        )
 
         logger.log_llm_metric(LLM_PROVIDER, SOCRATIC_MODEL, usage.prompt_tokens,
                                usage.completion_tokens, latency_ms, cost)
         logger.log_step_latency(step_index, "socratic_opening", "openai", latency_ms)
 
         question = response.choices[0].message.content.strip()
+        langfuse_obs.update_generation(
+            lf_generation,
+            response=response,
+            model=SOCRATIC_MODEL,
+            latency_ms=latency_ms,
+            output=question,
+            metadata={"phase": "opening_question"},
+        )
 
         logger.log_tool_result(step_index, "get_opening_question", True, question)
         return question
@@ -229,6 +257,7 @@ def get_hint(
     repeat_focus: bool = False,
     repeat_depth: int = 0,
     step_attempts: list | None = None,
+    trace_metadata: dict | None = None,
 ) -> str:
     """
     Câu hỏi hint sau khi sinh viên fail.
@@ -298,24 +327,65 @@ Generate a targeted hint question.""")
 
     start = time.time()
     try:
-        response = client.chat.completions.create(
+        with langfuse_obs.generation(
+            "socratic.hint",
             model=SOCRATIC_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_HINT},
-                {"role": "user",   "content": user_prompt}
-            ],
-            temperature=0.3,
-            max_tokens=150
-        )
+            metadata=langfuse_obs.common_metadata(
+                feature="practice",
+                agent_name="socratic",
+                provider=LLM_PROVIDER,
+                model=SOCRATIC_MODEL,
+                step_code=step_name,
+                step_index=step_index,
+                extra={
+                    **(trace_metadata or {}),
+                    "hint_count": hint_count,
+                    "errors": errors,
+                    "prior_error_count": len(prior_errors or []),
+                    "has_partial_answer": bool(partial_answer),
+                    "focus_error_code": focus_error_code,
+                    "repeat_focus": repeat_focus,
+                    "repeat_depth": repeat_depth,
+                },
+            ),
+            input={
+                "step_name": step_name,
+                "errors": errors,
+                "hint_count": hint_count,
+                "attempt_count": len(step_attempts or []),
+            },
+        ) as lf_generation:
+            response = client.chat.completions.create(
+                model=SOCRATIC_MODEL,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT_HINT},
+                    {"role": "user",   "content": user_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=150
+            )
         latency_ms = int((time.time() - start) * 1000)
+        usage_metrics = langfuse_obs.usage_from_openai(response)
         usage = response.usage
-        cost = (usage.prompt_tokens * 0.000005) + (usage.completion_tokens * 0.000015)
+        cost = langfuse_obs.openai_cost_estimate(
+            SOCRATIC_MODEL,
+            usage_metrics["prompt_tokens"],
+            usage_metrics["completion_tokens"],
+        )
 
         logger.log_llm_metric(LLM_PROVIDER, SOCRATIC_MODEL, usage.prompt_tokens,
                                usage.completion_tokens, latency_ms, cost)
         logger.log_step_latency(step_index, "socratic_hint", "openai", latency_ms)
 
         hint = response.choices[0].message.content.strip()
+        langfuse_obs.update_generation(
+            lf_generation,
+            response=response,
+            model=SOCRATIC_MODEL,
+            latency_ms=latency_ms,
+            output=hint,
+            metadata={"phase": "hint"},
+        )
 
         logger.log_tool_result(step_index, "get_hint", True, hint)
         return hint
@@ -330,6 +400,7 @@ def classify_and_respond(
     step_name: str,
     step_index: int,
     current_question: str,
+    trace_metadata: dict | None = None,
 ) -> dict:
     """
     Classify user intent và generate response nếu cần.
@@ -355,19 +426,42 @@ Classify intent and generate response.""")
 
     start = time.time()
     try:
-        response = client.chat.completions.create(
+        with langfuse_obs.generation(
+            "socratic.classify_intent",
             model=SOCRATIC_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_CLASSIFY},
-                {"role": "user",   "content": user_prompt}
-            ],
-            temperature=0.4,
-            max_tokens=200,
-            response_format={"type": "json_object"}
-        )
+            metadata=langfuse_obs.common_metadata(
+                feature="practice",
+                agent_name="socratic",
+                provider=LLM_PROVIDER,
+                model=SOCRATIC_MODEL,
+                step_code=step_name,
+                step_index=step_index,
+                extra=trace_metadata,
+            ),
+            input={
+                "step_name": step_name,
+                "message_length": len(user_input.split()),
+                "has_current_question": bool(current_question),
+            },
+        ) as lf_generation:
+            response = client.chat.completions.create(
+                model=SOCRATIC_MODEL,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT_CLASSIFY},
+                    {"role": "user",   "content": user_prompt}
+                ],
+                temperature=0.4,
+                max_tokens=200,
+                response_format={"type": "json_object"}
+            )
         latency_ms = int((time.time() - start) * 1000)
+        usage_metrics = langfuse_obs.usage_from_openai(response)
         usage = response.usage
-        cost = (usage.prompt_tokens * 0.000005) + (usage.completion_tokens * 0.000015)
+        cost = langfuse_obs.openai_cost_estimate(
+            SOCRATIC_MODEL,
+            usage_metrics["prompt_tokens"],
+            usage_metrics["completion_tokens"],
+        )
 
         logger.log_llm_metric(LLM_PROVIDER, SOCRATIC_MODEL, usage.prompt_tokens,
                                usage.completion_tokens, latency_ms, cost)
@@ -376,6 +470,14 @@ Classify intent and generate response.""")
         result = _json.loads(response.choices[0].message.content)
         intent = result.get("intent", "answer")
         resp   = result.get("response", "")
+        langfuse_obs.update_generation(
+            lf_generation,
+            response=response,
+            model=SOCRATIC_MODEL,
+            latency_ms=latency_ms,
+            output={"intent": intent, "response_length": len(resp)},
+            metadata={"intent": intent, "response_length": len(resp)},
+        )
 
         logger.log_tool_result(step_index, "classify_and_respond", True,
                                f"intent={intent}")

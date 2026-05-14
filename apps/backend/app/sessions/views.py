@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from app.core.step_codes import STEP_CODES, index_by_canonical_step, normalize_step_code
 from app.core.supabase_client import get_supabase
 from app.agents.ai_services import classify_intent, evaluate_answer, get_socratic_hint, get_step_rubric
+from app.observability import langfuse_obs
 
 from .serializers import StepAnswerSubmitSerializer
 from .services import get_session, get_rubric_id
@@ -184,7 +185,8 @@ class SessionViewSet(viewsets.ViewSet):
     def submit_answer(self, request, pk=None):
         """POST /api/v1/sessions/{id}/submit_answer/"""
         sb = get_supabase()
-        session, err = get_session(sb, pk, request.user['id'])
+        user_id = request.user['id']
+        session, err = get_session(sb, pk, user_id)
         if err:
             return err
 
@@ -202,10 +204,27 @@ class SessionViewSet(viewsets.ViewSet):
             )
         step_code = STEP_CODES[current_step]
         is_last = current_step == len(STEP_CODES) - 1
+        trace_metadata = langfuse_obs.common_metadata(
+            feature="practice",
+            session_kind="practice",
+            case_id=session.get('case_id'),
+            step_code=step_code,
+            step_index=current_step,
+            extra={
+                "langfuse_user_id": user_id,
+                "langfuse_session_id": f"practice:{pk}",
+            },
+        )
 
         # ── 1. Classify intent — handle question/chit-chat without evaluating ──
         current_question = request.data.get('current_question', '')
-        classified = classify_intent(student_answer, step_code, current_step, current_question)
+        classified = classify_intent(
+            student_answer,
+            step_code,
+            current_step,
+            current_question,
+            trace_metadata=trace_metadata,
+        )
         if classified['intent'] in ('question', 'chit-chat'):
             return Response({'type': 'socratic', 'message': classified['response']})
 
@@ -268,6 +287,11 @@ class SessionViewSet(viewsets.ViewSet):
             previous_steps=previous_steps,
             step_attempts=step_attempts_texts,
             is_last_step=is_last,
+            trace_metadata={
+                **trace_metadata,
+                "attempt_number": len(step_attempts_texts) + 1,
+                "hint_count": hint_count,
+            },
         )
 
         # ── 5. Save attempt ───────────────────────────────────────────────────
@@ -362,6 +386,11 @@ class SessionViewSet(viewsets.ViewSet):
                 repeat_focus=repeat_focus,
                 repeat_depth=repeat_depth,
                 step_attempts=step_attempts_texts + [student_answer],
+                trace_metadata={
+                    **trace_metadata,
+                    "attempt_number": attempt_number,
+                    "hint_count": hint_count + 1,
+                },
             )
             response_data['hint'] = hint
             response_data['message'] = 'Chưa đủ. Hãy xem gợi ý và thử lại.'

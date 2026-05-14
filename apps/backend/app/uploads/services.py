@@ -22,6 +22,7 @@ from app.prompt.gpt_prompt import (
     build_image_validation_prompt,
 )
 from app.prompt.medgemma_prompt import build_analysis_prompt
+from app.observability import langfuse_obs
 
 logger = logging.getLogger(__name__)
 
@@ -472,16 +473,41 @@ def _call_gpt_vision(image_files: list, prompt: str) -> str:
             "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"},
         })
 
+    import time
+
     client = OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
+    start = time.time()
+    with langfuse_obs.generation(
+        "upload.gpt_vision_analysis",
         model=OPENAI_IMAGE_ANALYSIS_MODEL,
-        messages=[{
-            "role": "user",
-            "content": [{"type": "text", "text": prompt}, *image_contents],
-        }],
-        max_completion_tokens=5000,
+        metadata=langfuse_obs.common_metadata(
+            feature="upload",
+            agent_name="gpt_vision",
+            provider="openai",
+            model=OPENAI_IMAGE_ANALYSIS_MODEL,
+            extra={"image_count": len(image_files)},
+        ),
+        input={"image_count": len(image_files), "prompt_length": len(prompt)},
+    ) as lf_generation:
+        response = client.chat.completions.create(
+            model=OPENAI_IMAGE_ANALYSIS_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}, *image_contents],
+            }],
+            max_completion_tokens=5000,
+        )
+    latency_ms = int((time.time() - start) * 1000)
+    output = (response.choices[0].message.content or '').strip()
+    langfuse_obs.update_generation(
+        lf_generation,
+        response=response,
+        model=OPENAI_IMAGE_ANALYSIS_MODEL,
+        latency_ms=latency_ms,
+        output={"output_length": len(output)},
+        metadata={"output_length": len(output)},
     )
-    return (response.choices[0].message.content or '').strip()
+    return output
 
 
 def _parse_findings(description: str, modality: str, prompt_steps: int = 4, source: str = "MedGemma") -> Dict[str, Any]:
@@ -584,12 +610,29 @@ def _complete_final_steps_with_llm(findings: Dict[str, Any], modality: str, regi
         try:
             from openai import OpenAI
 
+            import time
+
             client = OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
+            start = time.time()
+            with langfuse_obs.generation(
+                "upload.complete_final_steps",
                 model=OPENAI_STEP_COMPLETION_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=800,
-            )
+                metadata=langfuse_obs.common_metadata(
+                    feature="upload",
+                    agent_name="step_completion",
+                    provider="openai",
+                    model=OPENAI_STEP_COMPLETION_MODEL,
+                    modality=modality,
+                    extra={"region": region},
+                ),
+                input={"modality": modality, "region": region, "raw_vlm_length": len(raw_vlm)},
+            ) as lf_generation:
+                response = client.chat.completions.create(
+                    model=OPENAI_STEP_COMPLETION_MODEL,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=800,
+                )
+            latency_ms = int((time.time() - start) * 1000)
             raw = (response.choices[0].message.content or '').strip()
             logger.debug(f"[LLM completion answer]\n{raw}")
             j_start = raw.find('{')
@@ -602,6 +645,20 @@ def _complete_final_steps_with_llm(findings: Dict[str, Any], modality: str, regi
             raw_diff = str(parsed.get('difficulty', 'medium')).strip().lower().split()[0]
             findings['difficulty'] = raw_diff if raw_diff in ('easy', 'medium', 'hard') else 'medium'
             findings['llm_completion_raw'] = raw
+            langfuse_obs.update_generation(
+                lf_generation,
+                response=response,
+                model=OPENAI_STEP_COMPLETION_MODEL,
+                latency_ms=latency_ms,
+                output={
+                    "completed_steps": list(completed.keys()),
+                    "difficulty": findings.get('difficulty'),
+                },
+                metadata={
+                    "completed_steps": list(completed.keys()),
+                    "difficulty": findings.get('difficulty'),
+                },
+            )
             logger.info("LLM completion generated DDx and CONCLUSION")
         except Exception as e:
             logger.warning(f"LLM completion failed: {e} — using default DDx/CONCLUSION")
@@ -707,7 +764,32 @@ def analyze_medical_image(
         return findings
     try:
         logger.debug(f"[MedGemma prompt]\n{prompt}")
+        import time
+
+        start = time.time()
         raw = _call_gradio(image_files, prompt, token)
+        gradio_latency_ms = int((time.time() - start) * 1000)
+        with langfuse_obs.span(
+            "upload.medgemma_gradio_analysis",
+            metadata=langfuse_obs.common_metadata(
+                feature="upload",
+                agent_name="vlm",
+                provider="gradio",
+                model=MEDGEMMA_GRADIO_SPACE_ID,
+                modality=modality,
+                extra={
+                    "engine": engine,
+                    "region": region,
+                    "image_count": len(image_files or []),
+                    "volume_count": len(set(volume_names or [])),
+                    "prompt_steps": prompt_steps,
+                    "latency_ms": gradio_latency_ms,
+                    "raw_output_length": len(raw),
+                },
+            ),
+            as_type="tool",
+        ) as lf_vlm:
+            lf_vlm.update(output={"raw_output_length": len(raw)})
         logger.info(f"Phân tích hoàn tất — modality={modality}, region={region}")
         findings = _parse_findings(raw, modality, prompt_steps)
         if complete_final_steps_with_llm:

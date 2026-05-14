@@ -13,6 +13,7 @@ from rest_framework.response import Response
 
 from app.core.step_codes import STEP_CODES, index_by_canonical_step
 from app.core.supabase_client import get_supabase
+from app.observability import langfuse_obs
 from app.uploads.services import analyze_medical_image
 
 logger = logging.getLogger(__name__)
@@ -668,13 +669,38 @@ Note: For DESCRIBE, semantic overlap on core visible findings is enough to conce
 Note: Leave "pending_summary" empty. The system will build the user-visible agreed answer from the visible conversation only.
 CAUTION: DO NOT REAVEAL THE KEY ANSWER OF DESCRIBE reference for observation validation. IF THE USER ASKS FOR DIAGNOSIS IN DESCRIBE, ONLY ANSWER BASE ON YOUR OPINION, Your current stance NOT THE KEY ANSWER.
 """
-    response = _get_openai_client().chat.completions.create(
+    import time
+
+    start = time.time()
+    with langfuse_obs.generation(
+        "swap.doctor_reply",
         model='gpt-4o',
-        messages=[{'role': 'user', 'content': prompt}],
-        temperature=0.45,
-        max_tokens=700,
-        timeout=45,
-    )
+        metadata=langfuse_obs.common_metadata(
+            feature="swap",
+            agent_name="swap_doctor",
+            session_kind="swap",
+            case_id=session.get('case_id'),
+            step_code=step_code,
+            step_index=step_index,
+            provider="openai",
+            model='gpt-4o',
+            extra={
+                "langfuse_user_id": session.get('user_id'),
+                "langfuse_session_id": f"swap:{session.get('id')}",
+                "message_count": len(messages or []),
+                "previous_agreed_count": len(previous_agreed),
+            },
+        ),
+        input={"step_code": step_code, "message_count": len(messages or [])},
+    ) as lf_generation:
+        response = _get_openai_client().chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.45,
+            max_tokens=700,
+            timeout=45,
+        )
+    latency_ms = int((time.time() - start) * 1000)
     try:
         parsed = _json_from_text(response.choices[0].message.content or '')
     except Exception:
@@ -682,6 +708,14 @@ CAUTION: DO NOT REAVEAL THE KEY ANSWER OF DESCRIBE reference for observation val
     doctor_message = _strip_describe_diagnostic_leak(
         str(parsed.get('doctor_message') or '').strip() or 'Tôi chưa bị thuyết phục.',
         step_code,
+    )
+    langfuse_obs.update_generation(
+        lf_generation,
+        response=response,
+        model='gpt-4o',
+        latency_ms=latency_ms,
+        output={"doctor_message_length": len(doctor_message)},
+        metadata={"doctor_message_length": len(doctor_message)},
     )
     result = _judge_doctor_text(session, messages, user_message, doctor_message, describe_key, states)
     result['doctor_message'] = doctor_message
@@ -869,13 +903,38 @@ Return ONLY valid JSON:
 
 Important: Leave "pending_summary" empty.
 """
-    response = _get_openai_client().chat.completions.create(
+    import time
+
+    start = time.time()
+    with langfuse_obs.generation(
+        "swap.judge_reply",
         model='gpt-4o',
-        messages=[{'role': 'user', 'content': prompt}],
-        temperature=0.2,
-        max_tokens=350,
-        timeout=45,
-    )
+        metadata=langfuse_obs.common_metadata(
+            feature="swap",
+            agent_name="swap_judge",
+            session_kind="swap",
+            case_id=session.get('case_id'),
+            step_code=step_code,
+            step_index=step_index,
+            provider="openai",
+            model='gpt-4o',
+            extra={
+                "langfuse_user_id": session.get('user_id'),
+                "langfuse_session_id": f"swap:{session.get('id')}",
+                "message_count": len(messages or []),
+                "doctor_message_length": len(doctor_message or ""),
+            },
+        ),
+        input={"step_code": step_code, "message_count": len(messages or [])},
+    ) as lf_generation:
+        response = _get_openai_client().chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            max_tokens=350,
+            timeout=45,
+        )
+    latency_ms = int((time.time() - start) * 1000)
     try:
         parsed = _json_from_text(response.choices[0].message.content or '')
     except Exception:
@@ -896,7 +955,7 @@ Important: Leave "pending_summary" empty.
     if _doctor_message_blocks_convinced(doctor_message):
         convinced = False
     debate_score, knowledge_score = _strict_online_component_scores(step_code, parsed, persuasion_score)
-    return {
+    result = {
         'doctor_message': doctor_message,
         'convinced': convinced,
         'persuasion_score': persuasion_score,
@@ -905,6 +964,25 @@ Important: Leave "pending_summary" empty.
         'pending_summary': str(parsed.get('pending_summary') or '').strip(),
         'reasoning_for_grader': str(parsed.get('reasoning_for_grader') or '').strip(),
     }
+    langfuse_obs.update_generation(
+        lf_generation,
+        response=response,
+        model='gpt-4o',
+        latency_ms=latency_ms,
+        output={
+            "convinced": convinced,
+            "persuasion_score": persuasion_score,
+            "debate_score": debate_score,
+            "knowledge_score": knowledge_score,
+        },
+        metadata={
+            "convinced": convinced,
+            "persuasion_score": persuasion_score,
+            "debate_score": debate_score,
+            "knowledge_score": knowledge_score,
+        },
+    )
+    return result
 
 
 def _final_grade(case: dict, answer_key: dict[str, dict[str, Any]], messages: list[dict]) -> list[dict[str, Any]]:
@@ -969,16 +1047,37 @@ Return ONLY valid JSON:
   ]
 }}
 """
-    response = _get_openai_client().chat.completions.create(
+    import time
+
+    start = time.time()
+    with langfuse_obs.generation(
+        "swap.final_grade",
         model='gpt-4o',
-        messages=[{'role': 'user', 'content': prompt}],
-        temperature=0.2,
-        max_tokens=900,
-        timeout=45,
-    )
+        metadata=langfuse_obs.common_metadata(
+            feature="swap",
+            agent_name="swap_final_grader",
+            session_kind="swap",
+            case_id=case.get('id'),
+            provider="openai",
+            model='gpt-4o',
+            extra={
+                "message_count": len(messages or []),
+                "transcript_length": len(transcript),
+            },
+        ),
+        input={"message_count": len(messages or []), "step_count": len(STEP_CODES)},
+    ) as lf_generation:
+        response = _get_openai_client().chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            max_tokens=900,
+            timeout=45,
+        )
+    latency_ms = int((time.time() - start) * 1000)
     parsed = _json_from_text(response.choices[0].message.content or '')
     by_code = {item.get('step_code'): item for item in parsed.get('scores', [])}
-    return [
+    scores = [
         {
             'step_index': idx,
             'step_code': code,
@@ -989,6 +1088,19 @@ Return ONLY valid JSON:
         }
         for idx, code in enumerate(STEP_CODES)
     ]
+    langfuse_obs.update_generation(
+        lf_generation,
+        response=response,
+        model='gpt-4o',
+        latency_ms=latency_ms,
+        output={"scores": scores},
+        metadata={
+            "avg_debate_score": sum(s["debate_score"] for s in scores) / len(scores),
+            "avg_knowledge_score": sum(s["knowledge_score"] for s in scores) / len(scores),
+            "avg_accuracy_score": sum(s["accuracy_score"] for s in scores) / len(scores),
+        },
+    )
+    return scores
 
 
 def _case_summary(case: dict) -> dict:

@@ -5,6 +5,7 @@ import re
 from openai import OpenAI
 from .debug.logger import logger
 from .config import LLM_PROVIDER, ANSWER_CHECK_MODEL
+from app.observability import langfuse_obs
 
 
 def _sanitize(s: str) -> str:
@@ -148,6 +149,7 @@ def evaluate(
     previous_steps: list | None = None,
     step_attempts: list | None = None,
     is_last_step: bool = False,
+    trace_metadata: dict | None = None,
 ) -> dict:
     """
     Gọi GPT-4o chấm điểm câu trả lời sinh viên.
@@ -212,20 +214,49 @@ Evaluate and return JSON.""")
     })
 
     start = time.time()
-    response = client.chat.completions.create(
+    with langfuse_obs.generation(
+        "answer_check.evaluate",
         model=ANSWER_CHECK_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": user_prompt}
-        ],
-        temperature=0.1,
-        max_tokens=300,
-        response_format={"type": "json_object"}
-    )
+        metadata=langfuse_obs.common_metadata(
+            feature="practice",
+            agent_name="answer_check",
+            provider=LLM_PROVIDER,
+            model=ANSWER_CHECK_MODEL,
+            step_code=step_code,
+            step_index=step_index,
+            extra={
+                **(trace_metadata or {}),
+                "valid_error_codes": valid_error_codes,
+                "previous_step_count": len(previous_steps or []),
+                "attempt_count": len(step_attempts or []),
+                "is_last_step": is_last_step,
+            },
+        ),
+        input={
+            "step_code": step_code,
+            "student_answer_length": len(student_answer.split()),
+            "rubric_criteria_count": len(rubric.get("criteria", [])),
+        },
+    ) as lf_generation:
+        response = client.chat.completions.create(
+            model=ANSWER_CHECK_MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": user_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=300,
+            response_format={"type": "json_object"}
+        )
     latency_ms = int((time.time() - start) * 1000)
 
+    usage_metrics = langfuse_obs.usage_from_openai(response)
     usage = response.usage
-    cost = (usage.prompt_tokens * 0.000005) + (usage.completion_tokens * 0.000015)
+    cost = langfuse_obs.openai_cost_estimate(
+        ANSWER_CHECK_MODEL,
+        usage_metrics["prompt_tokens"],
+        usage_metrics["completion_tokens"],
+    )
 
     logger.log_llm_metric(
         provider=LLM_PROVIDER,
@@ -237,9 +268,11 @@ Evaluate and return JSON.""")
     )
     logger.log_step_latency(step_index, "answer_check", "openai", latency_ms)
 
+    json_parse_failed = False
     try:
         raw = _safe_parse_llm_json(response.choices[0].message.content or "")
     except Exception as exc:
+        json_parse_failed = True
         logger.log_tool_result(
             step=step_index,
             tool="evaluate_answer",
@@ -267,6 +300,26 @@ Evaluate and return JSON.""")
     passed = raw["score"] >= 0.6   # never trust LLM's passed field — compute from score
     errors = [] if passed else raw.get("errors", [])   # errors must be empty when passed
     partial_answer_by_error = [] if passed else raw.get("partial_answer_by_error", [])
+    langfuse_obs.update_generation(
+        lf_generation,
+        response=response,
+        model=ANSWER_CHECK_MODEL,
+        latency_ms=latency_ms,
+        output={
+            "score": raw.get("score"),
+            "passed": passed,
+            "errors": errors,
+            "error_count": len(errors),
+            "json_parse_failed": json_parse_failed,
+        },
+        metadata={
+            "score": raw.get("score"),
+            "passed": passed,
+            "errors": errors,
+            "error_count": len(errors),
+            "json_parse_failed": json_parse_failed,
+        },
+    )
     return {
         "score":             raw["score"],
         "passed":            passed,
