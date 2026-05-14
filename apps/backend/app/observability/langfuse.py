@@ -13,6 +13,7 @@ LANGFUSE_HOST = os.getenv(
     "LANGFUSE_HOST",
     os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"),
 ).strip()
+LANGFUSE_DEBUG = os.getenv("LANGFUSE_DEBUG", "false").lower() in ("1", "true", "yes")
 CAPTURE_RAW_IO = False
 
 if LANGFUSE_HOST:
@@ -22,12 +23,19 @@ if LANGFUSE_HOST:
 
 def _load_client():
     if not (LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY):
+        if LANGFUSE_DEBUG:
+            logger.warning("[Langfuse] Missing LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY")
         return None
     try:
         from langfuse import get_client
 
-        return get_client()
+        client = get_client()
+        if LANGFUSE_DEBUG:
+            logger.warning("[Langfuse] auth_check=%s host=%s", client.auth_check(), LANGFUSE_HOST)
+        return client
     except Exception as exc:
+        if LANGFUSE_DEBUG:
+            raise
         logger.warning("Langfuse disabled: %s", exc)
         return None
 
@@ -187,6 +195,8 @@ def observation(
         with _CLIENT.start_as_current_observation(**kwargs) as obs:
             yield Observation(obs)
     except Exception as exc:
+        if LANGFUSE_DEBUG:
+            raise
         logger.debug("Langfuse observation failed: %s", exc)
         yield Observation()
 
