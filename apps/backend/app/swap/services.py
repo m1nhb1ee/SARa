@@ -565,8 +565,13 @@ Step-specific rules for DDx:
     if step_code == 'REASONING':
         return """
 Step-specific rules for REASONING:
-- The agreed answer must summarize the causal/clinical reasoning from agreed imaging findings and clinical context.
-- Do not summarize the step as only an observation; explain why the agreed findings affect next diagnostic thinking.
+- The agreed answer must be a reasoning explanation, not a management plan.
+- Synthesize three inputs when available: patient clinical history, Dr. Swap's initial reasoning stance, and the previous DESCRIBE agreed answer.
+- State the working hypothesis for why the patient's clinical history could exist despite the current imaging conclusion.
+- Explain the causal link: why the agreed image findings do or do not support that hypothesis.
+- If there is clinical history, use it explicitly. If there is no clinical history, explain from the previous DESCRIBE agreed answer only.
+- Do not list differential diagnoses as the main output; save disease lists for DDx.
+- Do not recommend next imaging, MRI, lab tests, treatment, or follow-up as the main conclusion. Mention additional imaging only if it was explicitly part of the accepted reasoning, and keep it secondary.
 - Preserve clinically agreed caution or uncertainty, especially statements such as "X-ray is negative but does not exclude early osteomyelitis, deep soft-tissue infection, or Charcot foot when clinical context supports it."
 """
     if step_code == 'CONCLUSION':
@@ -584,6 +589,7 @@ Step-specific rules for DESCRIBE:
 
 def _summarize_agreed_answer_from_conversation(
     session: dict,
+    case: dict,
     messages: list[dict],
     user_message: str,
     doctor_message: str = '',
@@ -593,6 +599,12 @@ def _summarize_agreed_answer_from_conversation(
     step_code = STEP_CODES[step_index]
     previous_agreed = _previous_agreed_answers(states or [], step_index)
     step_rules = _consensus_summary_step_rules(step_code)
+    doctor_diagnosis = session.get('doctor_diagnosis') or {}
+    doctor_initial_stance = str(
+        doctor_diagnosis.get(step_code)
+        or doctor_diagnosis.get('OBSERVE' if step_code == 'DESCRIBE' else step_code)
+        or ''
+    ).strip()
     prompt = f"""
 Create the agreed answer for the current radiology debate step.
 
@@ -617,6 +629,12 @@ Current step: {step_code}
 Previous agreed answers, for context only:
 {json.dumps(previous_agreed, ensure_ascii=False)}
 
+Patient clinical history, if provided:
+{case.get('clinical_history') or ''}
+
+Dr. Swap's initial opinion for the current step, if it was part of this step's debate context:
+{doctor_initial_stance}
+
 Visible conversation for current step:
 {_current_step_visible_history(messages, step_index, user_message)}
 
@@ -640,6 +658,37 @@ Return JSON:
     return str(parsed.get('agreed_answer') or '').strip()
 
 
+def _next_step_opening_step_rules(step_code: str) -> str:
+    if step_code == 'DDx':
+        return """
+Step-specific requirements for DDx opening:
+- Base the opening primarily on the agreed REASONING conclusion.
+- Use the patient's clinical history, if present, to predict possible diseases the patient may have.
+- Name the plausible differential diagnoses directly. Do not turn risk factors into diagnoses.
+- If the reasoning is "normal X-ray but diabetic foot ulcer/clinical concern remains", the DDx should consider entities such as early osteomyelitis, soft-tissue infection/cellulitis or abscess, neuropathic/Charcot change, peripheral arterial disease or ischemic ulcer, pressure/mechanical ulcer, and other clinically fitting causes.
+- Rank or group the diseases by likelihood if the evidence supports it.
+- Do not make the DDx opening about ordering MRI or additional imaging. Imaging can be mentioned only as support for uncertainty, not as the main DDx answer.
+"""
+    if step_code == 'REASONING':
+        return """
+Step-specific requirements for REASONING opening:
+- Build the reasoning from the agreed DESCRIBE answer, Dr. Swap's initial reasoning opinion, and the clinical history.
+- State the hypothesis that explains why the patient's history can coexist with the current imaging conclusion.
+- Explain the causal/clinical logic. Do not jump to a list of diseases, and do not make the main point a recommendation for MRI or other tests.
+"""
+    if step_code == 'CONCLUSION':
+        return """
+Step-specific requirements for CONCLUSION opening:
+- Base the conclusion on the agreed DESCRIBE, REASONING, and DDx answers.
+- State the most defensible final diagnostic conclusion or diagnostic decision, with confidence/uncertainty if needed.
+"""
+    return """
+Step-specific requirements for DESCRIBE opening:
+- State Dr. Swap's imaging observation position only.
+- Do not include reasoning, DDx, diagnosis, or management.
+"""
+
+
 def _next_step_opening_message(
     session: dict,
     case: dict,
@@ -651,6 +700,7 @@ def _next_step_opening_message(
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
     vlm_stance = str(doctor_diagnosis.get(next_code) or '').strip()
     previous_agreed = _previous_agreed_answers(states or [], next_step)
+    step_rules = _next_step_opening_step_rules(next_code)
     if just_agreed_answer:
         current_code = STEP_CODES[next_step - 1]
         previous_agreed = [
@@ -687,6 +737,8 @@ Rules:
 - Keep it short, conversational, and direct. Address the user as "bạn"; speak as "tôi".
 - Respond in Vietnamese as the doctor only. Do not return JSON.
 - Keep it to 3-5 sentences.
+
+{step_rules}
 
 Case:
 Title: {case.get('title', '')}
@@ -728,10 +780,6 @@ Dr. Swap's initial opinion for {next_code}:
             "Quan điểm của tôi là hướng giải thích tiếp theo phải bám chặt vào điểm đó, thay vì mở rộng sang những giả định chưa có cơ sở."
         )
 
-    if just_agreed_answer and vlm_stance:
-        return f"Dựa trên phần đã thống nhất: {just_agreed_answer}\n\nỞ bước {next_code}, quan điểm ban đầu của tôi là: {vlm_stance}"
-    if just_agreed_answer:
-        return f"Dựa trên phần đã thống nhất: {just_agreed_answer}\n\nBây giờ chuyển sang bước {next_code}. Hãy trình bày lập luận của bạn."
     return vlm_stance
 
 
@@ -1294,12 +1342,22 @@ def _case_summary(case: dict) -> dict:
     }
 
 
+def _message_order_key(message: dict) -> tuple:
+    role_order = {'user': 0, 'doctor': 1, 'system': 2}
+    return (
+        message.get('created_at') or '',
+        role_order.get(message.get('role'), 9),
+        message.get('id') or '',
+    )
+
+
 def _serialize_session(session: dict) -> dict:
     sb = get_supabase()
     case, _ = _get_case_for_user(session['case_id'], session['user_id'])
     messages = sb.table('swap_messages').select('*').eq(
         'swap_session_id', session['id']
     ).order('created_at').execute().data or []
+    messages.sort(key=_message_order_key)
     scores = sb.table('swap_step_scores').select('*').eq(
         'swap_session_id', session['id']
     ).order('step_index').execute().data or []
@@ -1520,6 +1578,7 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
         try:
             pending_summary = _summarize_agreed_answer_from_conversation(
                 session,
+                data.get('case') or {},
                 data['messages'],
                 message,
                 result.get('doctor_message') or '',
@@ -1626,6 +1685,7 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             full_messages = sb.table('swap_messages').select('*').eq(
                 'swap_session_id', session_id
             ).order('created_at').execute().data or []
+            full_messages.sort(key=_message_order_key)
             answer_key = _answer_key_for_case(session['case_id'])
             try:
                 final_scores = _final_grade(data['case'], answer_key, full_messages)
@@ -1723,24 +1783,13 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
     agreed_answer = state.get('pending_summary') or ''
     if not agreed_answer:
         return None, Response({'error': 'No pending step summary to confirm'}, status=status.HTTP_400_BAD_REQUEST)
-    confirm_message = f'Thống nhất bước {step_code}: {agreed_answer}'
-
-    sb.table('swap_messages').insert([
-        {
-            'swap_session_id': session_id,
-            'role': 'user',
-            'step_index': step_index,
-            'content': message,
-            'metadata': {'confirmation': True},
-        },
-        {
-            'swap_session_id': session_id,
-            'role': 'doctor',
-            'step_index': step_index,
-            'content': confirm_message,
-            'metadata': {'confirmed': True},
-        },
-    ]).execute()
+    sb.table('swap_messages').insert({
+        'swap_session_id': session_id,
+        'role': 'user',
+        'step_index': step_index,
+        'content': message,
+        'metadata': {'confirmation': True},
+    }).execute()
     sb.table('swap_step_states').upsert({
         'swap_session_id': session_id,
         'step_index': step_index,
@@ -1763,11 +1812,12 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
         'reasoning': state.get('reasoning') or '',
     }, on_conflict='swap_session_id,step_index').execute()
 
-    result: dict[str, Any] = {'confirmed': True, 'doctor_message': confirm_message}
+    result: dict[str, Any] = {'confirmed': True, 'doctor_message': ''}
     if step_index >= len(STEP_CODES) - 1:
         full_messages = sb.table('swap_messages').select('*').eq(
             'swap_session_id', session_id
         ).order('created_at').execute().data or []
+        full_messages.sort(key=_message_order_key)
         answer_key = _answer_key_for_case(session['case_id'])
         try:
             final_scores = _final_grade(data['case'], answer_key, full_messages)
@@ -1839,6 +1889,7 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
                 'metadata': {'source': 'agreed_context_plus_vlm'},
             }).execute()
             result['next_step_message'] = next_message
+            result['doctor_message'] = next_message
 
     updated, updated_err = get_swap_session(session_id, user_id)
     if updated_err:
