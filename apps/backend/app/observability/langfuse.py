@@ -9,11 +9,15 @@ logger = logging.getLogger(__name__)
 
 LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "").strip()
 LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "").strip()
-LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").strip()
+LANGFUSE_HOST = os.getenv(
+    "LANGFUSE_HOST",
+    os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"),
+).strip()
 CAPTURE_RAW_IO = False
 
 if LANGFUSE_HOST:
     os.environ.setdefault("LANGFUSE_HOST", LANGFUSE_HOST)
+    os.environ.setdefault("LANGFUSE_BASE_URL", LANGFUSE_HOST)
 
 
 def _load_client():
@@ -131,6 +135,7 @@ class Observation:
             return
         try:
             self._observation.update(**kwargs)
+            flush()
         except Exception as exc:
             logger.debug("Langfuse update failed: %s", exc)
 
