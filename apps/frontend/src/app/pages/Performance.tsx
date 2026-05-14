@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   User, Pencil, Home as HomeIcon, ChevronRight,
-  Flame, CheckCircle2, XCircle, Clock, Crown, Sparkles
+  Flame, CheckCircle2, XCircle, Clock, Crown, Sparkles, X, Save
 } from 'lucide-react';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
 import {
@@ -16,10 +16,18 @@ import { useAuth } from '@/api/authContext';
 
 export function ProfilePage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { data: stats } = useMyStats();
   const { data: sessionsData } = useSessions({ status: 'COMPLETED' });
   const isPremium = !!user?.is_premium;
+  const [isEditing, setIsEditing] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    user_name: user?.user_name ?? '',
+    dob: user?.dob ?? '',
+    university: user?.university ?? '',
+  });
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const recentSessions = (sessionsData?.results ?? []).slice(0, 6);
 
@@ -135,6 +143,37 @@ export function ProfilePage() {
         ? 'LEVEL 3 — RESIDENT'
         : 'LEVEL 4 — SENIOR RESIDENT';
 
+  const displayUserName = user?.user_name || (user?.id ? `Student #${user.id.split('-')[0].slice(0, 4).toUpperCase()}` : 'Student');
+  const dobLabel = user?.dob
+    ? new Date(user.dob).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '-';
+
+  const openProfileEditor = () => {
+    setProfileForm({
+      user_name: user?.user_name ?? '',
+      dob: user?.dob ?? '',
+      university: user?.university ?? '',
+    });
+    setProfileError(null);
+    setIsEditing(true);
+  };
+
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    setProfileError(null);
+    const result = await updateProfile({
+      user_name: profileForm.user_name,
+      dob: profileForm.dob,
+      university: profileForm.university,
+    });
+    setSavingProfile(false);
+    if (!result.success) {
+      setProfileError(result.error || 'Update failed');
+      return;
+    }
+    setIsEditing(false);
+  };
+
   return (
     <div style={{
       minHeight: '100%',
@@ -210,6 +249,9 @@ export function ProfilePage() {
               <div className="space-y-3" style={{ fontFamily: "var(--font-mono)", fontSize: '14px' }}>
                 {[
                   { label: 'EMAIL',        value: user?.email ?? '—' },
+                  { label: 'USER NAME',    value: displayUserName },
+                  { label: 'DOB',          value: dobLabel },
+                  { label: 'UNIVERSITY',   value: user?.university || '—' },
                   { label: 'TIER',         value: isPremium ? 'PREMIUM' : 'FREE' },
                   { label: 'CASES DONE',   value: String(casesCompleted) },
                   { label: 'AVG SCORE',    value: `${avgScore}/100` },
@@ -226,6 +268,7 @@ export function ProfilePage() {
               </div>
 
               <button className="mt-6 px-6 py-2 border-2 rounded hover:bg-black/5 transition-all"
+                onClick={openProfileEditor}
                 style={{ borderColor: 'var(--border)', color: 'var(--ink-secondary)', fontFamily: "var(--font-mono)", fontSize: '14px' }}>
                 <Pencil className="w-4 h-4 inline mr-2" /> Edit Details
               </button>
@@ -234,6 +277,76 @@ export function ProfilePage() {
         </div>
 
         {/* ── Two-column Charts ── */}
+        {isEditing && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            style={{ background: 'rgba(38, 30, 22, 0.32)', backdropFilter: 'blur(2px)' }}
+            onClick={() => setIsEditing(false)}
+          >
+            <div
+              className="w-full max-w-lg p-6 border rounded relative"
+              style={{ ...cardStyle, borderColor: 'var(--border-strong)' }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-profile-title"
+            >
+              <SketchBorder id="prof-edit-modal" color="var(--ink)" opacity={0.75} />
+              <div className="flex items-start justify-between gap-4 mb-5" style={{ position: 'relative', zIndex: 1 }}>
+                <div>
+                  <h2 id="edit-profile-title" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.6rem', color: 'var(--ink)', margin: 0 }}>
+                    Edit Details
+                  </h2>
+                  <p style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>
+                    These fields appear on your profile and leaderboard card.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setIsEditing(false)} className="p-2 rounded hover:bg-black/5" style={{ border: '1px solid var(--border)', color: 'var(--ink-secondary)' }} title="Close">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4" style={{ position: 'relative', zIndex: 1 }}>
+                {[
+                  { key: 'user_name', label: 'User name', type: 'text', placeholder: 'radiology_resident' },
+                  { key: 'dob', label: 'Date of birth', type: 'date', placeholder: '' },
+                  { key: 'university', label: 'University', type: 'text', placeholder: 'University of Medicine' },
+                ].map((field) => (
+                  <label key={field.key} className="block">
+                    <span style={{ display: 'block', marginBottom: 6, fontFamily: "var(--font-typewriter)", fontSize: 12, color: 'var(--ink-secondary)', textTransform: 'uppercase' }}>
+                      {field.label}
+                    </span>
+                    <input
+                      type={field.type}
+                      value={profileForm[field.key as keyof typeof profileForm]}
+                      placeholder={field.placeholder}
+                      onChange={(e) => setProfileForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      className="w-full rounded border px-3 py-2 outline-none"
+                      style={{ borderColor: 'var(--border)', background: 'var(--bg-page)', color: 'var(--ink)', fontFamily: 'var(--font-mono)', fontSize: 14 }}
+                    />
+                  </label>
+                ))}
+
+                {profileError && (
+                  <div className="px-3 py-2 rounded border" style={{ borderColor: 'var(--accent-clay)', color: 'var(--accent-clay)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                    {profileError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 rounded border hover:bg-black/5" style={{ borderColor: 'var(--border)', color: 'var(--ink-secondary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                    Cancel
+                  </button>
+                  <button type="button" onClick={saveProfile} disabled={savingProfile} className="px-4 py-2 rounded border inline-flex items-center gap-2 disabled:opacity-60" style={{ borderColor: 'var(--accent-sage)', background: 'var(--accent-sage)', color: 'var(--bg-page)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                    <Save className="w-4 h-4" />
+                    {savingProfile ? 'Saving...' : 'Save Details'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Left: Diagnostic Performance */}
           <div>
