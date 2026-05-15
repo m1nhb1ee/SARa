@@ -13,6 +13,7 @@ from rest_framework.response import Response
 
 from app.core.step_codes import STEP_CODES, index_by_canonical_step
 from app.core.supabase_client import get_supabase
+from app.observability import langfuse_obs
 from app.uploads.services import analyze_medical_image
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,8 @@ SWAP_PHASE_CONFIRMED = 'CONFIRMED'
 SWAP_FINAL_DEBATE_WEIGHT = float(os.getenv('SWAP_FINAL_DEBATE_WEIGHT', '0.3333333333'))
 SWAP_FINAL_KNOWLEDGE_WEIGHT = float(os.getenv('SWAP_FINAL_KNOWLEDGE_WEIGHT', '0.3333333333'))
 SWAP_FINAL_ACCURACY_WEIGHT = float(os.getenv('SWAP_FINAL_ACCURACY_WEIGHT', '0.3333333333'))
+SWAP_LOG_PROMPTS = os.getenv('SWAP_LOG_PROMPTS', '1').strip().lower() not in {'0', 'false', 'no', 'off'}
+SWAP_LOG_PROMPT_MAX_CHARS = int(os.getenv('SWAP_LOG_PROMPT_MAX_CHARS', '0') or '0')
 
 
 MODALITY_TO_UPLOAD = {
@@ -34,6 +37,30 @@ MODALITY_TO_UPLOAD = {
     'Difference': 'DIFF',
     'DIFF': 'DIFF',
 }
+
+
+def _log_swap_prompt(name: str, prompt: str, *, session: dict | None = None, step_code: str | None = None) -> None:
+    if not SWAP_LOG_PROMPTS:
+        return
+    text = prompt or ''
+    truncated = False
+    if SWAP_LOG_PROMPT_MAX_CHARS > 0 and len(text) > SWAP_LOG_PROMPT_MAX_CHARS:
+        text = text[:SWAP_LOG_PROMPT_MAX_CHARS]
+        truncated = True
+    logger.info(
+        "\n========== SWAP PROMPT START ==========\n"
+        "name=%s session_id=%s user_id=%s case_id=%s step_code=%s length=%s truncated=%s\n"
+        "%s\n"
+        "========== SWAP PROMPT END ==========",
+        name,
+        (session or {}).get('id'),
+        (session or {}).get('user_id'),
+        (session or {}).get('case_id'),
+        step_code,
+        len(prompt or ''),
+        truncated,
+        text,
+    )
 
 
 def _parse_uuid(value: str) -> bool:
@@ -131,28 +158,115 @@ def _format_history(messages: list[dict], pending_user_message: str) -> str:
     return "\n".join(lines)
 
 
-def _is_confirmation_message(message: str) -> bool:
-    text = " ".join((message or "").strip().lower().split())
-    if not text:
-        return False
-    confirm_words = (
-        'dong y', 'đồng ý', 'ok', 'okay', 'yes', 'chot', 'chốt',
-        'dung roi', 'đúng rồi', 'nhat tri', 'nhất trí', 'tiep tuc',
-        'tiếp tục', 'sang buoc', 'sang bước'
-    )
-    reject_words = (
-        'khong', 'không', 'chua', 'chưa', 'sai', 'bo sung', 'bổ sung',
-        'sua', 'sửa', 'nhung', 'nhưng'
-    )
-    if any(word in text for word in reject_words):
-        return False
-    return any(word in text for word in confirm_words)
-
-
 def _normalize_signal_text(text: str) -> str:
     normalized = unicodedata.normalize('NFKD', text or '')
     ascii_text = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    ascii_text = ascii_text.replace('đ', 'd').replace('Đ', 'D')
     return " ".join(ascii_text.lower().split())
+
+
+def _has_reject_intent(text: str) -> bool:
+    reject_signals = (
+        'khong dong y',
+        'khong chot',
+        'khong tiep tuc',
+        'khong sang buoc',
+        'khong muon tiep tuc',
+        'chua dung',
+        'chua dong y',
+        'chua chot',
+        'sai',
+        'sai roi',
+        'can bo sung',
+        'toi muon bo sung',
+        'hay bo sung',
+        'can sua',
+        'hay sua',
+    )
+    return any(signal in text for signal in reject_signals)
+
+
+def _wants_next_step(message: str) -> bool:
+    text = _normalize_signal_text(message)
+    if not text or _has_reject_intent(text):
+        return False
+    next_step_signals = (
+        'tiep tuc',
+        'sang buoc',
+        'buoc tiep',
+        'buoc ke tiep',
+        'next step',
+        'san sang',
+        'di tiep',
+        'chuyen sang',
+        'chuyen buoc',
+        'proceed',
+    )
+    return any(signal in text for signal in next_step_signals)
+
+
+def _is_step_agreement_message(message: str) -> bool:
+    text = _normalize_signal_text(message)
+    if not text or _has_reject_intent(text):
+        return False
+    agreement_signals = (
+        'dong y',
+        'dung roi',
+        'ban dung',
+        'mo ta dung',
+        'mo ta cua ban dung',
+        'mo ta ban dau',
+        'mo ta hien tai',
+        'hinh anh binh thuong',
+        'co ve binh thuong',
+        'tat ca moi thu deu binh thuong',
+        'chinh xac',
+        'nhat tri',
+        'chot',
+        'khong co gi bo sung',
+        'khong thay gi them',
+        'khong co them',
+        'hop ly',
+        'ok',
+        'okay',
+        'yes',
+    )
+    return any(signal in text for signal in agreement_signals)
+
+
+def _is_direct_stance_agreement_message(message: str) -> bool:
+    text = _normalize_signal_text(message)
+    if not text or _has_reject_intent(text):
+        return False
+    if any(signal in text for signal in ('xin y kien', 'hoi y kien', 'ban nghi sao', 'nghi sao ve')):
+        return False
+    agreement_signals = (
+        'dong y',
+        'dung roi',
+        'ban dung',
+        'y kien cua ban dung',
+        'y kien ban dau cua ban dung',
+        'quan diem cua ban dung',
+        'quan diem ban dau cua ban dung',
+        'nhan dinh cua ban dung',
+        'nhan dinh ban dau cua ban dung',
+        'mo ta cua ban dung',
+        'chan doan cua ban',
+        'toi cung nghi vay',
+        'toi cung thay vay',
+        'chinh xac',
+        'nhat tri',
+        'chot',
+        'hop ly',
+    )
+    return any(signal in text for signal in agreement_signals)
+
+
+def _is_confirmation_message(message: str) -> bool:
+    text = _normalize_signal_text(message)
+    if not text or _has_reject_intent(text):
+        return False
+    return _is_step_agreement_message(message) or _wants_next_step(message)
 
 
 def _doctor_message_blocks_convinced(doctor_message: str) -> bool:
@@ -303,10 +417,12 @@ def _strict_final_component_scores(score: dict[str, Any]) -> tuple[float, float,
     return debate_score, knowledge_score, accuracy_score
 
 
-def _sanitize_consensus_summary(text: str) -> str:
+def _sanitize_consensus_summary(text: str, step_code: str | None = None) -> str:
     summary = (text or '').strip()
     if not summary:
         return ''
+    if step_code and step_code != 'DESCRIBE':
+        return summary
     lower = summary.lower()
     markers = [' tuy nhiên', '. tuy nhiên', ' nhưng ', '. nhưng ', ' however ']
     cut_positions = [lower.find(marker) for marker in markers if lower.find(marker) > 0]
@@ -351,6 +467,34 @@ def _strip_describe_diagnostic_leak(text: str, step_code: str) -> str:
     return "Mình đang ở bước DESCRIBE nên chỉ tập trung mô tả dấu hiệu hình ảnh, chưa kết luận chẩn đoán."
 
 
+def _sanitize_doctor_persona_text(text: str) -> str:
+    replacements = {
+        'VLM': 'ấn tượng ban đầu của tôi',
+        'vlm': 'ấn tượng ban đầu của tôi',
+        'AI': 'tôi',
+        'ai': 'tôi',
+        'model': 'đánh giá ban đầu của tôi',
+        'Model': 'đánh giá ban đầu của tôi',
+        'current stance': 'ấn tượng ban đầu của tôi',
+    }
+    sanitized = text or ''
+    for source, replacement in replacements.items():
+        sanitized = sanitized.replace(source, replacement)
+    formal_phrases = (
+        'Chào các đồng nghiệp,',
+        'Chào các đồng nghiệp',
+        'Kính gửi các đồng nghiệp,',
+        'Kính gửi các đồng nghiệp',
+        'Trong buổi thảo luận hôm nay,',
+        'Trân trọng,',
+        'Trân trọng',
+        'Bác sĩ [Tên]',
+    )
+    for phrase in formal_phrases:
+        sanitized = sanitized.replace(phrase, '').strip()
+    return sanitized.strip()
+
+
 def _get_openai_client() -> OpenAI:
     api_key = os.getenv('OPENAI_API_KEY', '').strip()
     if not api_key:
@@ -393,6 +537,7 @@ Return JSON shape:
   "CONCLUSION": "..."
 }}
 """
+    _log_swap_prompt("swap.translate_doctor_diagnosis", prompt)
     response = _get_openai_client().chat.completions.create(
         model='gpt-4o',
         messages=[{'role': 'user', 'content': prompt}],
@@ -408,8 +553,43 @@ Return JSON shape:
     return translated
 
 
+def _consensus_summary_step_rules(step_code: str) -> str:
+    if step_code == 'DDx':
+        return """
+Step-specific rules for DDx:
+- The agreed answer must name the differential diagnoses being considered.
+- Risk factors such as age, diabetes, ulcer history, immune status, or healing capacity are supporting context only; do not make them the differential diagnosis.
+- If the conversation mentions diagnoses such as soft-tissue infection, osteomyelitis, peripheral arterial disease, Charcot foot, arthritis, tendinitis, pressure injury, or mechanical ulcer, preserve those diagnoses in the agreed answer.
+- Write the summary as a ranked or grouped differential diagnosis list with brief rationale when possible.
+"""
+    if step_code == 'REASONING':
+        return """
+Step-specific rules for REASONING:
+- The agreed answer must be a reasoning explanation, not a management plan.
+- Synthesize three inputs when available: patient clinical history, Dr. Swap's initial reasoning stance, and the previous DESCRIBE agreed answer.
+- State the working hypothesis for why the patient's clinical history could exist despite the current imaging conclusion.
+- Explain the causal link: why the agreed image findings do or do not support that hypothesis.
+- If there is clinical history, use it explicitly. If there is no clinical history, explain from the previous DESCRIBE agreed answer only.
+- Do not list differential diagnoses as the main output; save disease lists for DDx.
+- Do not recommend next imaging, MRI, lab tests, treatment, or follow-up as the main conclusion. Mention additional imaging only if it was explicitly part of the accepted reasoning, and keep it secondary.
+- Preserve clinically agreed caution or uncertainty, especially statements such as "X-ray is negative but does not exclude early osteomyelitis, deep soft-tissue infection, or Charcot foot when clinical context supports it."
+"""
+    if step_code == 'CONCLUSION':
+        return """
+Step-specific rules for CONCLUSION:
+- The agreed answer must state the final diagnostic conclusion or next diagnostic decision.
+- Include confidence/uncertainty only if it was actually discussed.
+"""
+    return """
+Step-specific rules for DESCRIBE:
+- The agreed answer must summarize visible imaging observations only.
+- Do not include diagnosis, differential diagnosis, etiology, or management.
+"""
+
+
 def _summarize_agreed_answer_from_conversation(
     session: dict,
+    case: dict,
     messages: list[dict],
     user_message: str,
     doctor_message: str = '',
@@ -418,6 +598,13 @@ def _summarize_agreed_answer_from_conversation(
     step_index = session['current_step']
     step_code = STEP_CODES[step_index]
     previous_agreed = _previous_agreed_answers(states or [], step_index)
+    step_rules = _consensus_summary_step_rules(step_code)
+    doctor_diagnosis = session.get('doctor_diagnosis') or {}
+    doctor_initial_stance = str(
+        doctor_diagnosis.get(step_code)
+        or doctor_diagnosis.get('OBSERVE' if step_code == 'DESCRIBE' else step_code)
+        or ''
+    ).strip()
     prompt = f"""
 Create the agreed answer for the current radiology debate step.
 
@@ -427,6 +614,7 @@ Rules:
 - The agreed answer should reflect what the user and doctor have actually discussed.
 - The doctor has already conceded for this step. The agreed answer must reflect the final accepted position only.
 - Do not include unresolved disagreement, contrast clauses, or "however/but" style contradictions.
+- Preserve resolved clinical caveats that both sides accepted; do not remove cautious wording just because it uses "tuy nhiên" or "không loại trừ".
 - Do not mention both sides if they conflict; keep only the final consensus statement.
 - Respond in Vietnamese.
 - Avoid repetitive openings like "Tôi hiểu rằng", "Tôi biết rằng", "Tôi đồng ý rằng".
@@ -435,9 +623,17 @@ Rules:
 - Return ONLY valid JSON.
 - Do not prefix the answer with the step code.
 
+{step_rules}
+
 Current step: {step_code}
 Previous agreed answers, for context only:
 {json.dumps(previous_agreed, ensure_ascii=False)}
+
+Patient clinical history, if provided:
+{case.get('clinical_history') or ''}
+
+Dr. Swap's initial opinion for the current step, if it was part of this step's debate context:
+{doctor_initial_stance}
 
 Visible conversation for current step:
 {_current_step_visible_history(messages, step_index, user_message)}
@@ -450,6 +646,7 @@ Return JSON:
   "agreed_answer": "one concise Vietnamese paragraph based only on the conversation"
 }}
 """
+    _log_swap_prompt("swap.consensus_summary", prompt, session=session, step_code=step_code)
     response = _get_openai_client().chat.completions.create(
         model='gpt-4o',
         messages=[{'role': 'user', 'content': prompt}],
@@ -461,8 +658,40 @@ Return JSON:
     return str(parsed.get('agreed_answer') or '').strip()
 
 
+def _next_step_opening_step_rules(step_code: str) -> str:
+    if step_code == 'DDx':
+        return """
+Step-specific requirements for DDx opening:
+- Base the opening primarily on the agreed REASONING conclusion.
+- Use the patient's clinical history, if present, to predict possible diseases the patient may have.
+- Name the plausible differential diagnoses directly. Do not turn risk factors into diagnoses.
+- If the reasoning is "normal X-ray but diabetic foot ulcer/clinical concern remains", the DDx should consider entities such as early osteomyelitis, soft-tissue infection/cellulitis or abscess, neuropathic/Charcot change, peripheral arterial disease or ischemic ulcer, pressure/mechanical ulcer, and other clinically fitting causes.
+- Rank or group the diseases by likelihood if the evidence supports it.
+- Do not make the DDx opening about ordering MRI or additional imaging. Imaging can be mentioned only as support for uncertainty, not as the main DDx answer.
+"""
+    if step_code == 'REASONING':
+        return """
+Step-specific requirements for REASONING opening:
+- Build the reasoning from the agreed DESCRIBE answer, Dr. Swap's initial reasoning opinion, and the clinical history.
+- State the hypothesis that explains why the patient's history can coexist with the current imaging conclusion.
+- Explain the causal/clinical logic. Do not jump to a list of diseases, and do not make the main point a recommendation for MRI or other tests.
+"""
+    if step_code == 'CONCLUSION':
+        return """
+Step-specific requirements for CONCLUSION opening:
+- Base the conclusion on the agreed DESCRIBE, REASONING, and DDx answers.
+- State the most defensible final diagnostic conclusion or diagnostic decision, with confidence/uncertainty if needed.
+"""
+    return """
+Step-specific requirements for DESCRIBE opening:
+- State Dr. Swap's imaging observation position only.
+- Do not include reasoning, DDx, diagnosis, or management.
+"""
+
+
 def _next_step_opening_message(
     session: dict,
+    case: dict,
     states: list[dict] | None,
     next_step: int,
     just_agreed_answer: str,
@@ -471,6 +700,7 @@ def _next_step_opening_message(
     doctor_diagnosis = session.get('doctor_diagnosis') or {}
     vlm_stance = str(doctor_diagnosis.get(next_code) or '').strip()
     previous_agreed = _previous_agreed_answers(states or [], next_step)
+    step_rules = _next_step_opening_step_rules(next_code)
     if just_agreed_answer:
         current_code = STEP_CODES[next_step - 1]
         previous_agreed = [
@@ -481,22 +711,48 @@ def _next_step_opening_message(
     prompt = f"""
 Write the doctor's opening message for the next step in a Vietnamese radiology teaching debate.
 
+This is debate, not tutoring. Dr. Swap must open by stating his own current clinical opinion for the step. Do not ask the user what to check, inspect, verify, or answer.
+
+Build that opinion from exactly these sources:
+1. Previous agreed answers, especially the conclusion from the immediately previous step.
+2. Dr. Swap's initial opinion for the current step.
+3. Patient clinical history, if present.
+
 Rules:
+- Start with Dr. Swap's hypothesis/opinion for {next_code}.
+- Explain why that hypothesis follows from the previous agreed answer(s), the initial opinion, and the clinical history.
+- State the suitable next clinical/debate direction as Dr. Swap's position, not as an assignment for the user.
+- Do not write a Socratic prompt. Do not end with a question.
+- Do not say "bạn hãy", "tôi đề nghị bạn", "kiểm tra kỹ hơn", "xem xét thêm", "hãy trình bày", or equivalent teaching prompts.
 - The agreed answers are authoritative clinical context.
-- The VLM/current stance is only a secondary hint. Use it only if it fits the agreed observations.
-- If the VLM/current stance conflicts with the agreed observations, revise it so the next-step reasoning follows the agreed observations.
-- Do not mention VLM, model, answer key, or hidden reference.
+- Dr. Swap's initial opinion is a required input, but it is not automatically established fact.
+- Build the next-step stance by combining the agreed answers with Dr. Swap's initial opinion into one coherent clinical opinion.
+- If the initial opinion conflicts with the agreed observations, revise it so the next-step reasoning follows the agreed observations.
+- Do not assert new imaging findings unless they already appear in the agreed observations. If the initial opinion mentions an unagreed finding, downgrade it to a cautious hypothesis based on agreed evidence.
+- Do not mention VLM, model, AI, answer key, hidden reference, prompt, or "current stance" in the doctor-facing message.
 - Discuss ONLY the next step: {next_code}.
 - Keep the stubborn senior radiologist persona, but do not reopen already agreed observations.
+- This is a 1-on-1 chat with the user, not a lecture, email, report, or conference.
+- Do not greet colleagues, sign off, write "Trân trọng", use "chúng ta trong buổi thảo luận hôm nay", or address a group.
+- Keep it short, conversational, and direct. Address the user as "bạn"; speak as "tôi".
 - Respond in Vietnamese as the doctor only. Do not return JSON.
+- Keep it to 3-5 sentences.
+
+{step_rules}
+
+Case:
+Title: {case.get('title', '')}
+Modality: {case.get('modality', '')}
+Clinical history: {case.get('clinical_history', '')}
 
 Previous agreed observations/answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
 
-Secondary VLM/current stance for {next_code}:
+Dr. Swap's initial opinion for {next_code}:
 {vlm_stance}
 """
     try:
+        _log_swap_prompt("swap.next_step_opening", prompt, session=session, step_code=next_code)
         response = _get_openai_client().chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
@@ -506,14 +762,24 @@ Secondary VLM/current stance for {next_code}:
         )
         message = (response.choices[0].message.content or '').strip()
         if message:
-            return message
+            return _sanitize_doctor_persona_text(message)
     except Exception as exc:
         logger.warning("swap: failed to generate next-step opening from agreed answer: %s", exc)
 
+    history = str(case.get('clinical_history') or '').strip()
+    history_clause = f" Bệnh sử hiện có củng cố hướng này: {history}" if history else ""
     if just_agreed_answer and vlm_stance:
-        return f"Dựa trên phần đã thống nhất: {just_agreed_answer}\n\nỞ bước {next_code}, quan điểm ban đầu của tôi là: {vlm_stance}"
+        return (
+            f"Ở bước {next_code}, lập trường của tôi là: {vlm_stance} "
+            f"Tôi dựa trên phần đã thống nhất trước đó: {just_agreed_answer}.{history_clause} "
+            "Đó là hướng giải thích hợp lý nhất để tôi bảo vệ trong phần tranh luận tiếp theo."
+        )
     if just_agreed_answer:
-        return f"Dựa trên phần đã thống nhất: {just_agreed_answer}\n\nBây giờ chuyển sang bước {next_code}. Hãy trình bày lập luận của bạn."
+        return (
+            f"Ở bước {next_code}, tôi sẽ xây dựng lập luận từ kết luận đã thống nhất: {just_agreed_answer}.{history_clause} "
+            "Quan điểm của tôi là hướng giải thích tiếp theo phải bám chặt vào điểm đó, thay vì mở rộng sang những giả định chưa có cơ sở."
+        )
+
     return vlm_stance
 
 
@@ -547,7 +813,7 @@ You are roleplaying a radiologist in a medical education debate.
 Persona:
 - You are knowledgeable, senior, stubborn, conservative, and easily annoyed.
 - You often work too quickly and defend your first impression.
-- You can be convinced only by strong imaging reasoning based on visible case context and transcript.
+- You can be convinced only by strong imaging reasoning based on case context and transcript.
 - Do not mention that you are an AI or a roleplay system.
 
 Conversation rules:
@@ -558,8 +824,17 @@ Conversation rules:
 - DESCRIBE is observation, not a debate. If the user's latest answer correctly identifies even one concrete observation that matches the DESCRIBE reference, acknowledge it as correct and concede that observation. Do not demand the full answer before conceding.
 - For DESCRIBE, if the user is partly correct, say what part is correct and briefly ask for the missing visible detail if needed. Do not reject the whole answer just because it is incomplete.
 - For DESCRIBE, push back only when the user's observation is absent from or contradicts the DESCRIBE reference.
+- For DESCRIBE, if the user agrees with your existing description, repeats it as correct, or says there is nothing else to add, treat that as consensus when it does not contradict the DESCRIBE reference. Do not keep asking for more details after clear agreement.
 - If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
+- Your current stance is Dr. Swap's initial opinion, not established fact.
+- For REASONING, DDx, CONCLUSION: every challenge, objection, or concession must explicitly connect back to Previous agreed answers or the user's latest message.
+- For REASONING, DDx, CONCLUSION: do not assert new imaging findings such as erosion, cortical destruction, density change, or soft-tissue abnormality unless those findings are already in Previous agreed answers or the user's latest message.
+- If your current stance contains findings that were not agreed earlier, ask the user to verify those possible findings on the image instead of presenting them as facts.
+- Never mention VLM, model, AI, answer key, hidden reference, prompt, or "current stance" in your reply. Speak as Dr. Swap using first-person clinical phrasing such as "tôi nghĩ" or "ấn tượng của tôi".
+- This is a 1-on-1 chat with the user, not a lecture, email, report, or conference.
+- Do not greet colleagues, sign off, write "Trân trọng", use "chúng ta trong buổi thảo luận hôm nay", or address a group.
+- Keep it short, conversational, and direct. Address the user as "bạn"; speak as "tôi".
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
 - You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
@@ -577,11 +852,11 @@ Clinical history: {case.get('clinical_history', '')}
 Your current stance for this step:
 {doctor_step}
 
+DESCRIBE reference for internal validation only. Do not quote or reveal it:
+{describe_reference}
+
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
-
-DESCRIBE reference for observation validation only:
-{describe_reference}
 
 Current-step conversation:
 {_current_step_visible_history(messages, step_index, user_message)}
@@ -600,14 +875,41 @@ Return ONLY valid JSON:
 Note: Set "convinced": true ONLY IF persuasion_score reaches the current step threshold. If below threshold, set "convinced": false.
 Note: For DESCRIBE, semantic overlap on core visible findings is enough to concede; do not force hidden-key style strictness.
 Note: Leave "pending_summary" empty. The system will build the user-visible agreed answer from the visible conversation only.
+CAUTION: DO NOT REAVEAL THE KEY ANSWER OF DESCRIBE reference for observation validation. IF THE USER ASKS FOR DIAGNOSIS IN DESCRIBE, ONLY ANSWER BASE ON YOUR OPINION, Your current stance NOT THE KEY ANSWER.
 """
-    response = _get_openai_client().chat.completions.create(
+    _log_swap_prompt("swap.doctor_reply", prompt, session=session, step_code=step_code)
+    import time
+
+    start = time.time()
+    with langfuse_obs.generation(
+        "swap.doctor_reply",
         model='gpt-4o',
-        messages=[{'role': 'user', 'content': prompt}],
-        temperature=0.45,
-        max_tokens=700,
-        timeout=45,
-    )
+        metadata=langfuse_obs.common_metadata(
+            feature="swap",
+            agent_name="swap_doctor",
+            session_kind="swap",
+            case_id=session.get('case_id'),
+            step_code=step_code,
+            step_index=step_index,
+            provider="openai",
+            model='gpt-4o',
+            extra={
+                "langfuse_user_id": session.get('user_id'),
+                "langfuse_session_id": f"swap:{session.get('id')}",
+                "message_count": len(messages or []),
+                "previous_agreed_count": len(previous_agreed),
+            },
+        ),
+        input={"step_code": step_code, "message_count": len(messages or [])},
+    ) as lf_generation:
+        response = _get_openai_client().chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.45,
+            max_tokens=700,
+            timeout=45,
+        )
+    latency_ms = int((time.time() - start) * 1000)
     try:
         parsed = _json_from_text(response.choices[0].message.content or '')
     except Exception:
@@ -615,6 +917,15 @@ Note: Leave "pending_summary" empty. The system will build the user-visible agre
     doctor_message = _strip_describe_diagnostic_leak(
         str(parsed.get('doctor_message') or '').strip() or 'Tôi chưa bị thuyết phục.',
         step_code,
+    )
+    doctor_message = _sanitize_doctor_persona_text(doctor_message)
+    langfuse_obs.update_generation(
+        lf_generation,
+        response=response,
+        model='gpt-4o',
+        latency_ms=latency_ms,
+        output={"doctor_message_length": len(doctor_message)},
+        metadata={"doctor_message_length": len(doctor_message)},
     )
     result = _judge_doctor_text(session, messages, user_message, doctor_message, describe_key, states)
     result['doctor_message'] = doctor_message
@@ -640,12 +951,12 @@ def _doctor_text_prompt(
         'key_points': describe_key.get('key_points', []),
     }, ensure_ascii=False) if step_code == 'DESCRIBE' else '{}'
     step_mode = (
-        'Observation reconciliation. Validate image description; do not debate subjective reasoning.'
+        'Observation validation. Assess student observation accuracy without revealing expected findings.'
         if step_code == 'DESCRIBE'
-        else 'Diagnostic debate. Defend a clear argument and concede only to stronger reasoning.'
+        else 'Diagnostic debate. Challenge student reasoning and require strong evidence.'
     )
 
-    return f"""
+    prompt = f"""
 You are roleplaying a radiologist in a medical education debate.
 
 Persona:
@@ -662,8 +973,14 @@ Conversation rules:
 - DESCRIBE is observation, not a debate. If the user's latest answer correctly identifies even one concrete observation that matches the DESCRIBE reference, acknowledge it as correct and concede that observation. Do not demand the full answer before conceding.
 - For DESCRIBE, if the user is partly correct, say what part is correct and briefly ask for the missing visible detail if needed. Do not reject the whole answer just because it is incomplete.
 - For DESCRIBE, push back only when the user's observation is absent from or contradicts the DESCRIBE reference.
+- For DESCRIBE, if the user agrees with your existing description, repeats it as correct, or says there is nothing else to add, treat that as consensus when it does not contradict the DESCRIBE reference. Do not keep asking for more details after clear agreement.
 - If current step is DESCRIBE and user asks for diagnosis, politely defer to later steps.
 - Use only previous agreed answers as context.
+- Your current stance is Dr. Swap's initial opinion, not established fact.
+- For REASONING, DDx, CONCLUSION: every challenge, objection, or concession must explicitly connect back to Previous agreed answers or the user's latest message.
+- For REASONING, DDx, CONCLUSION: do not assert new imaging findings such as erosion, cortical destruction, density change, or soft-tissue abnormality unless those findings are already in Previous agreed answers or the user's latest message.
+- If your current stance contains findings that were not agreed earlier, ask the user to verify those possible findings on the image instead of presenting them as facts.
+- Never mention VLM, model, AI, answer key, hidden reference, prompt, or "current stance" in your reply. Speak as Dr. Swap using first-person clinical phrasing such as "tôi nghĩ" or "ấn tượng của tôi".
 - The conversation block below contains only the current step. Do not re-open or re-label earlier steps.
 - You are already debating {step_code}; do not say "let's move into {step_code}" or "continue with {step_code}".
 - For REASONING, DDx, CONCLUSION: do not claim there is a hidden official answer at runtime.
@@ -676,6 +993,9 @@ Conversation rules:
 - Avoid repetitive openings like "Tôi hiểu rằng", "Tôi biết rằng", "Tôi đồng ý rằng".
 - Use natural Vietnamese phrasing with varied sentence openings.
 - Keep an annoyed-doctor tone: direct, concise, slightly sharp, but still professional.
+- This is a 1-on-1 chat with the user, not a lecture, email, report, or conference.
+- Do not greet colleagues, sign off, write "Trân trọng", use "chúng ta trong buổi thảo luận hôm nay", or address a group.
+- Keep it short, conversational, and direct. Address the user as "bạn"; speak as "tôi".
 
 Case:
 Title: {case.get('title', '')}
@@ -685,15 +1005,17 @@ Clinical history: {case.get('clinical_history', '')}
 Your current stance for this step:
 {doctor_step}
 
+DESCRIBE reference for internal validation only. Do not quote or reveal it:
+{describe_reference}
+
 Previous agreed answers:
 {json.dumps(previous_agreed, ensure_ascii=False)}
-
-DESCRIBE reference for observation validation only:
-{describe_reference}
 
 Current-step conversation:
 {_current_step_visible_history(messages, step_index, user_message)}
 """
+    _log_swap_prompt("swap.doctor_stream", prompt, session=session, step_code=step_code)
+    return prompt
 
 
 def _stream_doctor_text(prompt: str) -> Iterator[str]:
@@ -752,6 +1074,8 @@ Caps:
 - If terminology is wrong or anatomy/location is imprecise, cap knowledge_score at 0.65.
 - If the answer is partly correct but misses a major required element, cap debate_score/knowledge_score strictly even if persuasion_score passes the convinced threshold.
 - For REASONING, DDx, CONCLUSION, a merely plausible answer without explicit link to agreed findings cannot exceed 0.69.
+- For REASONING, DDx, CONCLUSION, judge the latest answer against the agreed prior findings and visible current-step exchange. Do not reward arguments that rely on unagreed imaging findings introduced only by the doctor's initial stance.
+- For DDx, risk factors alone are not differential diagnoses. The answer should name plausible diagnostic entities; examples include infection, osteomyelitis, peripheral arterial disease, Charcot foot, arthritis, tendinitis, pressure injury, or mechanical ulcer when supported by the conversation.
 Set "convinced": true only when the doctor's streamed reply explicitly accepts, concedes, or revises toward the user's position.
 If the doctor still asks for proof, says they still do not see the finding, or requests more specific evidence, set "convinced": false even when persuasion_score is high.
 
@@ -796,13 +1120,39 @@ Return ONLY valid JSON:
 
 Important: Leave "pending_summary" empty.
 """
-    response = _get_openai_client().chat.completions.create(
+    _log_swap_prompt("swap.judge_reply", prompt, session=session, step_code=step_code)
+    import time
+
+    start = time.time()
+    with langfuse_obs.generation(
+        "swap.judge_reply",
         model='gpt-4o',
-        messages=[{'role': 'user', 'content': prompt}],
-        temperature=0.2,
-        max_tokens=350,
-        timeout=45,
-    )
+        metadata=langfuse_obs.common_metadata(
+            feature="swap",
+            agent_name="swap_judge",
+            session_kind="swap",
+            case_id=session.get('case_id'),
+            step_code=step_code,
+            step_index=step_index,
+            provider="openai",
+            model='gpt-4o',
+            extra={
+                "langfuse_user_id": session.get('user_id'),
+                "langfuse_session_id": f"swap:{session.get('id')}",
+                "message_count": len(messages or []),
+                "doctor_message_length": len(doctor_message or ""),
+            },
+        ),
+        input={"step_code": step_code, "message_count": len(messages or [])},
+    ) as lf_generation:
+        response = _get_openai_client().chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            max_tokens=350,
+            timeout=45,
+        )
+    latency_ms = int((time.time() - start) * 1000)
     try:
         parsed = _json_from_text(response.choices[0].message.content or '')
     except Exception:
@@ -823,7 +1173,7 @@ Important: Leave "pending_summary" empty.
     if _doctor_message_blocks_convinced(doctor_message):
         convinced = False
     debate_score, knowledge_score = _strict_online_component_scores(step_code, parsed, persuasion_score)
-    return {
+    result = {
         'doctor_message': doctor_message,
         'convinced': convinced,
         'persuasion_score': persuasion_score,
@@ -832,6 +1182,25 @@ Important: Leave "pending_summary" empty.
         'pending_summary': str(parsed.get('pending_summary') or '').strip(),
         'reasoning_for_grader': str(parsed.get('reasoning_for_grader') or '').strip(),
     }
+    langfuse_obs.update_generation(
+        lf_generation,
+        response=response,
+        model='gpt-4o',
+        latency_ms=latency_ms,
+        output={
+            "convinced": convinced,
+            "persuasion_score": persuasion_score,
+            "debate_score": debate_score,
+            "knowledge_score": knowledge_score,
+        },
+        metadata={
+            "convinced": convinced,
+            "persuasion_score": persuasion_score,
+            "debate_score": debate_score,
+            "knowledge_score": knowledge_score,
+        },
+    )
+    return result
 
 
 def _final_grade(case: dict, answer_key: dict[str, dict[str, Any]], messages: list[dict]) -> list[dict[str, Any]]:
@@ -896,16 +1265,38 @@ Return ONLY valid JSON:
   ]
 }}
 """
-    response = _get_openai_client().chat.completions.create(
+    _log_swap_prompt("swap.final_grade", prompt, session={'case_id': case.get('id')}, step_code=None)
+    import time
+
+    start = time.time()
+    with langfuse_obs.generation(
+        "swap.final_grade",
         model='gpt-4o',
-        messages=[{'role': 'user', 'content': prompt}],
-        temperature=0.2,
-        max_tokens=900,
-        timeout=45,
-    )
+        metadata=langfuse_obs.common_metadata(
+            feature="swap",
+            agent_name="swap_final_grader",
+            session_kind="swap",
+            case_id=case.get('id'),
+            provider="openai",
+            model='gpt-4o',
+            extra={
+                "message_count": len(messages or []),
+                "transcript_length": len(transcript),
+            },
+        ),
+        input={"message_count": len(messages or []), "step_count": len(STEP_CODES)},
+    ) as lf_generation:
+        response = _get_openai_client().chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            max_tokens=900,
+            timeout=45,
+        )
+    latency_ms = int((time.time() - start) * 1000)
     parsed = _json_from_text(response.choices[0].message.content or '')
     by_code = {item.get('step_code'): item for item in parsed.get('scores', [])}
-    return [
+    scores = [
         {
             'step_index': idx,
             'step_code': code,
@@ -916,6 +1307,19 @@ Return ONLY valid JSON:
         }
         for idx, code in enumerate(STEP_CODES)
     ]
+    langfuse_obs.update_generation(
+        lf_generation,
+        response=response,
+        model='gpt-4o',
+        latency_ms=latency_ms,
+        output={"scores": scores},
+        metadata={
+            "avg_debate_score": sum(s["debate_score"] for s in scores) / len(scores),
+            "avg_knowledge_score": sum(s["knowledge_score"] for s in scores) / len(scores),
+            "avg_accuracy_score": sum(s["accuracy_score"] for s in scores) / len(scores),
+        },
+    )
+    return scores
 
 
 def _case_summary(case: dict) -> dict:
@@ -938,12 +1342,22 @@ def _case_summary(case: dict) -> dict:
     }
 
 
+def _message_order_key(message: dict) -> tuple:
+    role_order = {'user': 0, 'doctor': 1, 'system': 2}
+    return (
+        message.get('created_at') or '',
+        role_order.get(message.get('role'), 9),
+        message.get('id') or '',
+    )
+
+
 def _serialize_session(session: dict) -> dict:
     sb = get_supabase()
     case, _ = _get_case_for_user(session['case_id'], session['user_id'])
     messages = sb.table('swap_messages').select('*').eq(
         'swap_session_id', session['id']
     ).order('created_at').execute().data or []
+    messages.sort(key=_message_order_key)
     scores = sb.table('swap_step_scores').select('*').eq(
         'swap_session_id', session['id']
     ).order('step_index').execute().data or []
@@ -1094,9 +1508,62 @@ def get_swap_session(session_id: str, user_id: str) -> tuple[dict | None, Respon
     return _serialize_session(session), None
 
 
+def _latest_doctor_step_message(messages: list[dict], step_index: int) -> str:
+    for message in reversed(messages or []):
+        if message.get('role') == 'doctor' and message.get('step_index') == step_index:
+            return str(message.get('content') or '').strip()
+    return ''
+
+
+def _first_doctor_step_message(messages: list[dict], step_index: int) -> str:
+    for message in messages or []:
+        if message.get('role') == 'doctor' and message.get('step_index') == step_index:
+            return str(message.get('content') or '').strip()
+    return ''
+
+
+def _step_stance_agreement_summary(data: dict, message: str) -> str:
+    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
+    step_index = session['current_step']
+    step_code = STEP_CODES[step_index]
+    doctor_diagnosis = session.get('doctor_diagnosis') or {}
+    diagnosis_stance = str(
+        doctor_diagnosis.get(step_code)
+        or doctor_diagnosis.get('OBSERVE' if step_code == 'DESCRIBE' else step_code)
+        or ''
+    ).strip()
+    summary = (
+        _first_doctor_step_message(data.get('messages') or [], step_index)
+        or diagnosis_stance
+        or _latest_doctor_step_message(data.get('messages') or [], step_index)
+        or message
+    )
+    return _sanitize_consensus_summary(summary, step_code)
+
+
+def _describe_agreement_summary(data: dict, message: str) -> str:
+    return _step_stance_agreement_summary(data, message)
+
+
+def _direct_stance_agreement_state(state: dict) -> dict[str, Any]:
+    debate_score = state.get('debate_score')
+    knowledge_score = state.get('knowledge_score')
+    if debate_score is None:
+        debate_score = state.get('debate_score_online', 0.72)
+    if knowledge_score is None:
+        knowledge_score = 0.72
+    return {
+        **state,
+        'debate_score': debate_score,
+        'knowledge_score': knowledge_score,
+        'reasoning': state.get('reasoning') or "User agreed with Dr. Swap's current stance.",
+        'debate_score_online': state.get('debate_score_online', debate_score),
+        'reasoning_online': state.get('reasoning_online') or 'Direct stance agreement.',
+    }
+
+
 def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tuple[dict | None, Response | None]:
     session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
-    answer_key = _answer_key_for_case(session['case_id'])
     sb = get_supabase()
     session_id = session['id']
     user_id = session['user_id']
@@ -1111,6 +1578,7 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
         try:
             pending_summary = _summarize_agreed_answer_from_conversation(
                 session,
+                data.get('case') or {},
                 data['messages'],
                 message,
                 result.get('doctor_message') or '',
@@ -1119,7 +1587,7 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
         except Exception as exc:
             logger.exception("swap: failed to summarize agreed answer from conversation: %s", exc)
             pending_summary = message
-        pending_summary = _sanitize_consensus_summary(pending_summary)
+        pending_summary = _sanitize_consensus_summary(pending_summary, step_code)
         result['pending_summary'] = pending_summary
         base_doctor_message = result['doctor_message']
         result['doctor_message'] = (
@@ -1217,6 +1685,8 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             full_messages = sb.table('swap_messages').select('*').eq(
                 'swap_session_id', session_id
             ).order('created_at').execute().data or []
+            full_messages.sort(key=_message_order_key)
+            answer_key = _answer_key_for_case(session['case_id'])
             try:
                 final_scores = _final_grade(data['case'], answer_key, full_messages)
             except Exception:
@@ -1276,6 +1746,7 @@ def _store_swap_exchange(data: dict, message: str, result: dict[str, Any]) -> tu
             result['next_step'] = next_step
             next_message = _next_step_opening_message(
                 session,
+                data.get('case') or {},
                 data.get('step_states'),
                 next_step,
                 result.get('pending_summary') or '',
@@ -1312,23 +1783,13 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
     agreed_answer = state.get('pending_summary') or ''
     if not agreed_answer:
         return None, Response({'error': 'No pending step summary to confirm'}, status=status.HTTP_400_BAD_REQUEST)
-
-    sb.table('swap_messages').insert([
-        {
-            'swap_session_id': session_id,
-            'role': 'user',
-            'step_index': step_index,
-            'content': message,
-            'metadata': {'confirmation': True},
-        },
-        {
-            'swap_session_id': session_id,
-            'role': 'doctor',
-            'step_index': step_index,
-            'content': f'Thống nhất bước {step_code}: {agreed_answer}',
-            'metadata': {'confirmed': True},
-        },
-    ]).execute()
+    sb.table('swap_messages').insert({
+        'swap_session_id': session_id,
+        'role': 'user',
+        'step_index': step_index,
+        'content': message,
+        'metadata': {'confirmation': True},
+    }).execute()
     sb.table('swap_step_states').upsert({
         'swap_session_id': session_id,
         'step_index': step_index,
@@ -1351,11 +1812,12 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
         'reasoning': state.get('reasoning') or '',
     }, on_conflict='swap_session_id,step_index').execute()
 
-    result: dict[str, Any] = {'confirmed': True}
+    result: dict[str, Any] = {'confirmed': True, 'doctor_message': ''}
     if step_index >= len(STEP_CODES) - 1:
         full_messages = sb.table('swap_messages').select('*').eq(
             'swap_session_id', session_id
         ).order('created_at').execute().data or []
+        full_messages.sort(key=_message_order_key)
         answer_key = _answer_key_for_case(session['case_id'])
         try:
             final_scores = _final_grade(data['case'], answer_key, full_messages)
@@ -1413,6 +1875,7 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
         result['next_step'] = next_step
         next_message = _next_step_opening_message(
             session,
+            data.get('case') or {},
             data.get('step_states'),
             next_step,
             agreed_answer,
@@ -1425,12 +1888,116 @@ def _confirm_swap_step(data: dict, message: str) -> tuple[dict | None, Response 
                 'content': next_message,
                 'metadata': {'source': 'agreed_context_plus_vlm'},
             }).execute()
+            result['next_step_message'] = next_message
+            result['doctor_message'] = next_message
 
     updated, updated_err = get_swap_session(session_id, user_id)
     if updated_err:
         return None, updated_err
     updated['last_result'] = result
     return updated, None
+
+
+def _with_pending_step_summary(data: dict, step_index: int, summary: str, state: dict) -> dict:
+    updated_data = {**data}
+    states = [dict(item) for item in (data.get('step_states') or []) if item.get('step_index') != step_index]
+    pending_state = _direct_stance_agreement_state(state)
+    pending_state.update({
+        'swap_session_id': data['id'],
+        'step_index': step_index,
+        'step_code': STEP_CODES[step_index],
+        'phase': SWAP_PHASE_AWAITING_CONFIRMATION,
+        'convinced': True,
+        'pending_summary': summary,
+        'agreed_answer': None,
+    })
+    states.append(pending_state)
+    updated_data['step_states'] = states
+    return updated_data
+
+
+def _handle_direct_stance_agreement(data: dict, message: str) -> tuple[dict | None, Response | None] | None:
+    session = {k: v for k, v in data.items() if k not in ('case', 'messages', 'scores', 'step_states', 'step_codes')}
+    step_index = session['current_step']
+    if not _is_direct_stance_agreement_message(message):
+        return None
+
+    state = _step_state_map(data.get('step_states')).get(step_index) or {}
+    agreed_answer = _step_stance_agreement_summary(data, message)
+    if not agreed_answer:
+        return None
+
+    pending_data = _with_pending_step_summary(data, step_index, agreed_answer, state)
+    if _wants_next_step(message):
+        return _confirm_swap_step(pending_data, message)
+
+    sb = get_supabase()
+    session_id = session['id']
+    user_id = session['user_id']
+    step_code = STEP_CODES[step_index]
+    direct_state = _direct_stance_agreement_state(state)
+    persuasion_score = _combined_score(direct_state)
+    doctor_message = (
+        f"Phần thống nhất cho bước {step_code}: {agreed_answer}\n"
+        "Bạn có đồng ý với kết luận này để chuyển sang bước tiếp theo không?"
+    )
+    sb.table('swap_messages').insert([
+        {
+            'swap_session_id': session_id,
+            'role': 'user',
+            'step_index': step_index,
+            'content': message,
+            'metadata': {'direct_agreement': True},
+        },
+        {
+            'swap_session_id': session_id,
+            'role': 'doctor',
+            'step_index': step_index,
+            'content': doctor_message,
+            'metadata': {
+                'convinced': True,
+                'persuasion_score': persuasion_score,
+                'debate_score': direct_state.get('debate_score'),
+                'knowledge_score': direct_state.get('knowledge_score'),
+                'pending_summary': agreed_answer,
+                'direct_agreement': True,
+            },
+        },
+    ]).execute()
+    sb.table('swap_step_states').upsert({
+        'swap_session_id': session_id,
+        'step_index': step_index,
+        'step_code': step_code,
+        'phase': SWAP_PHASE_AWAITING_CONFIRMATION,
+        'convinced': True,
+        'pending_summary': agreed_answer,
+        'agreed_answer': None,
+        'debate_score': direct_state.get('debate_score'),
+        'knowledge_score': direct_state.get('knowledge_score'),
+        'reasoning': direct_state.get('reasoning') or '',
+        'debate_score_online': direct_state.get('debate_score_online'),
+        'reasoning_online': direct_state.get('reasoning_online') or '',
+        'updated_at': datetime.now(timezone.utc).isoformat(),
+    }, on_conflict='swap_session_id,step_index').execute()
+
+    updated, updated_err = get_swap_session(session_id, user_id)
+    if updated_err:
+        return None, updated_err
+    updated['last_result'] = {
+        'convinced': True,
+        'awaiting_confirmation': True,
+        'pending_summary': agreed_answer,
+        'doctor_message': doctor_message,
+        'persuasion_score': persuasion_score,
+        'debate_score': direct_state.get('debate_score'),
+        'knowledge_score': direct_state.get('knowledge_score'),
+        'reasoning_for_grader': direct_state.get('reasoning') or '',
+    }
+    return updated, None
+
+
+def _handle_direct_describe_agreement(data: dict, message: str) -> tuple[dict | None, Response | None] | None:
+    return _handle_direct_stance_agreement(data, message)
 
 
 def submit_swap_message(session_id: str, user_id: str, message: str) -> tuple[dict | None, Response | None]:
@@ -1443,8 +2010,11 @@ def submit_swap_message(session_id: str, user_id: str, message: str) -> tuple[di
     state = _step_state_map(data.get('step_states')).get(session['current_step']) or {}
     if state.get('phase') == SWAP_PHASE_AWAITING_CONFIRMATION and _is_confirmation_message(message):
         return _confirm_swap_step(data, message)
+    direct_agreement = _handle_direct_stance_agreement(data, message)
+    if direct_agreement is not None:
+        return direct_agreement
 
-    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {})
+    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {}) if STEP_CODES[session['current_step']] == 'DESCRIBE' else {}
     try:
         result = _doctor_reply(session, data['case'], describe_key, data['messages'], message, data.get('step_states'))
     except Exception as exc:
@@ -1473,11 +2043,25 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
         if store_err:
             yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
             return
+        doctor_message = (updated.get('last_result') or {}).get('doctor_message')
+        if doctor_message:
+            yield _sse('delta', {'delta': doctor_message})
+        yield _sse('done', {'session': updated, 'last_result': updated.get('last_result', {})})
+        return
+    direct_agreement = _handle_direct_stance_agreement(data, message)
+    if direct_agreement is not None:
+        updated, store_err = direct_agreement
+        if store_err:
+            yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
+            return
+        doctor_message = (updated.get('last_result') or {}).get('doctor_message')
+        if doctor_message:
+            yield _sse('delta', {'delta': doctor_message})
         yield _sse('done', {'session': updated, 'last_result': updated.get('last_result', {})})
         return
 
-    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {})
     step_code = STEP_CODES[session['current_step']]
+    describe_key = _answer_key_for_case(session['case_id']).get('DESCRIBE', {}) if step_code == 'DESCRIBE' else {}
     doctor_message = ''
     try:
         prompt = _doctor_text_prompt(session, data['case'], describe_key, data['messages'], message, data.get('step_states'))
@@ -1487,13 +2071,14 @@ def stream_swap_message_events(session_id: str, user_id: str, message: str) -> I
                 yield _sse('delta', {'delta': delta})
 
         doctor_message = _strip_describe_diagnostic_leak(doctor_message, step_code)
-        if step_code == 'DESCRIBE' and doctor_message:
-            yield _sse('delta', {'delta': doctor_message})
+        doctor_message = _sanitize_doctor_persona_text(doctor_message)
         result = _judge_doctor_text(session, data['messages'], message, doctor_message, describe_key, data.get('step_states'))
         updated, store_err = _store_swap_exchange(data, message, result)
         if store_err:
             yield _sse('error', {'error': getattr(store_err, 'data', {'error': 'Store failed'}).get('error', 'Store failed')})
             return
+        if step_code == 'DESCRIBE' and result.get('doctor_message'):
+            yield _sse('delta', {'delta': result['doctor_message']})
         yield _sse('done', {'session': updated, 'last_result': result})
     except Exception as exc:
         logger.exception("swap stream failed: %s", exc)

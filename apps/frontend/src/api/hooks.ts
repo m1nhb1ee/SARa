@@ -104,6 +104,16 @@ export function useMyStats() {
   return state;
 }
 
+export function useLeaderboard(type: 'exam' | 'case', limit = 50) {
+  const [state, patch] = useQueryState<any>();
+
+  useEffect(() => {
+    resolveQuery(() => apiClient.getLeaderboard(type, limit), patch);
+  }, [type, limit]);
+
+  return state;
+}
+
 export function useGetAnswerKey(sessionId: string | null) {
   const [state, patch] = useQueryState<any>();
 

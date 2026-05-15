@@ -7,7 +7,23 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from app.auth.views import LoginView, LogoutView, MeView, RegisterView
 from app.cases.views import CaseTagViewSet, CaseViewSet
 from app.sessions.views import SessionViewSet, StudentPerformanceViewSet
-from app.swap.services import _doctor_message_blocks_convinced
+from app.swap.services import (
+    SWAP_PHASE_AWAITING_CONFIRMATION,
+    SWAP_PHASE_DEBATING,
+    _describe_agreement_summary,
+    _doctor_message_blocks_convinced,
+    _doctor_text_prompt,
+    _consensus_summary_step_rules,
+    _handle_direct_describe_agreement,
+    _is_direct_stance_agreement_message,
+    _is_confirmation_message,
+    _is_step_agreement_message,
+    _next_step_opening_message,
+    _sanitize_consensus_summary,
+    _sanitize_doctor_persona_text,
+    _wants_next_step,
+    submit_swap_message,
+)
 from app.swap.views import SwapSessionViewSet
 from app.uploads.views import UserUploadedCaseViewSet
 
@@ -636,6 +652,46 @@ class SwapEndpointTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
 
+    def make_swap_data(self, phase=SWAP_PHASE_DEBATING, pending_summary=None, current_step=0):
+        return {
+            'id': 'swap-1',
+            'user_id': 'user-1',
+            'case_id': 'case-1',
+            'status': 'IN_PROGRESS',
+            'current_step': current_step,
+            'doctor_diagnosis': {
+                'DESCRIBE': 'Hình ảnh cho thấy X-quang bàn chân phải. Không thấy gãy xương hoặc trật khớp rõ ràng.',
+                'REASONING': 'Các cấu trúc xương bảo tồn nên ít nghĩ tổn thương cấp.',
+                'DDx': 'Chẩn đoán phân biệt ưu tiên tổn thương phần mềm hoặc loét cơ học hơn là gãy xương cấp.',
+            },
+            'case': {'id': 'case-1', 'title': 'Foot X-ray'},
+            'messages': [
+                {
+                    'role': 'doctor',
+                    'step_index': 0,
+                    'content': 'Hình ảnh cho thấy X-quang bàn chân phải. Không thấy gãy xương hoặc trật khớp rõ ràng.',
+                }
+            ],
+            'scores': [],
+            'step_states': [
+                {
+                    'swap_session_id': 'swap-1',
+                    'step_index': 0,
+                    'step_code': 'DESCRIBE',
+                    'phase': phase,
+                    'convinced': phase == SWAP_PHASE_AWAITING_CONFIRMATION,
+                    'pending_summary': pending_summary,
+                    'agreed_answer': None,
+                    'debate_score': 0.72,
+                    'knowledge_score': 0.72,
+                    'reasoning': 'DESCRIBE consensus.',
+                    'debate_score_online': 0.72,
+                    'reasoning_online': 'DESCRIBE consensus.',
+                }
+            ],
+            'step_codes': ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION'],
+        }
+
     def test_swap_session_list(self):
         request = self.factory.get('/api/v1/swap-sessions/')
         force_authenticate(request, user=FakeUser())
@@ -698,3 +754,203 @@ class SwapEndpointTests(SimpleTestCase):
         message = 'Tôi đồng ý với lập luận của bạn và chấp nhận mô tả gãy cành tươi ở đoạn giữa.'
 
         self.assertFalse(_doctor_message_blocks_convinced(message))
+
+    def test_confirmation_message_accepts_vietnamese_agreement_and_next_step(self):
+        self.assertTrue(_is_confirmation_message('đồng ý'))
+        self.assertTrue(_is_confirmation_message('tôi sẵn sàng, hãy sang bước tiếp'))
+        self.assertTrue(_is_confirmation_message('mô tả đúng rồi, tiếp tục'))
+        self.assertTrue(_is_step_agreement_message('tôi đồng ý với mô tả ban đầu'))
+        self.assertTrue(_is_step_agreement_message('tôi không thấy gì, tôi thấy hình ảnh bình thường'))
+        self.assertTrue(_is_direct_stance_agreement_message('tôi nghĩ ý kiến ban đầu của bạn là chính xác'))
+        self.assertFalse(_is_direct_stance_agreement_message('tôi xin ý kiến của bạn'))
+        self.assertFalse(_is_direct_stance_agreement_message('bạn nghĩ sao về trường hợp này'))
+        self.assertFalse(_is_direct_stance_agreement_message('oke'))
+        self.assertTrue(_wants_next_step('hãy sang bước kế tiếp'))
+
+    def test_confirmation_message_does_not_reject_medical_negative_finding(self):
+        self.assertFalse(_is_confirmation_message('không thấy gãy xương hoặc trật khớp rõ ràng'))
+
+    def test_confirmation_message_rejects_clear_disagreement(self):
+        self.assertFalse(_is_confirmation_message('không đồng ý'))
+        self.assertFalse(_is_confirmation_message('chưa đúng, cần bổ sung'))
+
+    def test_awaiting_confirmation_next_step_message_confirms_and_advances(self):
+        supabase = FakeSupabase()
+        initial = self.make_swap_data(
+            phase=SWAP_PHASE_AWAITING_CONFIRMATION,
+            pending_summary='X-quang bàn chân phải, không thấy gãy xương rõ.',
+        )
+        updated = {**initial, 'current_step': 1, 'last_result': {'confirmed': True, 'next_step': 1}}
+
+        with patch('app.swap.services.get_swap_session', side_effect=[(initial, None), (updated, None)]), \
+             patch('app.swap.services.get_supabase', return_value=supabase), \
+             patch('app.swap.services._next_step_opening_message', return_value='Bây giờ sang bước REASONING.'):
+            result, err = submit_swap_message('swap-1', 'user-1', 'tôi sẵn sàng, hãy sang bước tiếp')
+
+        self.assertIsNone(err)
+        self.assertEqual(result['last_result']['next_step'], 1)
+        self.assertTrue(any(
+            call['table'] == 'swap_sessions'
+            and call['operation'] == 'update'
+            and call['payload'] == {'current_step': 1}
+            for call in supabase.calls
+        ))
+
+    def test_direct_describe_agreement_with_next_step_auto_confirms(self):
+        supabase = FakeSupabase()
+        initial = self.make_swap_data()
+        updated = {**initial, 'current_step': 1, 'last_result': {'confirmed': True, 'next_step': 1}}
+
+        with patch('app.swap.services.get_swap_session', side_effect=[(initial, None), (updated, None)]), \
+             patch('app.swap.services.get_supabase', return_value=supabase), \
+             patch('app.swap.services._next_step_opening_message', return_value='Bây giờ sang bước REASONING.'):
+            result, err = submit_swap_message('swap-1', 'user-1', 'mô tả của bạn đúng rồi, hãy tiếp tục')
+
+        self.assertIsNone(err)
+        self.assertEqual(result['last_result']['next_step'], 1)
+        self.assertTrue(any(
+            call['table'] == 'swap_step_states'
+            and call['operation'] == 'upsert'
+            and call['payload']['phase'] == 'CONFIRMED'
+            for call in supabase.calls
+        ))
+
+    def test_direct_describe_agreement_without_next_step_awaits_confirmation(self):
+        supabase = FakeSupabase()
+        initial = self.make_swap_data()
+        updated = {**initial, 'last_result': {'awaiting_confirmation': True}}
+
+        with patch('app.swap.services.get_swap_session', side_effect=[(initial, None), (updated, None)]), \
+             patch('app.swap.services.get_supabase', return_value=supabase):
+            result, err = submit_swap_message('swap-1', 'user-1', 'tôi đồng ý với mô tả ban đầu')
+
+        self.assertIsNone(err)
+        self.assertTrue(result['last_result']['awaiting_confirmation'])
+        self.assertTrue(any(
+            call['table'] == 'swap_step_states'
+            and call['operation'] == 'upsert'
+            and call['payload']['phase'] == SWAP_PHASE_AWAITING_CONFIRMATION
+            for call in supabase.calls
+        ))
+        consensus_messages = [
+            call['payload'][1]
+            for call in supabase.calls
+            if call['table'] == 'swap_messages' and call['operation'] == 'insert'
+        ]
+        self.assertEqual(consensus_messages[0]['metadata']['persuasion_score'], 0.72)
+        self.assertIn('Bạn có đồng ý', consensus_messages[0]['content'])
+        self.assertFalse(any(
+            call['table'] == 'swap_sessions' and call['operation'] == 'update'
+            for call in supabase.calls
+        ))
+
+    def test_direct_describe_agreement_summary_uses_initial_description_not_latest_prompt(self):
+        data = self.make_swap_data()
+        data['messages'].append({
+            'role': 'doctor',
+            'step_index': 0,
+            'content': 'Nếu bạn không thấy gì, có thể cần xem xét kỹ hơn quanh vùng xương bàn chân.',
+        })
+
+        summary = _describe_agreement_summary(data, 'tôi nghĩ ý kiến ban đầu của bạn là chính xác')
+
+        self.assertIn('X-quang bàn chân phải', summary)
+        self.assertIn('Không thấy gãy xương', summary)
+        self.assertNotIn('xem xét kỹ hơn', summary)
+
+    def test_reasoning_consensus_sanitizer_preserves_clinical_caveat(self):
+        summary = (
+            'Không thấy bất thường xương rõ trên X-quang hiện tại; tuy nhiên không loại trừ '
+            'viêm xương tủy sớm hoặc bệnh lý mô mềm trong bối cảnh lâm sàng phù hợp.'
+        )
+
+        sanitized = _sanitize_consensus_summary(summary, 'REASONING')
+
+        self.assertIn('tuy nhiên không loại trừ', sanitized)
+        self.assertIn('viêm xương tủy sớm', sanitized)
+
+    def test_direct_describe_agreement_ignores_off_topic_message(self):
+        result = _handle_direct_describe_agreement(self.make_swap_data(), 'tôi thấy con vịt')
+
+        self.assertIsNone(result)
+
+    def test_reasoning_direct_stance_agreement_awaits_confirmation_without_answer_key(self):
+        supabase = FakeSupabase()
+        initial = self.make_swap_data(current_step=1)
+        initial['step_states'].append({
+            'swap_session_id': 'swap-1',
+            'step_index': 1,
+            'step_code': 'REASONING',
+            'phase': SWAP_PHASE_DEBATING,
+            'convinced': False,
+            'pending_summary': None,
+            'agreed_answer': None,
+            'debate_score': None,
+            'knowledge_score': None,
+            'reasoning': '',
+        })
+        updated = {**initial, 'last_result': {'awaiting_confirmation': True}}
+
+        with patch('app.swap.services.get_swap_session', side_effect=[(initial, None), (updated, None)]), \
+             patch('app.swap.services.get_supabase', return_value=supabase), \
+             patch('app.swap.services._answer_key_for_case', side_effect=AssertionError('answer key leak')):
+            result, err = submit_swap_message('swap-1', 'user-1', 'tôi cũng nghĩ vậy')
+
+        self.assertIsNone(err)
+        self.assertTrue(result['last_result']['awaiting_confirmation'])
+        self.assertTrue(any(
+            call['table'] == 'swap_step_states'
+            and call['operation'] == 'upsert'
+            and call['payload']['step_code'] == 'REASONING'
+            and call['payload']['phase'] == SWAP_PHASE_AWAITING_CONFIRMATION
+            for call in supabase.calls
+        ))
+
+    def test_reasoning_prompt_keeps_vlm_stance_tied_to_agreed_findings(self):
+        data = self.make_swap_data(current_step=1)
+        data['step_states'][0]['agreed_answer'] = 'X-quang bàn chân phải không thấy gãy xương hay trật khớp rõ ràng.'
+
+        prompt = _doctor_text_prompt(
+            data,
+            data['case'],
+            {},
+            data['messages'],
+            'tôi nghĩ hình ảnh bình thường',
+            data['step_states'],
+        )
+
+        self.assertIn("Dr. Swap's initial opinion, not established fact", prompt)
+        self.assertIn('do not assert new imaging findings', prompt)
+        self.assertIn('Never mention VLM, model, AI', prompt)
+        self.assertIn('1-on-1 chat with the user', prompt)
+        self.assertIn('Previous agreed answers', prompt)
+
+    def test_next_step_opening_combines_agreed_answer_with_vlm_stance(self):
+        data = self.make_swap_data()
+        agreed = 'X-quang bàn chân phải không thấy gãy xương hay trật khớp rõ ràng.'
+
+        with patch('app.swap.services._get_openai_client', side_effect=RuntimeError('no api key')):
+            message = _next_step_opening_message(data, data['step_states'], 1, agreed)
+
+        self.assertIn(agreed, message)
+        self.assertIn('Các cấu trúc xương bảo tồn', message)
+
+    def test_doctor_persona_sanitizer_removes_model_terms(self):
+        text = 'Chào các đồng nghiệp, Mặc dù VLM có thể gợi ý bình thường, model vẫn cần được kiểm tra. Trân trọng, Bác sĩ [Tên]'
+
+        sanitized = _sanitize_doctor_persona_text(text)
+
+        self.assertNotIn('VLM', sanitized)
+        self.assertNotIn('model', sanitized)
+        self.assertNotIn('Chào các đồng nghiệp', sanitized)
+        self.assertNotIn('Trân trọng', sanitized)
+        self.assertIn('ấn tượng ban đầu của tôi', sanitized)
+
+    def test_ddx_consensus_rules_keep_diagnoses_not_risk_factor_title(self):
+        rules = _consensus_summary_step_rules('DDx')
+
+        self.assertIn('differential diagnoses', rules)
+        self.assertIn('Risk factors', rules)
+        self.assertIn('supporting context only', rules)
+        self.assertIn('osteomyelitis', rules)
+        self.assertIn('Charcot foot', rules)

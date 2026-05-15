@@ -549,16 +549,6 @@ export function Dashboard() {
             </button>
           </div>
         )}
-
-        {/* sticky note */}
-        {!casesLoading && filtered.length > 0 && (
-          <div className={styles.stickyRow}>
-            <div className={styles.stickyNote}>
-              Mẹo: Tập trung luyện các ca X-Ray trước để nắm vững giải phẫu cơ bản! 📌
-            </div>
-          </div>
-        )}
-
       </div>
 
       {/* ── Resume/Restart modal ── */}

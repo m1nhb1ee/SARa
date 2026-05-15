@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from app.agents.ai_services import evaluate_answer
 from app.core.step_codes import STEP_CODES, index_by_canonical_step
 from app.core.supabase_client import get_supabase
+from app.observability import langfuse_obs
 
 EXAM_STEP_SECONDS = 300
 
@@ -45,8 +46,8 @@ def list_exam_cases(user_id: str) -> list[dict]:
 def list_exam_sessions(user_id: str) -> list[dict]:
     sb = get_supabase()
     return sb.table('exam_sessions').select(
-        'id, case_id, status, final_score, completed_at, created_at'
-    ).eq('user_id', user_id).order('created_at', desc=True).execute().data or []
+        'id, case_id, status, final_score, completed_at, started_at'
+    ).eq('user_id', user_id).order('started_at', desc=True).execute().data or []
 
 
 def _get_exam_case(case_id: str, user_id: str) -> tuple[dict | None, Response | None]:
@@ -179,6 +180,18 @@ def complete_exam_session(session_id: str, user_id: str) -> tuple[dict | None, R
             previous_steps=previous_steps,
             step_attempts=[],
             is_last_step=step_index == len(STEP_CODES) - 1,
+            trace_metadata=langfuse_obs.common_metadata(
+                feature="exam",
+                session_kind="exam",
+                case_id=data.get('case_id'),
+                step_code=step_code,
+                step_index=step_index,
+                extra={
+                    "langfuse_user_id": user_id,
+                    "langfuse_session_id": f"exam:{session_id}",
+                    "attempt_number": 1,
+                },
+            ),
         )
         score = float(result.get('score') or 0)
         scores.append(score)

@@ -123,23 +123,53 @@ class LoginView(APIView):
             )
 
 
+PROFILE_FIELDS = ('full_name', 'user_name', 'dob', 'university')
+
+
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
         sb = get_supabase()
-        profile = sb.table('users').select('is_premium').eq('id', str(user['id'])).single().execute()
-        is_premium = bool((profile.data or {}).get('is_premium', False))
+        profile = sb.table('users').select(
+            'is_premium, full_name, user_name, dob, university'
+        ).eq('id', str(user['id'])).single().execute()
+        data = profile.data or {}
         return Response({
             'user': {
                 'id': user['id'],
                 'email': user['email'],
-                'full_name': user.get('full_name', ''),
+                'full_name': data.get('full_name') or user.get('full_name', ''),
+                'user_name': data.get('user_name'),
+                'dob': data.get('dob'),
+                'university': data.get('university'),
                 'role': user.get('role', 'student'),
-                'is_premium': is_premium,
+                'is_premium': bool(data.get('is_premium', False)),
             }
         })
+
+    def patch(self, request):
+        user = request.user
+        payload = {k: request.data.get(k) for k in PROFILE_FIELDS if k in request.data}
+        for key in ('full_name', 'user_name', 'university'):
+            if key in payload and payload[key] is not None:
+                payload[key] = str(payload[key]).strip() or None
+        if 'dob' in payload and payload['dob'] in ('', None):
+            payload['dob'] = None
+        if not payload:
+            return Response({'error': 'No fields to update'}, status=status.HTTP_400_BAD_REQUEST)
+        sb = get_supabase()
+        try:
+            if payload.get('user_name'):
+                existing = sb.table('users').select('id').ilike('user_name', payload['user_name']).neq('id', str(user['id'])).execute()
+                if existing.data:
+                    return Response({'error': 'Username đã được sử dụng'}, status=status.HTTP_409_CONFLICT)
+            sb.table('users').update(payload).eq('id', str(user['id'])).execute()
+        except Exception:
+            logging.exception('MeView.patch: update failed')
+            return Response({'error': 'Cập nhật thất bại'}, status=status.HTTP_400_BAD_REQUEST)
+        return self.get(request)
 
 
 class LogoutView(APIView):
