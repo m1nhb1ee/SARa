@@ -48,3 +48,12 @@ def get_supabase() -> Client:
         url, key = _config()
         _client = create_client(url, key)
     return _client
+
+
+def get_supabase_service_role() -> Client:
+    """Return a service-role client without binding the request JWT."""
+    global _client
+    if _client is None:
+        url, key = _config()
+        _client = create_client(url, key)
+    return _client
