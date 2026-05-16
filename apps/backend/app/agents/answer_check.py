@@ -71,6 +71,91 @@ def _filter_partial_fragments(items, errors: list[str]) -> list[dict]:
         seen.add(code)
     return filtered
 
+
+def _filter_criterion_results(items, valid_error_codes: list[str]) -> list[dict]:
+    valid = set(valid_error_codes)
+    if not isinstance(items, list):
+        return []
+    filtered = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        code = item.get("error_code")
+        if code not in valid:
+            continue
+        status = item.get("status")
+        if status not in {"met", "partial", "missing"}:
+            status = "missing"
+        targets = item.get("missing_targets")
+        if not isinstance(targets, list):
+            targets = []
+        clean_targets = []
+        for target in targets[:3]:
+            if not isinstance(target, dict):
+                continue
+            hint_levels = target.get("hint_levels")
+            if not isinstance(hint_levels, dict):
+                hint_levels = {}
+            clean_targets.append({
+                "target_id": str(target.get("target_id") or code),
+                "status": str(target.get("status") or status),
+                "safe_anchor": str(target.get("safe_anchor") or ""),
+                "hint_levels": {
+                    "1": str(hint_levels.get("1") or ""),
+                    "2": str(hint_levels.get("2") or ""),
+                    "3": str(hint_levels.get("3") or ""),
+                },
+            })
+        evidence = item.get("student_evidence")
+        if isinstance(evidence, str):
+            evidence = [evidence] if evidence else []
+        elif not isinstance(evidence, list):
+            evidence = []
+        filtered.append({
+            "error_code": code,
+            "status": status,
+            "score_awarded": _coerce_score(item.get("score_awarded")),
+            "student_evidence": [str(value) for value in evidence[:3]],
+            "missing_targets": clean_targets,
+        })
+    return filtered
+
+
+def _filter_hint_directives(items, errors: list[str]) -> list[dict]:
+    wanted = set(errors)
+    if not isinstance(items, list):
+        return []
+    filtered = []
+    seen = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        code = item.get("error_code")
+        if code not in wanted:
+            continue
+        target_id = str(item.get("target_id") or code)
+        key = (code, target_id)
+        if key in seen:
+            continue
+        do_not_reveal = item.get("do_not_reveal")
+        if isinstance(do_not_reveal, str):
+            do_not_reveal = [do_not_reveal]
+        elif not isinstance(do_not_reveal, list):
+            do_not_reveal = ["full diagnosis", "full expected finding"]
+        filtered.append({
+            "error_code": code,
+            "target_id": target_id,
+            "student_has": str(item.get("student_has") or ""),
+            "missing_target": str(item.get("missing_target") or ""),
+            "safe_anchor": str(item.get("safe_anchor") or ""),
+            "safe_hint_level_1": str(item.get("safe_hint_level_1") or ""),
+            "safe_hint_level_2": str(item.get("safe_hint_level_2") or ""),
+            "safe_hint_level_3": str(item.get("safe_hint_level_3") or ""),
+            "do_not_reveal": [str(value) for value in do_not_reveal[:5]],
+        })
+        seen.add(key)
+    return filtered
+
 # ── System Prompt ────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """
@@ -90,9 +175,30 @@ Rules:
 - Score must be between 0.0 and 1.0.
 - errors[] must only use the exact error_codes provided in the rubric for this step. No other codes allowed.
 - feedback must be in Vietnamese, 1-2 sentences, hint direction only.
+- criterion_results must describe grading state per rubric criterion:
+  status is "met", "partial", or "missing"; score_awarded is normalized 0-1
+  for that criterion; student_evidence lists only what the student actually said.
+  For partial/missing criteria, include missing_targets[] so the backend can
+  focus one sub-target at a time when a criterion has multiple acceptable parts.
 - partial_answer_by_error must be filled when the student fails. Return one
   short, non-leaking fragment for each error_code in errors[]. Each fragment
   must align with that specific rubric error.
+  These fragments are internal hint seeds, not final feedback. They may name
+  one safe anatomic, imaging, or reasoning target needed for that criterion,
+  but must not reveal the full expected finding, full diagnosis, or complete
+  answer key.
+  Ground fragments only in the rubric, answer_key, previous_steps, and the
+  cumulative student answer. Never introduce a condition, mechanism, pathology,
+  diagnosis, or imaging finding that is absent from those inputs. If no safe
+  concrete target is available, use a generic criterion label instead.
+- hint_directives must be filled when the student fails. Return one directive
+  per missing/partial target that is useful for the next hint. The directives
+  are internal only. They may include concrete safe imaging/anatomic anchors
+  from answer_key or previous_steps (for example mass effect or midline shift),
+  but must not reveal the full diagnosis, full expected finding, or complete
+  answer key. Level 1 should be broad, level 2 should name the safe anchor or
+  missing information type, and level 3 should state the missing criterion/target
+  explicitly while still asking the student to complete the answer.
 - positive_feedback must always be filled — explicitly reference what the student
   said correctly, including referencing their previous steps if relevant.
   If nothing was correct, write an encouraging note on what direction to focus.
@@ -119,8 +225,41 @@ Return pure JSON, no markdown:
   "passed": <bool>,
   "errors": [<use only the error_codes defined in the rubric criteria for this step>],
   "feedback": "<Vietnamese, 1-2 sentences when failed, no answer leak>",
+  "criterion_results": [
+    {
+      "error_code": "<rubric error code>",
+      "status": "met" | "partial" | "missing",
+      "score_awarded": <float 0.0-1.0 for this criterion>,
+      "student_evidence": ["<what the cumulative student answer already includes>"],
+      "missing_targets": [
+        {
+          "target_id": "<stable short id>",
+          "status": "partial" | "missing",
+          "safe_anchor": "<safe imaging/anatomic/reasoning anchor, not full answer>",
+          "hint_levels": {
+            "1": "<broad internal hint direction>",
+            "2": "<more specific internal hint direction with safe anchor if available>",
+            "3": "<explicit missing target/criterion, still not full answer>"
+          }
+        }
+      ]
+    }
+  ],
   "partial_answer_by_error": [
     {"error_code": "<one error code>", "fragment": "<short non-leaking fragment>"}
+  ],
+  "hint_directives": [
+    {
+      "error_code": "<one error code from errors[]>",
+      "target_id": "<matches a missing target id if available>",
+      "student_has": "<brief summary of what the student has already covered>",
+      "missing_target": "<one concrete missing target for this hint>",
+      "safe_anchor": "<safe concrete anchor from answer_key/previous_steps/rubric when available>",
+      "safe_hint_level_1": "<broad hint direction>",
+      "safe_hint_level_2": "<specific hint direction>",
+      "safe_hint_level_3": "<explicit criterion/target reveal without full answer>",
+      "do_not_reveal": ["full diagnosis", "full expected finding"]
+    }
   ],
   "positive_feedback": "<Vietnamese, what student got right — only when passed>",
   "could_add": "<Vietnamese, 1-2 things to make answer more complete — only when passed>",
@@ -254,8 +393,8 @@ Rubric:
 
 Valid error codes for this step (use ONLY these): {valid_error_codes}
 
-Answer key (internal use only, do not expose):
-expected_finding: {answer_key.get("expected_finding")}
+Answer key (internal use only, do not expose the full answer):
+{json.dumps(answer_key, ensure_ascii=False)}
 
 CV findings (ground truth from image):
 {json.dumps(cv_findings, ensure_ascii=True)}
@@ -306,7 +445,7 @@ Evaluate and return JSON.""")
                 {"role": "user",   "content": user_prompt}
             ],
             temperature=0.1,
-            max_tokens=1000,
+            max_tokens=1600,
             response_format={"type": "json_object"}
         )
     latency_ms = int((time.time() - start) * 1000)
@@ -345,7 +484,9 @@ Evaluate and return JSON.""")
             "passed": False,
             "errors": valid_error_codes[:1] if valid_error_codes else [],
             "feedback": "Hệ thống chấm điểm gặp lỗi định dạng phản hồi. Vui lòng thử lại.",
+            "criterion_results": [],
             "partial_answer_by_error": [],
+            "hint_directives": [],
             "positive_feedback": "",
             "could_add": "",
             "next_step_preview": "",
@@ -363,10 +504,15 @@ Evaluate and return JSON.""")
     passed = raw["score"] >= 0.6   # never trust LLM's passed field — compute from score
     errors = [] if passed else raw.get("errors", [])   # errors must be empty when passed
     partial_answer_by_error = [] if passed else raw.get("partial_answer_by_error", [])
+    criterion_results = _filter_criterion_results(raw.get("criterion_results", []), valid_error_codes)
     score = raw["score"]
     errors = [] if passed else _filter_error_codes(errors, valid_error_codes)
     partial_answer_by_error = [] if passed else _filter_partial_fragments(
         partial_answer_by_error,
+        errors,
+    )
+    hint_directives = [] if passed else _filter_hint_directives(
+        raw.get("hint_directives", []),
         errors,
     )
     langfuse_obs.update_generation(
@@ -379,6 +525,8 @@ Evaluate and return JSON.""")
             "passed": passed,
             "errors": errors,
             "error_count": len(errors),
+            "criterion_result_count": len(criterion_results),
+            "hint_directive_count": len(hint_directives),
             "json_parse_failed": json_parse_failed,
         },
         metadata={
@@ -386,6 +534,8 @@ Evaluate and return JSON.""")
             "passed": passed,
             "errors": errors,
             "error_count": len(errors),
+            "criterion_result_count": len(criterion_results),
+            "hint_directive_count": len(hint_directives),
             "json_parse_failed": json_parse_failed,
         },
     )
@@ -394,7 +544,9 @@ Evaluate and return JSON.""")
         "passed":            passed,
         "errors":            errors,
         "feedback":          "" if passed else raw.get("feedback", ""),
+        "criterion_results": criterion_results,
         "partial_answer_by_error": partial_answer_by_error,
+        "hint_directives":   hint_directives,
         "positive_feedback": raw.get("positive_feedback", ""),
         "could_add":         raw.get("could_add", ""),
         "next_step_preview": raw.get("next_step_preview", ""),

@@ -4,6 +4,7 @@ Replaces MockAIAgent / OpenAIAgent with the proper socratic + answer_check agent
 """
 import logging
 import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,24 @@ def _is_explicit_hint_request(user_input: str) -> bool:
     text = " ".join((user_input or "").strip().split())
     if not text:
         return False
-    if len(text) <= 40 and _HINT_REQUEST_RE.search(text):
+    normalized = unicodedata.normalize("NFKD", text)
+    normalized = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    normalized = " ".join(normalized.split())
+    hint_markers = (
+        "hint",
+        "help",
+        "goi y",
+        "khong biet",
+        "khong ro",
+        "khong nho",
+        "khong chac",
+        "toi khong biet",
+        "em khong biet",
+        "bo tay",
+    )
+    if len(text) <= 40 and (_HINT_REQUEST_RE.search(text) or any(marker in normalized for marker in hint_markers)):
         return True
-    return text.lower() in {
+    return normalized in {
         "khong biet", "không biết",
         "khong ro", "không rõ",
         "khong nho", "không nhớ",
@@ -142,6 +158,7 @@ def evaluate_answer(
         logger.warning(f"evaluate_answer fallback: agents={_AGENTS_AVAILABLE}, rubric_found={bool(rubric)}")
         return {
             "score": 0.5, "passed": False, "errors": [],
+            "criterion_results": [], "hint_directives": [],
             "feedback": "Không thể đánh giá lúc này.",
             "positive_feedback": "", "could_add": "",
             "next_step_preview": "", "latency_ms": 0,
@@ -172,6 +189,8 @@ def get_socratic_hint(
     repeat_depth: int = 0,
     step_attempts: list | None = None,
     error_context: list | None = None,
+    previous_steps: list | None = None,
+    hint_directive: dict | None = None,
     trace_metadata: dict | None = None,
 ) -> str:
     """
@@ -193,6 +212,8 @@ def get_socratic_hint(
             repeat_depth=repeat_depth,
             step_attempts=step_attempts,
             error_context=error_context,
+            previous_steps=previous_steps,
+            hint_directive=hint_directive,
             trace_metadata=trace_metadata,
         )
     except Exception as e:
