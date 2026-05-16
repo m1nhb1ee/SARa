@@ -1,12 +1,15 @@
-# populate_new_cases.py
-# Walks Data/new data/new data/ folder, reads each rubric_match.json,
-# uploads images to Supabase Storage, and inserts cases + case_images + answer_keys.
+# populate_all.py
+# Unified seeder — walks both data roots and inserts every case into Supabase.
 #
-# Difficulty is auto-determined from distinct image volume count:
-#   >4 volumes → difficult | 1 volume → easy | otherwise → medium
+#   Data/                        (original cases)
+#   Data/new data/new data/      (new cases, auto-difficulty, is_valid/is_exam flags)
 #
-# Schema additions vs populate_cases.py: is_valid=True, is_exam=False
-# Handles two rubric formats: with/without expected_output wrapper
+# Each case row gets:
+#   title    = disease name from rubric "title" field
+#   subtitle = "{Region} {Modality}" e.g. "Brain CT", "Chest X-ray"
+#
+# Difficulty is derived from distinct volume count for new data; fixed "medium" for original.
+# Handles two rubric formats: with/without expected_output wrapper.
 import os
 import uuid
 import json
@@ -21,15 +24,19 @@ supabase = create_client(
     os.getenv("SUPABASE_SERVICE_KEY"),
 )
 
-DATA_ROOT = Path(__file__).resolve().parents[4] / "Data" / "new data" / "new data"
+BASE = Path(__file__).resolve().parents[4]
+ROOTS = [
+    (BASE / "Data",                            "original"),
+    (BASE / "Data" / "new data" / "new data",  "new"),
+]
 BUCKET = "case_images"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
 MODALITY_MAP = {
     "x-ray": "X-ray",
-    "ct": "CT",
-    "ctpa": "CT",
-    "mri": "MRI",
+    "ct":    "CT",
+    "ctpa":  "CT",
+    "mri":   "MRI",
 }
 
 REGION_FROM_CASE_ID = {
@@ -40,6 +47,18 @@ REGION_FROM_CASE_ID = {
     "spine":     "Spine",
     "extremity": "Extremity",
 }
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _normalize_modality(raw: str) -> str:
+    key = raw.strip().lower()
+    if key in MODALITY_MAP:
+        return MODALITY_MAP[key]
+    for k, v in MODALITY_MAP.items():
+        if k in key:
+            return v
+    return raw.strip()
 
 
 def _derive_region(case_id: str, disease_dir: Path) -> str:
@@ -54,21 +73,7 @@ def _derive_region(case_id: str, disease_dir: Path) -> str:
     return "General"
 
 
-def _normalize_modality(raw: str) -> str:
-    """Map raw modality string to an allowed DB value."""
-    key = raw.strip().lower()
-    if key in MODALITY_MAP:
-        return MODALITY_MAP[key]
-    for allowed_key, allowed_val in MODALITY_MAP.items():
-        if allowed_key in key:
-            return allowed_val
-    return "Difference"
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
 def _collect_images(disease_dir: Path) -> list[tuple[Path, str]]:
-    """Return (file_path, volume_name) for every image under disease_dir."""
     results = []
     for path in sorted(disease_dir.rglob("*")):
         if path.suffix.lower() not in IMAGE_EXTS:
@@ -80,7 +85,7 @@ def _collect_images(disease_dir: Path) -> list[tuple[Path, str]]:
 
 
 def _get_difficulty(images: list[tuple[Path, str]]) -> str:
-    unique_volumes = len({volume for _, volume in images})
+    unique_volumes = len({v for _, v in images})
     if unique_volumes > 4:
         return "hard"
     if unique_volumes == 1:
@@ -89,7 +94,6 @@ def _get_difficulty(images: list[tuple[Path, str]]) -> str:
 
 
 def _upload_image(img_path: Path) -> str:
-    """Upload image to Supabase Storage and return its public URL."""
     mime = mimetypes.guess_type(img_path.name)[0] or "image/jpeg"
     storage_key = f"seed/{uuid.uuid4()}{img_path.suffix.lower()}"
     with open(img_path, "rb") as f:
@@ -112,7 +116,6 @@ def _format_list(items) -> str:
 # ── Answer key builders ────────────────────────────────────────────────────────
 
 def _build_answer_keys(rubric: dict) -> list[dict]:
-    """Dispatch to the correct builder based on rubric format."""
     expected = rubric.get("expected_output")
     if expected:
         return _build_from_expected_output(expected)
@@ -120,17 +123,22 @@ def _build_answer_keys(rubric: dict) -> list[dict]:
 
 
 def _build_from_expected_output(expected: dict) -> list[dict]:
-    """Build answer keys from expected_output.step_* structure."""
     s2 = expected.get("step_2_describe", {})
     s3 = expected.get("step_3_reasoning", {})
     s4 = expected.get("step_4_differential_diagnosis", {})
     s5 = expected.get("step_5_conclusion", {})
 
-    location = s2.get("location", [])
-    chars = s2.get("characteristics", [])
+    # Also pick up step_1_observe key_abnormalities if present
+    s1 = expected.get("step_1_observe", {})
+    key_abn = s1.get("key_abnormalities", [])
+
+    location   = s2.get("location", [])
+    chars      = s2.get("characteristics", [])
     associated = s2.get("associated_findings", [])
-    negative = s2.get("negative_findings", [])
-    obs_parts = []
+    negative   = s2.get("negative_findings", [])
+    obs_parts  = []
+    if key_abn:
+        obs_parts.append("Key abnormalities: " + _format_list(key_abn))
     if location:
         obs_parts.append("Location: " + _format_list(location))
     if chars:
@@ -139,9 +147,9 @@ def _build_from_expected_output(expected: dict) -> list[dict]:
         obs_parts.append("Associated findings: " + _format_list(associated))
     if negative:
         obs_parts.append("Negative findings: " + _format_list(negative))
-    observe_finding = ". ".join(obs_parts)
+    describe_finding = ". ".join(obs_parts)
 
-    chain = s3.get("inference_chain", [])
+    chain     = s3.get("inference_chain", [])
     hypothesis = s3.get("hypothesis", [])
     evidence_img = s3.get("evidence", {}).get("imaging", [])
     reasoning_parts = []
@@ -166,9 +174,9 @@ def _build_from_expected_output(expected: dict) -> list[dict]:
     return [
         {
             "step_order": 0, "step_code": "DESCRIBE",
-            "expected_finding": observe_finding,
-            "clinical_explanation": observe_finding,
-            "key_points": [p for p in location[:2] + chars[:2] if p],
+            "expected_finding": describe_finding,
+            "clinical_explanation": describe_finding,
+            "key_points": [p for p in (key_abn or location)[:2] + chars[:2] if p],
         },
         {
             "step_order": 1, "step_code": "REASONING",
@@ -192,13 +200,12 @@ def _build_from_expected_output(expected: dict) -> list[dict]:
 
 
 def _build_from_top_level(rubric: dict) -> list[dict]:
-    """Build answer keys from top-level step_* keys (no expected_output wrapper)."""
     s2 = rubric.get("step_2_description", {})
     s3 = rubric.get("step_3_reasoning", {})
     s4 = rubric.get("step_4_differential_diagnosis", [])
     s5 = rubric.get("step_5_conclusion", {})
 
-    location = s2.get("location", [])
+    location  = s2.get("location", [])
     img_chars = s2.get("imaging_characteristics", [])
     associated = s2.get("associated_findings", [])
     obs_parts = []
@@ -208,9 +215,9 @@ def _build_from_top_level(rubric: dict) -> list[dict]:
         obs_parts.append("Characteristics: " + _format_list(img_chars))
     if associated:
         obs_parts.append("Associated findings: " + _format_list(associated))
-    observe_finding = ". ".join(obs_parts)
+    describe_finding = ". ".join(obs_parts)
 
-    evidence = s3.get("evidence", [])
+    evidence  = s3.get("evidence", [])
     hypothesis = s3.get("hypothesis", [])
     reasoning_parts = []
     if evidence:
@@ -233,8 +240,8 @@ def _build_from_top_level(rubric: dict) -> list[dict]:
     return [
         {
             "step_order": 0, "step_code": "DESCRIBE",
-            "expected_finding": observe_finding,
-            "clinical_explanation": observe_finding,
+            "expected_finding": describe_finding,
+            "clinical_explanation": describe_finding,
             "key_points": [p for p in location[:2] + img_chars[:2] if p],
         },
         {
@@ -260,12 +267,21 @@ def _build_from_top_level(rubric: dict) -> list[dict]:
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
-def run():
-    rubric_files = sorted(DATA_ROOT.rglob("rubric_match.json"))
-    print(f"Found {len(rubric_files)} cases in {DATA_ROOT}\n")
+def process_root(data_root: Path, kind: str) -> tuple[int, int]:
+    rubric_files = sorted(data_root.rglob("rubric_match.json"))
+    # Exclude rubrics that belong to a nested sub-root already covered
+    if kind == "original":
+        rubric_files = [
+            p for p in rubric_files
+            if "new data" not in str(p)
+        ]
 
-    total_cases = 0
-    total_images = 0
+    print(f"\n{'='*60}")
+    print(f"  {kind.upper()} DATA  —  {data_root}")
+    print(f"  {len(rubric_files)} rubric(s) found")
+    print(f"{'='*60}")
+
+    total_cases = total_images = 0
 
     for rubric_path in rubric_files:
         disease_dir = rubric_path.parent
@@ -273,7 +289,7 @@ def run():
         with open(rubric_path, encoding="utf-8") as f:
             rubric = json.load(f)
 
-        title = rubric.get("title", disease_dir.name)
+        title    = rubric.get("title", disease_dir.name)
         modality = _normalize_modality(rubric.get("modality", "X-ray"))
         clinical_history_raw = rubric.get("clinical_history", [])
         clinical_history = (
@@ -282,20 +298,16 @@ def run():
             else str(clinical_history_raw)
         )
         case_id_tag = rubric.get("case_id", disease_dir.name)
-        disease_tag = (
-            case_id_tag
-            .lower()
-            .replace(" ", "_")
-            .replace("-", "_")
-        )
-        region = _derive_region(case_id_tag, disease_dir)
+        disease_tag = case_id_tag.lower().replace(" ", "_").replace("-", "_")
+        region   = _derive_region(case_id_tag, disease_dir)
         subtitle = f"{region} {modality}"
 
-        images = _collect_images(disease_dir)
-        difficulty = _get_difficulty(images)
-        unique_volumes = len({v for _, v in images})
+        images     = _collect_images(disease_dir)
+        difficulty = _get_difficulty(images) if kind == "new" else "medium"
+        unique_vol = len({v for _, v in images})
 
-        print(f"── {title} | {subtitle} | {len(images)} images | {unique_volumes} volumes | difficulty: {difficulty}")
+        print(f"\n── {title}")
+        print(f"   subtitle={subtitle!r}  difficulty={difficulty}  images={len(images)}  volumes={unique_vol}")
 
         supabase.table("disease_profiles").upsert(
             {"disease_tag": disease_tag}, on_conflict="disease_tag"
@@ -310,40 +322,53 @@ def run():
                 print(f"   ⚠ upload failed for {img_path.name}: {e}")
 
         case_row = {
-            "title": subtitle,
-            "disease_name": title,
-            "modality": modality,
-            "difficulty": difficulty,
+            "title":            subtitle,
+            "disease_name":     title,
+            "modality":         modality,
+            "difficulty":       difficulty,
             "clinical_history": clinical_history,
-            "tags": [disease_tag],
-            "disease_tag": disease_tag,
-            "status": "published",
-            "source": "system",
-            "is_valid": True,
-            "is_exam": False,
+            "tags":             [disease_tag],
+            "disease_tag":      disease_tag,
+            "status":           "published",
+            "source":           "system",
+            "is_valid":         True,
+            "is_exam":          False,
         }
-        result = supabase.table("cases").insert(case_row).execute()
+        result  = supabase.table("cases").insert(case_row).execute()
         case_id = result.data[0]["id"]
 
         for img in uploaded:
             supabase.table("case_images").insert({
-                "case_id": case_id,
-                "image_url": img["url"],
+                "case_id":     case_id,
+                "image_url":   img["url"],
                 "slice_index": img["slice_index"],
                 "volume_name": img["volume_name"],
             }).execute()
 
         answer_keys = _build_answer_keys(rubric)
         for ak in answer_keys:
-            supabase.table("answer_keys").insert({
-                "case_id": case_id, **ak
-            }).execute()
+            supabase.table("answer_keys").insert({"case_id": case_id, **ak}).execute()
 
-        total_cases += 1
+        total_cases  += 1
         total_images += len(uploaded)
-        print(f"   ✓ case {case_id} | {len(uploaded)} images | 4 answer keys")
+        print(f"   ✓ case {case_id}  |  {len(uploaded)} images  |  4 answer keys")
 
-    print(f"\nDone. {total_cases} cases, {total_images} images inserted.")
+    return total_cases, total_images
+
+
+def run():
+    grand_cases = grand_images = 0
+    for data_root, kind in ROOTS:
+        if not data_root.exists():
+            print(f"⚠ Skipping {data_root} (not found)")
+            continue
+        c, i = process_root(data_root, kind)
+        grand_cases  += c
+        grand_images += i
+
+    print(f"\n{'='*60}")
+    print(f"  ALL DONE — {grand_cases} cases, {grand_images} images inserted")
+    print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":
