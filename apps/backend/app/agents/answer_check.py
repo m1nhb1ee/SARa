@@ -32,6 +32,45 @@ def _safe_parse_llm_json(raw_text: str) -> dict:
 
     raise ValueError("Invalid JSON from LLM")
 
+
+def _coerce_score(value) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(score, 1.0))
+
+
+def _filter_error_codes(errors, valid_error_codes: list[str]) -> list[str]:
+    valid = set(valid_error_codes)
+    if not isinstance(errors, list):
+        return []
+    filtered = []
+    for code in errors:
+        if isinstance(code, str) and code in valid and code not in filtered:
+            filtered.append(code)
+    return filtered
+
+
+def _filter_partial_fragments(items, errors: list[str]) -> list[dict]:
+    wanted = set(errors)
+    if not isinstance(items, list):
+        return []
+    filtered = []
+    seen = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        code = item.get("error_code")
+        if code not in wanted or code in seen:
+            continue
+        filtered.append({
+            "error_code": code,
+            "fragment": str(item.get("fragment") or ""),
+        })
+        seen.add(code)
+    return filtered
+
 # ── System Prompt ────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """
@@ -42,6 +81,12 @@ and never reveal the full answer.
 
 Rules:
 - Evaluate only the current step, ignore other steps.
+- If previous attempts are provided, grade the cumulative answer made from
+  previous attempts plus the latest answer. Do not require the latest answer
+  to repeat correct points already stated earlier.
+- If the latest answer explicitly corrects a conflicting detail from an
+  earlier attempt, prefer the latest version for that conflict; otherwise
+  take the union of all findings.
 - Score must be between 0.0 and 1.0.
 - errors[] must only use the exact error_codes provided in the rubric for this step. No other codes allowed.
 - feedback must be in Vietnamese, 1-2 sentences, hint direction only.
@@ -172,12 +217,26 @@ def evaluate(
         attempts_section = (
             f"\nStudent's previous attempts at this step:\n"
             f"{lines}\n"
-            f"IMPORTANT: Treat all attempts as ONE cumulative answer. "
-            f"The student does not repeat what they already said — each new attempt "
-            f"adds to their understanding. Score based on the UNION of all findings "
-            f"mentioned across all attempts. positive_feedback MUST explicitly name "
-            f"what was correct from each attempt, not just the latest one.\n"
+            f"IMPORTANT CUMULATIVE SCORING RULE: Score the union of the previous "
+            f"attempts above AND the latest answer below as one cumulative answer. "
+            f"The student does not repeat what they already said; each new attempt "
+            f"adds to their understanding. Do not mark a criterion missing if it "
+            f"was already satisfied in any previous attempt. If the latest answer "
+            f"explicitly corrects a conflicting earlier detail, prefer the latest "
+            f"version for that conflict. positive_feedback MUST explicitly name "
+            f"what was correct across the cumulative attempts, not just the latest one.\n"
         )
+
+    cumulative_attempts = list(step_attempts or []) + [student_answer]
+    cumulative_lines = "\n".join(
+        f"  Attempt {i+1}: {answer}" for i, answer in enumerate(cumulative_attempts)
+    )
+    cumulative_answer_section = (
+        "\nCUMULATIVE STUDENT ANSWER TO GRADE:\n"
+        f"{cumulative_lines}\n"
+        "Grade this cumulative answer as a single answer. The latest answer is not a replacement "
+        "unless it explicitly corrects a conflicting earlier detail.\n"
+    )
 
     # Extract valid error codes for this step from rubric criteria
     valid_error_codes = [c["error_code"] for c in rubric.get("criteria", []) if "error_code" in c]
@@ -203,6 +262,8 @@ CV findings (ground truth from image):
 {prev_section}{attempts_section}
 Student answer (latest):
 \"{student_answer}\"
+{cumulative_answer_section}
+Evaluate ONLY the cumulative student answer above.
 
 {last_step_instruction}
 Evaluate and return JSON.""")
@@ -245,7 +306,7 @@ Evaluate and return JSON.""")
                 {"role": "user",   "content": user_prompt}
             ],
             temperature=0.1,
-            max_tokens=300,
+            max_tokens=1000,
             response_format={"type": "json_object"}
         )
     latency_ms = int((time.time() - start) * 1000)
@@ -297,23 +358,31 @@ Evaluate and return JSON.""")
         result_preview=json.dumps(raw, ensure_ascii=False)
     )
 
+    raw["score"] = _coerce_score(raw.get("score"))
+
     passed = raw["score"] >= 0.6   # never trust LLM's passed field — compute from score
     errors = [] if passed else raw.get("errors", [])   # errors must be empty when passed
     partial_answer_by_error = [] if passed else raw.get("partial_answer_by_error", [])
+    score = raw["score"]
+    errors = [] if passed else _filter_error_codes(errors, valid_error_codes)
+    partial_answer_by_error = [] if passed else _filter_partial_fragments(
+        partial_answer_by_error,
+        errors,
+    )
     langfuse_obs.update_generation(
         lf_generation,
         response=response,
         model=ANSWER_CHECK_MODEL,
         latency_ms=latency_ms,
         output={
-            "score": raw.get("score"),
+            "score": score,
             "passed": passed,
             "errors": errors,
             "error_count": len(errors),
             "json_parse_failed": json_parse_failed,
         },
         metadata={
-            "score": raw.get("score"),
+            "score": score,
             "passed": passed,
             "errors": errors,
             "error_count": len(errors),
@@ -321,7 +390,7 @@ Evaluate and return JSON.""")
         },
     )
     return {
-        "score":             raw["score"],
+        "score":             score,
         "passed":            passed,
         "errors":            errors,
         "feedback":          "" if passed else raw.get("feedback", ""),

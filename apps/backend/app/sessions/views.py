@@ -34,13 +34,10 @@ def _pick_hint_error_fragment(
     If an error repeats from the previous failed attempt, keep focus on that
     repeated error rather than switching to a different one.
     """
-    if hint_number < 2:
-        return None, None, False, 0
-
     errors = result.get('errors') or []
-    fragments = result.get('partial_answer_by_error') or []
-    if not errors or not fragments:
+    if not errors:
         return None, None, False, 0
+    fragments = result.get('partial_answer_by_error') or []
 
     rubric_criteria = rubric.get('criteria') or []
     rank_map: dict[str, tuple[float, int]] = {}
@@ -55,12 +52,9 @@ def _pick_hint_error_fragment(
         if isinstance(item, dict) and item.get('error_code')
     }
 
-    current_errors = [
-        code for code in errors
-        if code in fragment_map
-    ]
+    current_errors = [code for code in errors if code]
     if not current_errors:
-        return None, None, False
+        return None, None, False, 0
 
     previous_failed_error_counts = previous_failed_error_counts or {}
 
@@ -73,7 +67,25 @@ def _pick_hint_error_fragment(
     chosen_code = current_errors[0]
     repeat_depth = previous_failed_error_counts.get(chosen_code, 0) + 1
     repeat_focus = repeat_depth > 1
-    return fragment_map.get(chosen_code) or None, chosen_code, repeat_focus, repeat_depth
+    fragment = fragment_map.get(chosen_code) if hint_number >= 2 else None
+    return fragment or None, chosen_code, repeat_focus, repeat_depth
+
+
+def _rubric_error_context(rubric: dict, errors: list | None) -> list[dict]:
+    """Return safe rubric labels for the current missing error codes."""
+    wanted = set(errors or [])
+    if not wanted:
+        return []
+    context = []
+    for criterion in rubric.get('criteria') or []:
+        code = criterion.get('error_code')
+        if code in wanted:
+            context.append({
+                'error_code': code,
+                'label': criterion.get('label') or '',
+                'max_score': criterion.get('max_score'),
+            })
+    return context
 
 
 class SessionViewSet(viewsets.ViewSet):
@@ -225,7 +237,8 @@ class SessionViewSet(viewsets.ViewSet):
             current_question,
             trace_metadata=trace_metadata,
         )
-        if classified['intent'] in ('question', 'chit-chat'):
+        intent = classified.get('intent', 'answer')
+        if intent in ('question', 'chit-chat'):
             return Response({'type': 'socratic', 'message': classified['response']})
 
         # ── 2. Fetch answer key ───────────────────────────────────────────────
@@ -269,6 +282,12 @@ class SessionViewSet(viewsets.ViewSet):
             'student_answer, score, errors'
         ).eq('session_id', pk).eq('step_index', current_step).order('attempt_number').execute()
         step_attempts_texts = [a['student_answer'] for a in (cur_rows.data or [])]
+        student_answer_for_eval = student_answer
+        if intent == 'revise' and step_attempts_texts:
+            student_answer_for_eval = (
+                "[REVISION: this latest answer should override any conflicting "
+                f"details from previous attempts]\n{student_answer}"
+            )
         hint_count = sum(1 for a in (cur_rows.data or []) if a['score'] is not None and a['score'] < 0.6)
         previous_failed_error_counts: dict[str, int] = {}
         for a in reversed(cur_rows.data or []):
@@ -277,9 +296,57 @@ class SessionViewSet(viewsets.ViewSet):
                     previous_failed_error_counts[code] = previous_failed_error_counts.get(code, 0) + 1
         step_rubric = get_step_rubric(step_code)
 
+        if intent == 'need_hint':
+            failed_rows = [
+                a for a in (cur_rows.data or [])
+                if a.get('score') is not None and a['score'] < 0.6
+            ]
+            last_failed = failed_rows[-1] if failed_rows else {}
+            last_errors = last_failed.get('errors') or []
+            hint_result = {
+                'errors': last_errors,
+                'partial_answer_by_error': [],
+            }
+            partial_answer, focus_error_code, repeat_focus, repeat_depth = _pick_hint_error_fragment(
+                step_rubric,
+                hint_result,
+                hint_count + 1,
+                previous_failed_error_counts=previous_failed_error_counts,
+            )
+            focused_errors = [focus_error_code] if focus_error_code else last_errors
+            if not focused_errors:
+                focused_errors = [
+                    c.get('error_code')
+                    for c in (step_rubric.get('criteria') or [])
+                    if c.get('error_code')
+                ]
+            hint = get_socratic_hint(
+                step_code,
+                current_step,
+                focused_errors,
+                hint_count + 1,
+                prior_errors=prior_errors,
+                partial_answer=partial_answer,
+                focus_error_code=focus_error_code,
+                repeat_focus=repeat_focus,
+                repeat_depth=repeat_depth,
+                step_attempts=step_attempts_texts,
+                error_context=_rubric_error_context(step_rubric, focused_errors),
+                trace_metadata={
+                    **trace_metadata,
+                    "attempt_number": len(step_attempts_texts) + 1,
+                    "hint_count": hint_count + 1,
+                    "explicit_hint_request": True,
+                },
+            )
+            return Response({
+                'type': 'socratic',
+                'message': hint,
+            }, status=status.HTTP_200_OK)
+
         # ── 4. Evaluate ───────────────────────────────────────────────────────
         result = evaluate_answer(
-            student_answer=student_answer,
+            student_answer=student_answer_for_eval,
             step_code=step_code,
             step_index=current_step,
             answer_key=answer_key,
@@ -369,7 +436,7 @@ class SessionViewSet(viewsets.ViewSet):
                 }).eq('id', pk).execute()
                 response_data['session_complete'] = True
                 if not force_advance:
-                    response_data['message'] = 'Bạn đã hoàn thành toàn bộ 5 bước phân tích. Chúc mừng!'
+                    response_data['message'] = f'Bạn đã hoàn thành toàn bộ {len(STEP_CODES)} bước phân tích. Chúc mừng!'
         else:
             partial_answer, focus_error_code, repeat_focus, repeat_depth = _pick_hint_error_fragment(
                 step_rubric,
@@ -377,15 +444,23 @@ class SessionViewSet(viewsets.ViewSet):
                 next_hint_number,
                 previous_failed_error_counts=previous_failed_error_counts,
             )
+            focused_errors = [focus_error_code] if focus_error_code else result['errors']
+            if not focused_errors:
+                focused_errors = [
+                    c.get('error_code')
+                    for c in (step_rubric.get('criteria') or [])
+                    if c.get('error_code')
+                ]
             hint = get_socratic_hint(
                 step_code, current_step,
-                result['errors'], hint_count + 1,
+                focused_errors, hint_count + 1,
                 prior_errors=prior_errors,
                 partial_answer=partial_answer,
                 focus_error_code=focus_error_code,
                 repeat_focus=repeat_focus,
                 repeat_depth=repeat_depth,
                 step_attempts=step_attempts_texts + [student_answer],
+                error_context=_rubric_error_context(step_rubric, focused_errors),
                 trace_metadata={
                     **trace_metadata,
                     "attempt_number": attempt_number,

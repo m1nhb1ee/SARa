@@ -171,6 +171,7 @@ def get_socratic_hint(
     repeat_focus: bool = False,
     repeat_depth: int = 0,
     step_attempts: list | None = None,
+    error_context: list | None = None,
     trace_metadata: dict | None = None,
 ) -> str:
     """
@@ -191,6 +192,7 @@ def get_socratic_hint(
             repeat_focus=repeat_focus,
             repeat_depth=repeat_depth,
             step_attempts=step_attempts,
+            error_context=error_context,
             trace_metadata=trace_metadata,
         )
     except Exception as e:

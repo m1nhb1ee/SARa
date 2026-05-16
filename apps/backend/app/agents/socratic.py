@@ -43,6 +43,11 @@ who answered incorrectly. You guide without revealing the answer.
 
 Rules:
 - Ask exactly ONE question that targets a specific missing criterion.
+- If repeat_depth is provided for the focused criterion, use repeat_depth
+  rather than overall hint_count to decide specificity:
+    repeat_depth=1 -> gentle nudge toward the missing area
+    repeat_depth=2 -> point directly at the missing element
+    repeat_depth>=3 -> state the missing criterion/category explicitly, then ask student to complete
 - Increase specificity based on hint_count:
     hint_count=1 → gentle nudge toward the missing area
     hint_count=2 → point directly at the missing element
@@ -53,11 +58,16 @@ Capabilities:
 - You receive: step_name, errors[] as criterion codes, hint_count,
   prior_errors[] from earlier steps, and sometimes a partial_answer fragment
   or partial_answer_by_error[] from Answer-Check for more targeted follow-up.
+- You may receive error_context[] with safe rubric labels for the missing
+  criteria. Use it to target the hint; it is not an answer key.
 - You do not have access to the answer key.
 
 Constraints:
 - Never reveal the full expected answer.
 - Never use diagnosis names or pathology terms.
+- For the strongest hint, reveal only the missing criterion/category, not the answer key.
+- Use hint_count only when no focused criterion/repeat_depth is provided.
+- Never let the hint_count rule override the non-leaking constraints.
 - One question only, plain text.
 
 Output format:
@@ -257,6 +267,7 @@ def get_hint(
     repeat_focus: bool = False,
     repeat_depth: int = 0,
     step_attempts: list | None = None,
+    error_context: list | None = None,
     trace_metadata: dict | None = None,
 ) -> str:
     """
@@ -275,6 +286,25 @@ def get_hint(
             f"Focus your hint ONLY on criteria that are genuinely missing, "
             f"not on anything the student has already addressed.\n"
         )
+
+    error_context_section = ""
+    if error_context:
+        context_lines = []
+        for item in error_context:
+            if not isinstance(item, dict):
+                continue
+            code = item.get("error_code") or item.get("code") or ""
+            label = item.get("label") or item.get("criterion_label") or ""
+            max_score = item.get("max_score")
+            context_lines.append(
+                f"  - {code}: {label}" + (f" (weight {max_score})" if max_score is not None else "")
+            )
+        if context_lines:
+            error_context_section = (
+                "\nSafe rubric context for missing criteria (use for targeting, do not reveal answers):\n"
+                + "\n".join(context_lines)
+                + "\n"
+            )
 
     prior_errors_context = ""
     if prior_errors:
@@ -302,12 +332,13 @@ def get_hint(
             f"\nCurrent hint focus error code: {focus_error_code}\n"
             f"{'This error has repeated across attempts; increase specificity on the same missing element.' if repeat_focus else 'Treat this as the most important current missing element.'}\n"
             f"Repeat depth: {repeat_depth}\n"
+            f"Use repeat_depth, not the number of total attempts, to decide how explicit this hint should be.\n"
         )
 
     user_prompt = _sanitize(f"""Current step: {step_name}
 Missing criteria (error codes): {errors}
 Hint count: {hint_count}
-{prior_errors_context}{focus_context}{partial_answer_context}{attempts_context}
+{prior_errors_context}{focus_context}{error_context_section}{partial_answer_context}{attempts_context}
 Generate a targeted hint question.""")
 
     logger.log_event("TOOL_CALL", {
@@ -319,6 +350,7 @@ Generate a targeted hint question.""")
             "hint_count": hint_count,
             "prior_errors_count": len(prior_errors or []),
             "has_partial_answer": bool(partial_answer),
+            "has_error_context": bool(error_context),
             "focus_error_code": focus_error_code,
             "repeat_focus": repeat_focus,
             "repeat_depth": repeat_depth,
@@ -343,6 +375,7 @@ Generate a targeted hint question.""")
                     "errors": errors,
                     "prior_error_count": len(prior_errors or []),
                     "has_partial_answer": bool(partial_answer),
+                    "has_error_context": bool(error_context),
                     "focus_error_code": focus_error_code,
                     "repeat_focus": repeat_focus,
                     "repeat_depth": repeat_depth,
@@ -450,7 +483,7 @@ Classify intent and generate response.""")
                     {"role": "system", "content": SYSTEM_PROMPT_CLASSIFY},
                     {"role": "user",   "content": user_prompt}
                 ],
-                temperature=0.4,
+                temperature=0.1,
                 max_tokens=200,
                 response_format={"type": "json_object"}
             )
