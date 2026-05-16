@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from app.cases.views import CaseViewSet, CaseTagViewSet
-from app.sessions.views import SessionViewSet, StudentPerformanceViewSet
+from app.sessions.views import SessionViewSet, StudentPerformanceViewSet, TranslateView
 from app.uploads.views import UserUploadedCaseViewSet
 from app.swap.views import SwapSessionViewSet
 from app.exam.views import ExamCaseViewSet, ExamSessionViewSet
@@ -23,4 +23,5 @@ urlpatterns = router.urls + [
     path('auth/login/', LoginView.as_view()),
     path('auth/me/', MeView.as_view()),
     path('auth/logout/', LogoutView.as_view()),
+    path('translate/', TranslateView.as_view()),
 ]

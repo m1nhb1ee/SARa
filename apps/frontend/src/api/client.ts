@@ -244,6 +244,11 @@ class APIClient {
     return this.request<any>(`/exam-sessions/${sessionId}/review/`);
   }
 
+  // Translation
+  async translateFeedback(fields: Record<string, string>) {
+    return this.request<{ fields: Record<string, string> }>('/translate/', 'POST', { fields });
+  }
+
   // Performance
   async getMyStats() {
     return this.request<any>('/performance/my_stats/');
