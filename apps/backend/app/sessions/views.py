@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from app.core.step_codes import STEP_CODES, index_by_canonical_step, normalize_step_code
-from app.core.supabase_client import get_supabase
+from app.core.supabase_client import get_supabase, get_supabase_service_role
 from app.agents.ai_services import classify_intent, evaluate_answer, get_socratic_hint, get_step_rubric
 from app.observability import langfuse_obs
 
@@ -611,7 +611,7 @@ class StudentPerformanceViewSet(viewsets.ViewSet):
         Each row: {rank, user_id, display_name, avg_score, total_completed, is_self}.
         Display name = user_name || 'Student #<id4>'.
         """
-        sb = get_supabase()
+        sb = get_supabase_service_role()
         board_type = request.query_params.get('type', 'case').lower()
         try:
             limit = max(1, min(int(request.query_params.get('limit', 50)), 100))
