@@ -1,5 +1,6 @@
 import json
 import logging
+import unicodedata
 from datetime import timezone as dt_timezone
 from datetime import datetime
 
@@ -24,6 +25,58 @@ def _now_iso() -> str:
     return datetime.now(dt_timezone.utc).isoformat()
 
 
+def _is_hint_request_text(text: str | None) -> bool:
+    normalized = " ".join((text or "").strip().lower().split())
+    ascii_normalized = unicodedata.normalize("NFKD", normalized)
+    ascii_normalized = ascii_normalized.encode("ascii", "ignore").decode("ascii")
+    ascii_normalized = " ".join(ascii_normalized.split())
+    if not normalized or len(normalized) > 80:
+        return False
+    hint_markers = (
+        "hint",
+        "help",
+        "goi y",
+        "gợi ý",
+        "khong biet",
+        "không biết",
+        "khong ro",
+        "không rõ",
+        "khong nho",
+        "không nhớ",
+        "khong chac",
+        "không chắc",
+        "k biet",
+        "k biết",
+        "ko biet",
+        "ko biết",
+        "toi khong biet",
+        "tôi không biết",
+        "em khong biet",
+        "em không biết",
+        "chịu",
+        "bo tay",
+        "bó tay",
+    )
+    ascii_hint_markers = (
+        "hint",
+        "help",
+        "goi y",
+        "khong biet",
+        "khong ro",
+        "khong nho",
+        "khong chac",
+        "k biet",
+        "ko biet",
+        "toi khong biet",
+        "em khong biet",
+        "bo tay",
+    )
+    return (
+        any(marker in normalized for marker in hint_markers)
+        or any(marker in ascii_normalized for marker in ascii_hint_markers)
+    )
+
+
 def _pick_hint_error_fragment(
     rubric: dict,
     result: dict,
@@ -36,13 +89,10 @@ def _pick_hint_error_fragment(
     If an error repeats from the previous failed attempt, keep focus on that
     repeated error rather than switching to a different one.
     """
-    if hint_number < 2:
-        return None, None, False, 0
-
     errors = result.get('errors') or []
-    fragments = result.get('partial_answer_by_error') or []
-    if not errors or not fragments:
+    if not errors:
         return None, None, False, 0
+    fragments = result.get('partial_answer_by_error') or []
 
     rubric_criteria = rubric.get('criteria') or []
     rank_map: dict[str, tuple[float, int]] = {}
@@ -57,12 +107,9 @@ def _pick_hint_error_fragment(
         if isinstance(item, dict) and item.get('error_code')
     }
 
-    current_errors = [
-        code for code in errors
-        if code in fragment_map
-    ]
+    current_errors = [code for code in errors if code]
     if not current_errors:
-        return None, None, False
+        return None, None, False, 0
 
     previous_failed_error_counts = previous_failed_error_counts or {}
 
@@ -75,7 +122,151 @@ def _pick_hint_error_fragment(
     chosen_code = current_errors[0]
     repeat_depth = previous_failed_error_counts.get(chosen_code, 0) + 1
     repeat_focus = repeat_depth > 1
-    return fragment_map.get(chosen_code) or None, chosen_code, repeat_focus, repeat_depth
+    fragment = fragment_map.get(chosen_code) if hint_number >= 2 else None
+    return fragment or None, chosen_code, repeat_focus, repeat_depth
+
+
+def _rubric_error_context(rubric: dict, errors: list | None) -> list[dict]:
+    """Return safe rubric labels for the current missing error codes."""
+    wanted = set(errors or [])
+    if not wanted:
+        return []
+    context = []
+    for criterion in rubric.get('criteria') or []:
+        code = criterion.get('error_code')
+        if code in wanted:
+            context.append({
+                'error_code': code,
+                'label': criterion.get('label') or '',
+                'max_score': criterion.get('max_score'),
+            })
+    return context
+
+
+def _pick_hint_directive(result: dict, focus_error_code: str | None) -> dict | None:
+    """Pick the directive matching the focused error; fallback to criterion target."""
+    if not focus_error_code:
+        return None
+    directives = result.get('hint_directives') or []
+    for directive in directives:
+        if isinstance(directive, dict) and directive.get('error_code') == focus_error_code:
+            return directive
+
+    for criterion in result.get('criterion_results') or []:
+        if not isinstance(criterion, dict) or criterion.get('error_code') != focus_error_code:
+            continue
+        targets = criterion.get('missing_targets') or []
+        if not targets:
+            continue
+        target = targets[0]
+        if not isinstance(target, dict):
+            continue
+        hint_levels = target.get('hint_levels') or {}
+        return {
+            'error_code': focus_error_code,
+            'target_id': target.get('target_id') or focus_error_code,
+            'student_has': ', '.join(criterion.get('student_evidence') or []),
+            'missing_target': target.get('safe_anchor') or '',
+            'safe_anchor': target.get('safe_anchor') or '',
+            'safe_hint_level_1': hint_levels.get('1') or target.get('safe_anchor') or '',
+            'safe_hint_level_2': hint_levels.get('2') or target.get('safe_anchor') or '',
+            'safe_hint_level_3': hint_levels.get('3') or target.get('safe_anchor') or '',
+            'do_not_reveal': ['full diagnosis', 'full expected finding'],
+        }
+    for item in result.get('partial_answer_by_error') or []:
+        if not isinstance(item, dict) or item.get('error_code') != focus_error_code:
+            continue
+        fragment = item.get('fragment') or ''
+        if not fragment:
+            continue
+        return {
+            'error_code': focus_error_code,
+            'target_id': focus_error_code,
+            'student_has': '',
+            'missing_target': fragment,
+            'safe_anchor': fragment,
+            'safe_hint_level_1': 'nhắc người học xem lại tiêu chí còn thiếu',
+            'safe_hint_level_2': fragment,
+            'safe_hint_level_3': f'nói rõ còn thiếu: {fragment}',
+            'do_not_reveal': ['full diagnosis', 'full expected finding'],
+        }
+    return None
+
+
+def _fallback_hint_directive_from_rubric(
+    rubric: dict,
+    step_code: str,
+    focus_error_code: str | None,
+) -> dict | None:
+    """Build a deterministic hint directive when the student has not answered yet."""
+    if not focus_error_code:
+        return None
+
+    criterion_label = ''
+    for criterion in rubric.get('criteria') or []:
+        if criterion.get('error_code') == focus_error_code:
+            criterion_label = criterion.get('label') or ''
+            break
+
+    generic_target = criterion_label or focus_error_code.replace('_', ' ')
+    templates = {
+        'missing_location': {
+            'missing_target': 'vị trí của bất thường',
+            'safe_anchor': 'bên, vùng giải phẫu và khoang/liên quan giải phẫu',
+            'safe_hint_level_1': 'nhắc người học bắt đầu bằng vị trí của bất thường',
+            'safe_hint_level_2': 'yêu cầu nêu bên, vùng giải phẫu và khoang/liên quan giải phẫu của phát hiện',
+            'safe_hint_level_3': 'nói rõ còn thiếu vị trí: bên nào, vùng nào và phát hiện nằm trong/liên quan khoang nào',
+        },
+        'missing_imaging_characteristics': {
+            'missing_target': 'đặc điểm hình ảnh của bất thường',
+            'safe_anchor': 'đậm độ/tín hiệu, hình dạng, bờ và kích thước tương đối',
+            'safe_hint_level_1': 'nhắc người học mô tả đặc điểm hình ảnh thay vì chỉ nói có bất thường',
+            'safe_hint_level_2': 'yêu cầu nêu đậm độ/tín hiệu, hình dạng, bờ và kích thước tương đối',
+            'safe_hint_level_3': 'nói rõ còn thiếu mô tả đặc điểm: đậm độ/tín hiệu, hình dạng, bờ và kích thước tương đối',
+        },
+        'missing_associated_findings': {
+            'missing_target': 'dấu hiệu liên quan đi kèm',
+            'safe_anchor': 'hiệu ứng lên cấu trúc lân cận và dấu hiệu xương/mô mềm/liên quan nếu có',
+            'safe_hint_level_1': 'nhắc người học tìm dấu hiệu đi kèm quanh bất thường chính',
+            'safe_hint_level_2': 'yêu cầu kiểm tra ảnh hưởng lên cấu trúc lân cận và dấu hiệu xương/mô mềm/liên quan',
+            'safe_hint_level_3': 'nói rõ còn thiếu dấu hiệu liên quan: hiệu ứng lên cấu trúc lân cận và dấu hiệu đi kèm nếu có',
+        },
+        'insufficient_evidence': {
+            'missing_target': 'bằng chứng hình ảnh hỗ trợ lập luận',
+            'safe_anchor': 'findings đã mô tả ở bước trước',
+            'safe_hint_level_1': 'nhắc người học xem lại findings đã mô tả',
+            'safe_hint_level_2': 'yêu cầu chọn 1-2 dấu hiệu hình ảnh cụ thể làm bằng chứng',
+            'safe_hint_level_3': 'nói rõ còn thiếu bằng chứng hình ảnh cụ thể để hỗ trợ kết luận',
+        },
+        'missing_finding_mapping': {
+            'missing_target': 'liên hệ finding với ý nghĩa lâm sàng/chẩn đoán',
+            'safe_anchor': 'finding chính và ý nghĩa của nó',
+            'safe_hint_level_1': 'nhắc người học liên hệ finding với ý nghĩa của nó',
+            'safe_hint_level_2': 'yêu cầu giải thích finding chính làm giả thiết hợp lý như thế nào',
+            'safe_hint_level_3': 'nói rõ còn thiếu cầu nối finding -> giả thiết/kết luận',
+        },
+        'missing_reasonable_hypothesis': {
+            'missing_target': 'giả thiết chẩn đoán ban đầu hợp lý',
+            'safe_anchor': 'một giả thiết được hỗ trợ bởi findings',
+            'safe_hint_level_1': 'nhắc người học đề xuất một giả thiết dựa trên findings',
+            'safe_hint_level_2': 'yêu cầu nêu một giả thiết và gắn nó với bằng chứng hình ảnh',
+            'safe_hint_level_3': 'nói rõ còn thiếu giả thiết chẩn đoán ban đầu có dẫn chứng',
+        },
+    }
+    payload = templates.get(focus_error_code, {
+        'missing_target': generic_target,
+        'safe_anchor': generic_target,
+        'safe_hint_level_1': f'nhắc người học xem lại tiêu chí: {generic_target}',
+        'safe_hint_level_2': f'yêu cầu người học bổ sung cụ thể phần: {generic_target}',
+        'safe_hint_level_3': f'nói rõ còn thiếu tiêu chí: {generic_target}',
+    })
+    return {
+        'error_code': focus_error_code,
+        'target_id': focus_error_code,
+        'student_has': '',
+        'do_not_reveal': ['full diagnosis', 'full expected finding'],
+        **payload,
+    }
 
 
 class SessionViewSet(viewsets.ViewSet):
@@ -227,7 +418,10 @@ class SessionViewSet(viewsets.ViewSet):
             current_question,
             trace_metadata=trace_metadata,
         )
-        if classified['intent'] in ('question', 'chit-chat'):
+        intent = classified.get('intent', 'answer')
+        if _is_hint_request_text(student_answer):
+            intent = 'need_hint'
+        if intent in ('question', 'chit-chat'):
             return Response({'type': 'socratic', 'message': classified['response']})
 
         # ── 2. Fetch answer key ───────────────────────────────────────────────
@@ -246,6 +440,8 @@ class SessionViewSet(viewsets.ViewSet):
 
         best_prev: dict = {}
         for a in (prev_rows.data or []):
+            if _is_hint_request_text(a.get('student_answer')):
+                continue
             idx = a['step_index']
             if idx not in best_prev or (a['score'] or 0) > (best_prev[idx].get('_score') or 0):
                 best_prev[idx] = {
@@ -270,18 +466,187 @@ class SessionViewSet(viewsets.ViewSet):
         cur_rows = sb.table('step_attempts').select(
             'student_answer, score, errors'
         ).eq('session_id', pk).eq('step_index', current_step).order('attempt_number').execute()
-        step_attempts_texts = [a['student_answer'] for a in (cur_rows.data or [])]
-        hint_count = sum(1 for a in (cur_rows.data or []) if a['score'] is not None and a['score'] < 0.6)
+        current_attempt_rows = cur_rows.data or []
+        step_attempts_texts = [
+            a['student_answer']
+            for a in current_attempt_rows
+            if not _is_hint_request_text(a.get('student_answer'))
+        ]
+        student_answer_for_eval = student_answer
+        if intent == 'revise' and step_attempts_texts:
+            student_answer_for_eval = (
+                "[REVISION: this latest answer should override any conflicting "
+                f"details from previous attempts]\n{student_answer}"
+            )
+        hint_count = sum(1 for a in current_attempt_rows if a['score'] is not None and a['score'] < 0.6)
         previous_failed_error_counts: dict[str, int] = {}
-        for a in reversed(cur_rows.data or []):
+        for a in reversed(current_attempt_rows):
             if a.get('score') is not None and a['score'] < 0.6:
                 for code in a.get('errors') or []:
                     previous_failed_error_counts[code] = previous_failed_error_counts.get(code, 0) + 1
         step_rubric = get_step_rubric(step_code)
+        rubric_id = get_rubric_id(sb, step_code)
+
+        if intent == 'need_hint':
+            rubric_error_codes = [
+                c.get('error_code')
+                for c in (step_rubric.get('criteria') or [])
+                if c.get('error_code')
+            ]
+            failed_rows = [
+                a for a in current_attempt_rows
+                if a.get('score') is not None and a['score'] < 0.6
+            ]
+            last_failed = failed_rows[-1] if failed_rows else {}
+            last_errors = last_failed.get('errors') or rubric_error_codes
+            hint_result = {
+                'errors': last_errors,
+                'partial_answer_by_error': [],
+            }
+            partial_answer, focus_error_code, repeat_focus, repeat_depth = _pick_hint_error_fragment(
+                step_rubric,
+                hint_result,
+                hint_count + 1,
+                previous_failed_error_counts=previous_failed_error_counts,
+            )
+            hint_directive = _pick_hint_directive(hint_result, focus_error_code)
+            if not hint_directive:
+                hint_directive = _fallback_hint_directive_from_rubric(
+                    step_rubric,
+                    step_code,
+                    focus_error_code,
+                )
+            focused_errors = [focus_error_code] if focus_error_code else last_errors
+            if not focused_errors:
+                focused_errors = rubric_error_codes
+            if hint_count >= 3:
+                force_message = f'Đã nhận {hint_count} gợi ý. Chuyển bước tiếp theo.'
+                insert_data = {
+                    'session_id': pk,
+                    'step_index': current_step,
+                    'step_code': step_code,
+                    'student_answer': student_answer,
+                    'score': 0.0,
+                    'errors': focused_errors,
+                    'feedback': force_message,
+                    'attempt_number': len(current_attempt_rows) + 1,
+                    'latency_ms': 0,
+                }
+                if rubric_id:
+                    insert_data['rubric_criterion_id'] = rubric_id
+                attempt_result = sb.table('step_attempts').insert(insert_data).execute()
+                attempt = attempt_result.data[0]
+                response_data = {
+                    'attempt': attempt,
+                    'passed': False,
+                    'force_advance': True,
+                    'positive_feedback': '',
+                    'could_add': '',
+                    'answer_key_preview': answer_key.get('expected_finding', ''),
+                    'message': force_message,
+                }
+                if not is_last:
+                    sb.table('sessions').update({'current_step': current_step + 1}).eq('id', pk).execute()
+                    response_data['next_step'] = current_step + 1
+                else:
+                    all_attempts = sb.table('step_attempts').select(
+                        'step_index, score'
+                    ).eq('session_id', pk).execute()
+                    best_by_step: dict = {}
+                    for a in (all_attempts.data or []):
+                        if a['score'] is None:
+                            continue
+                        idx = a['step_index']
+                        if idx not in best_by_step or a['score'] > best_by_step[idx]:
+                            best_by_step[idx] = a['score']
+                    final_score = round(
+                        sum(best_by_step.values()) / len(STEP_CODES), 4
+                    ) if best_by_step else 0.0
+                    sb.table('sessions').update({
+                        'status': 'COMPLETED',
+                        'final_score': final_score,
+                        'completed_at': _now_iso(),
+                    }).eq('id', pk).execute()
+                    response_data['session_complete'] = True
+                return Response(response_data, status=status.HTTP_200_OK)
+
+            if step_attempts_texts:
+                hint_probe_result = evaluate_answer(
+                    student_answer="",
+                    step_code=step_code,
+                    step_index=current_step,
+                    answer_key=answer_key,
+                    cv_findings={},
+                    previous_steps=previous_steps,
+                    step_attempts=step_attempts_texts,
+                    is_last_step=is_last,
+                    trace_metadata={
+                        **trace_metadata,
+                        "attempt_number": len(current_attempt_rows) + 1,
+                        "hint_count": hint_count + 1,
+                        "explicit_hint_probe": True,
+                    },
+                )
+                if hint_probe_result.get('errors'):
+                    partial_answer, focus_error_code, repeat_focus, repeat_depth = _pick_hint_error_fragment(
+                        step_rubric,
+                        hint_probe_result,
+                        hint_count + 1,
+                        previous_failed_error_counts=previous_failed_error_counts,
+                    )
+                    focused_errors = [focus_error_code] if focus_error_code else hint_probe_result['errors']
+                    if not focused_errors:
+                        focused_errors = rubric_error_codes
+                    hint_directive = _pick_hint_directive(hint_probe_result, focus_error_code)
+                    if not hint_directive:
+                        hint_directive = _fallback_hint_directive_from_rubric(
+                            step_rubric,
+                            step_code,
+                            focus_error_code,
+                        )
+            hint = get_socratic_hint(
+                step_code,
+                current_step,
+                focused_errors,
+                hint_count + 1,
+                prior_errors=prior_errors,
+                partial_answer=partial_answer,
+                focus_error_code=focus_error_code,
+                repeat_focus=repeat_focus,
+                repeat_depth=repeat_depth,
+                step_attempts=step_attempts_texts,
+                error_context=_rubric_error_context(step_rubric, focused_errors),
+                previous_steps=previous_steps,
+                hint_directive=hint_directive,
+                trace_metadata={
+                    **trace_metadata,
+                    "attempt_number": len(current_attempt_rows) + 1,
+                    "hint_count": hint_count + 1,
+                    "explicit_hint_request": True,
+                },
+            )
+            insert_data = {
+                'session_id': pk,
+                'step_index': current_step,
+                'step_code': step_code,
+                'student_answer': student_answer,
+                'score': 0.0,
+                'errors': focused_errors,
+                'feedback': hint,
+                'attempt_number': len(current_attempt_rows) + 1,
+                'latency_ms': 0,
+            }
+            if rubric_id:
+                insert_data['rubric_criterion_id'] = rubric_id
+            sb.table('step_attempts').insert(insert_data).execute()
+            return Response({
+                'type': 'socratic',
+                'message': hint,
+            }, status=status.HTTP_200_OK)
 
         # ── 4. Evaluate ───────────────────────────────────────────────────────
         result = evaluate_answer(
-            student_answer=student_answer,
+            student_answer=student_answer_for_eval,
             step_code=step_code,
             step_index=current_step,
             answer_key=answer_key,
@@ -291,14 +656,13 @@ class SessionViewSet(viewsets.ViewSet):
             is_last_step=is_last,
             trace_metadata={
                 **trace_metadata,
-                "attempt_number": len(step_attempts_texts) + 1,
+                "attempt_number": len(current_attempt_rows) + 1,
                 "hint_count": hint_count,
             },
         )
 
         # ── 5. Save attempt ───────────────────────────────────────────────────
-        attempt_number = len(step_attempts_texts) + 1
-        rubric_id = get_rubric_id(sb, step_code)
+        attempt_number = len(current_attempt_rows) + 1
         insert_data = {
             'session_id': pk,
             'step_index': current_step,
@@ -371,7 +735,7 @@ class SessionViewSet(viewsets.ViewSet):
                 }).eq('id', pk).execute()
                 response_data['session_complete'] = True
                 if not force_advance:
-                    response_data['message'] = 'Bạn đã hoàn thành toàn bộ 5 bước phân tích. Chúc mừng!'
+                    response_data['message'] = f'Bạn đã hoàn thành toàn bộ {len(STEP_CODES)} bước phân tích. Chúc mừng!'
         else:
             partial_answer, focus_error_code, repeat_focus, repeat_depth = _pick_hint_error_fragment(
                 step_rubric,
@@ -379,15 +743,26 @@ class SessionViewSet(viewsets.ViewSet):
                 next_hint_number,
                 previous_failed_error_counts=previous_failed_error_counts,
             )
+            hint_directive = _pick_hint_directive(result, focus_error_code)
+            focused_errors = [focus_error_code] if focus_error_code else result['errors']
+            if not focused_errors:
+                focused_errors = [
+                    c.get('error_code')
+                    for c in (step_rubric.get('criteria') or [])
+                    if c.get('error_code')
+                ]
             hint = get_socratic_hint(
                 step_code, current_step,
-                result['errors'], hint_count + 1,
+                focused_errors, hint_count + 1,
                 prior_errors=prior_errors,
                 partial_answer=partial_answer,
                 focus_error_code=focus_error_code,
                 repeat_focus=repeat_focus,
                 repeat_depth=repeat_depth,
                 step_attempts=step_attempts_texts + [student_answer],
+                error_context=_rubric_error_context(step_rubric, focused_errors),
+                previous_steps=previous_steps,
+                hint_directive=hint_directive,
                 trace_metadata={
                     **trace_metadata,
                     "attempt_number": attempt_number,

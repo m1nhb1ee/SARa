@@ -43,6 +43,11 @@ who answered incorrectly. You guide without revealing the answer.
 
 Rules:
 - Ask exactly ONE question that targets a specific missing criterion.
+- If repeat_depth is provided for the focused criterion, use repeat_depth
+  rather than overall hint_count to decide specificity:
+    repeat_depth=1 -> gentle nudge toward the missing area
+    repeat_depth=2 -> point directly at the missing element
+    repeat_depth>=3 -> state the missing criterion/category explicitly, then ask student to complete
 - Increase specificity based on hint_count:
     hint_count=1 → gentle nudge toward the missing area
     hint_count=2 → point directly at the missing element
@@ -53,11 +58,28 @@ Capabilities:
 - You receive: step_name, errors[] as criterion codes, hint_count,
   prior_errors[] from earlier steps, and sometimes a partial_answer fragment
   or partial_answer_by_error[] from Answer-Check for more targeted follow-up.
+- You may receive error_context[] with safe rubric labels for the missing
+  criteria. Use it to target the hint; it is not an answer key.
+- You may receive previous_steps[] containing the student's own completed
+  answers from earlier steps. Use these as safe anchors for REASONING/DDx/
+  CONCLUSION hints, but do not treat them as an answer key.
+- You may receive a hint_directive from Answer-Check. When present, treat it
+  as the primary content source. Convert only the selected directive level into
+  one Socratic question; do not invent a different target.
 - You do not have access to the answer key.
 
 Constraints:
 - Never reveal the full expected answer.
 - Never use diagnosis names or pathology terms.
+- Never invent or introduce a concrete condition, mechanism, pathology,
+  diagnosis, or imaging finding that is absent from the provided context.
+- Every concrete clinical/imaging term in your hint must be grounded in
+  previous_steps, current step attempts, partial_answer, or error_context.
+- If there is no grounded concrete target, ask about the missing criterion in
+  neutral language instead of naming a condition.
+- For the strongest hint, reveal only the missing criterion/category, not the answer key.
+- Use hint_count only when no focused criterion/repeat_depth is provided.
+- Never let the hint_count rule override the non-leaking constraints.
 - One question only, plain text.
 
 Output format:
@@ -257,6 +279,9 @@ def get_hint(
     repeat_focus: bool = False,
     repeat_depth: int = 0,
     step_attempts: list | None = None,
+    error_context: list | None = None,
+    previous_steps: list | None = None,
+    hint_directive: dict | None = None,
     trace_metadata: dict | None = None,
 ) -> str:
     """
@@ -276,6 +301,25 @@ def get_hint(
             f"not on anything the student has already addressed.\n"
         )
 
+    error_context_section = ""
+    if error_context:
+        context_lines = []
+        for item in error_context:
+            if not isinstance(item, dict):
+                continue
+            code = item.get("error_code") or item.get("code") or ""
+            label = item.get("label") or item.get("criterion_label") or ""
+            max_score = item.get("max_score")
+            context_lines.append(
+                f"  - {code}: {label}" + (f" (weight {max_score})" if max_score is not None else "")
+            )
+        if context_lines:
+            error_context_section = (
+                "\nSafe rubric context for missing criteria (use for targeting, do not reveal answers):\n"
+                + "\n".join(context_lines)
+                + "\n"
+            )
+
     prior_errors_context = ""
     if prior_errors:
         prior_lines = "\n".join(
@@ -287,6 +331,24 @@ def get_hint(
             f"Use this to avoid repeating already-targeted mistakes from earlier steps.\n"
         )
 
+    previous_steps_context = ""
+    if previous_steps:
+        prev_lines = []
+        for item in previous_steps:
+            if not isinstance(item, dict):
+                continue
+            step = item.get("step", "")
+            answer = item.get("answer", "")
+            if answer:
+                prev_lines.append(f"  [{step}]: {answer}")
+        if prev_lines:
+            previous_steps_context = (
+                "\nStudent's completed earlier step answers (safe context, not an answer key):\n"
+                + "\n".join(prev_lines)
+                + "\nUse these to anchor the hint to what the student already observed, "
+                + "especially for REASONING, DDx, and CONCLUSION.\n"
+            )
+
     partial_answer_context = ""
     if partial_answer:
         rendered = str(partial_answer)
@@ -296,18 +358,50 @@ def get_hint(
             f"{rendered}\n"
         )
 
+    directive_context = ""
+    if isinstance(hint_directive, dict):
+        if repeat_depth >= 3:
+            level = "3"
+            selected_hint = hint_directive.get("safe_hint_level_3")
+        elif repeat_depth >= 2:
+            level = "2"
+            selected_hint = hint_directive.get("safe_hint_level_2")
+        else:
+            level = "1"
+            selected_hint = hint_directive.get("safe_hint_level_1")
+        selected_hint = selected_hint or hint_directive.get("safe_anchor") or hint_directive.get("missing_target") or ""
+        do_not_reveal = hint_directive.get("do_not_reveal") or []
+        directive_context = (
+            "\nAnswer-check hint directive (PRIMARY source for this hint):\n"
+            f"  error_code: {hint_directive.get('error_code', '')}\n"
+            f"  target_id: {hint_directive.get('target_id', '')}\n"
+            f"  student_has: {hint_directive.get('student_has', '')}\n"
+            f"  missing_target: {hint_directive.get('missing_target', '')}\n"
+            f"  safe_anchor: {hint_directive.get('safe_anchor', '')}\n"
+            f"  selected_level: {level}\n"
+            f"  selected_hint_direction: {selected_hint}\n"
+            f"  do_not_reveal: {do_not_reveal}\n"
+            "Use selected_hint_direction as the content anchor for the question.\n"
+        )
+
     focus_context = ""
     if focus_error_code:
         focus_context = (
             f"\nCurrent hint focus error code: {focus_error_code}\n"
             f"{'This error has repeated across attempts; increase specificity on the same missing element.' if repeat_focus else 'Treat this as the most important current missing element.'}\n"
             f"Repeat depth: {repeat_depth}\n"
+            f"Use repeat_depth, not the number of total attempts, to decide how explicit this hint should be.\n"
         )
 
     user_prompt = _sanitize(f"""Current step: {step_name}
 Missing criteria (error codes): {errors}
 Hint count: {hint_count}
-{prior_errors_context}{focus_context}{partial_answer_context}{attempts_context}
+{prior_errors_context}{previous_steps_context}{focus_context}{error_context_section}{directive_context}{partial_answer_context}{attempts_context}
+Grounding rule: do not name any concrete condition, mechanism, pathology, or
+finding unless it appears in the context above. If no safe grounded term exists,
+ask a neutral criterion-focused question.
+If a hint directive is present, do not choose another missing target; only turn
+the selected hint direction into one Vietnamese Socratic question.
 Generate a targeted hint question.""")
 
     logger.log_event("TOOL_CALL", {
@@ -318,7 +412,10 @@ Generate a targeted hint question.""")
             "errors": errors,
             "hint_count": hint_count,
             "prior_errors_count": len(prior_errors or []),
+            "previous_step_count": len(previous_steps or []),
             "has_partial_answer": bool(partial_answer),
+            "has_error_context": bool(error_context),
+            "has_hint_directive": bool(hint_directive),
             "focus_error_code": focus_error_code,
             "repeat_focus": repeat_focus,
             "repeat_depth": repeat_depth,
@@ -342,7 +439,10 @@ Generate a targeted hint question.""")
                     "hint_count": hint_count,
                     "errors": errors,
                     "prior_error_count": len(prior_errors or []),
+                    "previous_step_count": len(previous_steps or []),
                     "has_partial_answer": bool(partial_answer),
+                    "has_error_context": bool(error_context),
+                    "has_hint_directive": bool(hint_directive),
                     "focus_error_code": focus_error_code,
                     "repeat_focus": repeat_focus,
                     "repeat_depth": repeat_depth,
@@ -353,6 +453,8 @@ Generate a targeted hint question.""")
                 "errors": errors,
                 "hint_count": hint_count,
                 "attempt_count": len(step_attempts or []),
+                "previous_step_count": len(previous_steps or []),
+                "has_hint_directive": bool(hint_directive),
             },
         ) as lf_generation:
             response = client.chat.completions.create(
@@ -361,7 +463,7 @@ Generate a targeted hint question.""")
                     {"role": "system", "content": SYSTEM_PROMPT_HINT},
                     {"role": "user",   "content": user_prompt}
                 ],
-                temperature=0.3,
+                temperature=0.1,
                 max_tokens=150
             )
         latency_ms = int((time.time() - start) * 1000)
@@ -450,7 +552,7 @@ Classify intent and generate response.""")
                     {"role": "system", "content": SYSTEM_PROMPT_CLASSIFY},
                     {"role": "user",   "content": user_prompt}
                 ],
-                temperature=0.4,
+                temperature=0.1,
                 max_tokens=200,
                 response_format={"type": "json_object"}
             )

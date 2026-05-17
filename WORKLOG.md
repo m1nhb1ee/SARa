@@ -239,3 +239,47 @@ Interpret → DDx → Conclusion, LLM đặt câu hỏi Socratic và feedback.
 
 ---
 
+### [ADR-9] Tách `title` thành `disease_name` + `title` (region+modality label) — 17/05/2026
+
+**Bối cảnh:** Cột `title` trên bảng `cases` đang lưu tên bệnh lý (ví dụ: "Basal ganglia hemorrhage"). Khi thêm trường hiển thị khu vực + modality ("Brain CT", "Chest X-ray") cho case library UI, không có chỗ chứa thông tin này mà không làm nhập nhằng semantic của `title`.
+
+**Các lựa chọn đã xem xét:**
+- **Thêm cột `subtitle`:** Đơn giản nhưng API contract cũ vẫn dùng `title` cho tên bệnh lý, frontend phải cập nhật nhiều chỗ.
+- **Rename `title` → `disease_name`, dùng `title` cho label mới:** Giữ nguyên field name `title` trên API response nhưng thay đổi semantic — `title` giờ là "Brain CT", `disease_name` là tên bệnh thực. Frontend case card hiển thị `title` trên đầu, `disease_name` là phụ đề.
+
+**Quyết định:** Rename `title` → `disease_name`, thêm cột `title` mới lưu `{region} {modality}` (ví dụ: "Brain CT"). Migration `20260517000001_rename_title_add_disease_name.sql`. Cập nhật 3 seeder (`populate_cases.py`, `populate_new_cases.py`, `populate_all.py`).
+
+**Hệ quả:** Migration phải chạy trước khi chạy seeder mới. Mọi query lọc theo tên bệnh phải đổi từ `title` sang `disease_name`.
+
+---
+
+### [ADR-10] Thống nhất `step_code` thành DESCRIBE (bỏ OBSERVE) — 17/05/2026
+
+**Bối cảnh:** Schema cũ dùng `step_code = 'OBSERVE'` cho bước đầu. Sau khi rút gọn pipeline xuống 4 bước (Sprint 5), bước đầu đổi tên thành DESCRIBE. Constraint `answer_keys_step_code_check` vẫn cho phép cả OBSERVE và DESCRIBE, gây mâu thuẫn dữ liệu.
+
+**Quyết định:** Migration `20260517000002_answer_keys_allow_describe.sql`: backfill `OBSERVE → DESCRIBE` cho toàn bộ row cũ, cập nhật constraint chỉ cho phép `('DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION')`.
+
+**Hệ quả:** Dữ liệu cũ có OBSERVE không còn hợp lệ — phải chạy migration trước khi seeder mới insert.
+
+---
+
+### Sprint 6 - 11/05 → 17/05/2026 (Gate 6 — Ready to Demo)
+
+| Task | Người làm | Deadline | Trạng thái |
+|---|---|---|---|
+| Thêm data case mới (new data folder) vào seeder | Khôi | 13/05 | ✅ Xong |
+| Viết `populate_all.py` thống nhất 2 data root | Tiến | 14/05 | ✅ Xong |
+| Rename `title → disease_name`, thêm `title` = region+modality label | Tiến | 17/05 | ✅ Xong |
+| Refactor và hoàn thiện toàn bộ codebase | Cả nhóm | 15/05 | ✅ Xong |
+| Set up CI/CD pipeline (GitHub Actions) | Minh | 14/05 | ✅ Xong |
+| Sửa các bug còn lại trên frontend | Minh | 15/05 | ✅ Xong |
+| Hoàn thiện frontend: exam mode, performance page, swap/debate mode | Minh | 16/05 | ✅ Xong |
+| Chạy test toàn bộ hệ thống theo Test Plan | Tiến | 16/05 | ✅ Xong |
+| Viết Evaluation Report (GPT vs MedGemma, 22 cases) | Tiến | 16/05 | ✅ Xong |
+| Thêm Langfuse observability tracing cho cả 2 engine | Khôi | 14/05 | ✅ Xong |
+| Cải thiện Socratic agent: intent classification, DDx hint, hint escalation | Khôi | 15/05 | ✅ Xong |
+| Viết README và hoàn thiện deliverables GitHub | Cả nhóm | 17/05 | ✅ Xong |
+| Chuẩn bị Pitch Deck + nội dung live demo | Cả nhóm | 17/05 | ✅ Xong |
+
+---
+

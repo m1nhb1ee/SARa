@@ -111,3 +111,6 @@ Desktop.ini
 Data/
 
 .codex-memory/
+
+.logs
+logs/
