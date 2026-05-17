@@ -4,7 +4,7 @@
 **Report Date:** 2026-05-16  
 **Source Data:** `Data/results/scores.csv`, `Data/results/average_eval.md`  
 **Test Plan Reference:** `documents/TEST_PLAN.md` v2.0 (2026-05-12)  
-**Evaluators:** GPT-4.1-mini (production engine) · MedGemma-1.5-4B via Gradio (VLM engine)
+**Evaluators:** GPT-5.4-mini (production engine) · MedGemma-1.5-4B via Gradio (VLM engine)
 
 ---
 
