@@ -179,7 +179,7 @@ export function LoginPage() {
     e.preventDefault();
     setError('');
     if (!username.trim() || !password.trim()) {
-      setError('Điền đầy đủ thông tin nhé!');
+      setError('Chưa đủ thông tin nhé!');
       return;
     }
     const success = await login(username, password);
