@@ -1,0 +1,345 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1700 1620" font-family="Segoe UI, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1e293b"/>
+    </marker>
+    <marker id="arrDim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <style><![CDATA[
+      .bg { fill: #ffffff; }
+      .group { fill: #fafbfc; stroke: #94a3b8; stroke-width: 1.4; stroke-dasharray: 6 4; rx: 10; }
+      .subgroup { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 4 3; rx: 8; }
+      .group-title { fill: #0f172a; font-weight: 700; font-size: 13px; }
+      .node-fe { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.4; rx: 6; }
+      .node-be { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.4; rx: 6; }
+      .node-ai { fill: #fff7ed; stroke: #f97316; stroke-width: 1.4; rx: 6; }
+      .node-db { fill: #faf5ff; stroke: #a855f7; stroke-width: 1.4; rx: 6; }
+      .node-admin { fill: #fefce8; stroke: #ca8a04; stroke-width: 1.4; rx: 6; }
+      .node-ext { fill: #f0fdfa; stroke: #14b8a6; stroke-width: 1.4; rx: 6; }
+      .label { fill: #0f172a; font-weight: 600; font-size: 13px; }
+      .label-sm { fill: #0f172a; font-weight: 600; font-size: 12px; }
+      .sub { fill: #64748b; font-size: 11px; }
+      .edge { stroke: #1e293b; stroke-width: 1.5; fill: none; }
+      .edge-dim { stroke: #94a3b8; stroke-width: 1.2; fill: none; stroke-dasharray: 5 3; }
+      .edge-label { fill: #334155; font-size: 11px; }
+      .edge-bg { fill: #ffffff; }
+      text { dominant-baseline: middle; text-anchor: middle; }
+    ]]></style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1700" height="1620"/>
+
+  <text x="850" y="36" font-size="24" font-weight="700" fill="#0f172a">SARa - System Architecture</text>
+  <text x="850" y="62" font-size="13" fill="#64748b">React/Vite SPA - Django REST API - Supabase Auth/Postgres/Storage - OpenAI - MedGemma - Langfuse</text>
+
+  <!-- Admin / content ops -->
+  <rect class="group" x="40" y="95" width="340" height="205"/>
+  <text x="60" y="120" class="group-title" text-anchor="start">Admin / Medical Advisor</text>
+
+  <rect class="node-admin" x="80" y="150" width="260" height="74"/>
+  <text x="210" y="172" class="label">Curated Case Data</text>
+  <text x="210" y="192" class="sub">cases - case_images - answer_keys</text>
+  <text x="210" y="209" class="sub">step_rubrics - disease_profiles</text>
+
+  <text x="210" y="252" class="sub">Roles: admin / medical_advisor</text>
+  <text x="210" y="270" class="sub">Seed and maintain system cases</text>
+
+  <!-- Client -->
+  <rect class="group" x="1080" y="95" width="580" height="205"/>
+  <text x="1100" y="120" class="group-title" text-anchor="start">Client - Browser</text>
+
+  <rect class="node-fe" x="1410" y="140" width="220" height="56"/>
+  <text x="1520" y="160" class="label">React SPA</text>
+  <text x="1520" y="180" class="sub">Vite - TypeScript - Tailwind - Radix/MUI</text>
+
+  <rect class="node-fe" x="1100" y="225" width="170" height="56"/>
+  <text x="1185" y="245" class="label">Upload Cases</text>
+  <text x="1185" y="265" class="sub">/upload</text>
+
+  <rect class="node-fe" x="1290" y="225" width="190" height="56"/>
+  <text x="1385" y="245" class="label">Browse / Practice</text>
+  <text x="1385" y="265" class="sub">/practice - /session/:caseId</text>
+
+  <rect class="node-fe" x="1500" y="225" width="160" height="56"/>
+  <text x="1580" y="245" class="label">Exam / Swap</text>
+  <text x="1580" y="265" class="sub">/exam - /swap</text>
+
+  <path d="M 1520 196 L 1520 210 L 1185 210 L 1185 225" class="edge" marker-end="url(#arr)"/>
+  <path d="M 1385 210 L 1385 225" class="edge" marker-end="url(#arr)"/>
+  <path d="M 1520 210 L 1580 210 L 1580 225" class="edge" marker-end="url(#arr)"/>
+
+  <!-- Backend -->
+  <rect class="group" x="40" y="340" width="1620" height="860"/>
+  <text x="60" y="364" class="group-title" text-anchor="start">Backend - Django REST Framework API</text>
+
+  <rect class="node-be" x="720" y="395" width="220" height="55"/>
+  <text x="830" y="414" class="label">Auth + Request Context</text>
+  <text x="830" y="432" class="sub">Supabase JWT auth + RLS token binding</text>
+
+  <rect class="node-be" x="720" y="470" width="220" height="55"/>
+  <text x="830" y="489" class="label">DRF API Router</text>
+  <text x="830" y="507" class="sub">auth - cases - sessions - upload - swap - exam</text>
+
+  <path d="M 830 450 L 830 470" class="edge" marker-end="url(#arr)"/>
+
+  <!-- Upload pipeline -->
+  <rect class="subgroup" x="65" y="560" width="370" height="455"/>
+  <text x="85" y="583" class="group-title" text-anchor="start">Upload + Case Generation</text>
+
+  <rect class="node-be" x="105" y="610" width="290" height="42"/>
+  <text x="250" y="631" class="label-sm">UserUploadedCaseViewSet</text>
+
+  <rect class="node-be" x="105" y="664" width="290" height="42"/>
+  <text x="250" y="680" class="label-sm">Image Count + Metadata Validation</text>
+  <text x="250" y="697" class="sub">modality - region - volume names</text>
+
+  <rect class="node-ai" x="105" y="718" width="290" height="42"/>
+  <text x="250" y="734" class="label-sm">GPT-4o Image Validation</text>
+  <text x="250" y="751" class="sub">medical / modality / region checks</text>
+
+  <rect class="node-db" x="105" y="772" width="290" height="42"/>
+  <text x="250" y="788" class="label-sm">Upload Images to Supabase Storage</text>
+  <text x="250" y="805" class="sub">bucket: images - public URLs</text>
+
+  <rect class="node-ai" x="105" y="826" width="290" height="42"/>
+  <text x="250" y="842" class="label-sm">Analyze Medical Image</text>
+  <text x="250" y="859" class="sub">engine: vlm or gpt</text>
+
+  <rect class="node-db" x="105" y="880" width="290" height="42"/>
+  <text x="250" y="896" class="label-sm">Create Uploaded Case</text>
+  <text x="250" y="913" class="sub">cases - case_images - answer_keys</text>
+
+  <path d="M 250 652 L 250 664" class="edge" marker-end="url(#arr)"/>
+  <path d="M 250 706 L 250 718" class="edge" marker-end="url(#arr)"/>
+  <path d="M 250 760 L 250 772" class="edge" marker-end="url(#arr)"/>
+  <path d="M 250 814 L 250 826" class="edge" marker-end="url(#arr)"/>
+  <path d="M 250 868 L 250 880" class="edge" marker-end="url(#arr)"/>
+
+  <!-- Learning/session orchestration -->
+  <rect class="subgroup" x="465" y="560" width="370" height="455"/>
+  <text x="485" y="583" class="group-title" text-anchor="start">Practice + Exam Orchestration</text>
+
+  <rect class="node-be" x="485" y="610" width="330" height="44"/>
+  <text x="650" y="628" class="label-sm">SessionViewSet</text>
+  <text x="650" y="646" class="sub">sessions - step_attempts - answer_key</text>
+
+  <rect class="node-be" x="485" y="664" width="330" height="44"/>
+  <text x="650" y="682" class="label-sm">Canonical 4-Step Pipeline</text>
+  <text x="650" y="700" class="sub">DESCRIBE - REASONING - DDx - CONCLUSION</text>
+
+  <rect class="node-ai" x="485" y="718" width="330" height="44"/>
+  <text x="650" y="736" class="label-sm">Answer Check + Socratic Hint</text>
+  <text x="650" y="754" class="sub">score, feedback, errors, next hint</text>
+
+  <rect class="node-be" x="485" y="772" width="330" height="44"/>
+  <text x="650" y="790" class="label-sm">ExamSessionViewSet</text>
+  <text x="650" y="808" class="sub">timed step submissions + review</text>
+
+  <rect class="node-be" x="485" y="826" width="330" height="44"/>
+  <text x="650" y="844" class="label-sm">Performance + Leaderboard</text>
+  <text x="650" y="862" class="sub">my_stats - exam/case leaderboard</text>
+
+  <rect class="node-ext" x="485" y="880" width="330" height="42"/>
+  <text x="650" y="901" class="label-sm">Translate Feedback</text>
+
+  <path d="M 650 654 L 650 664" class="edge" marker-end="url(#arr)"/>
+  <path d="M 650 708 L 650 718" class="edge" marker-end="url(#arr)"/>
+  <path d="M 650 762 L 650 772" class="edge" marker-end="url(#arr)"/>
+  <path d="M 650 816 L 650 826" class="edge" marker-end="url(#arr)"/>
+
+  <!-- Swap debate -->
+  <rect class="subgroup" x="865" y="560" width="370" height="455"/>
+  <text x="885" y="583" class="group-title" text-anchor="start">Swap Debate Mode</text>
+
+  <rect class="node-be" x="885" y="610" width="330" height="54"/>
+  <text x="1050" y="630" class="label-sm">SwapSessionViewSet</text>
+  <text x="1050" y="650" class="sub">list - create - retrieve - messages</text>
+
+  <rect class="node-ai" x="885" y="698" width="330" height="54"/>
+  <text x="1050" y="718" class="label-sm">Initial Doctor Diagnosis</text>
+  <text x="1050" y="738" class="sub">download case images - VLM analysis</text>
+
+  <rect class="node-ai" x="885" y="786" width="330" height="54"/>
+  <text x="1050" y="806" class="label-sm">Doctor Debate Agent</text>
+  <text x="1050" y="826" class="sub">OpenAI GPT-4o - SSE streaming</text>
+
+  <rect class="node-be" x="885" y="874" width="330" height="54"/>
+  <text x="1050" y="894" class="label-sm">Step State + Final Grade</text>
+  <text x="1050" y="914" class="sub">swap_step_states - swap_step_scores</text>
+
+  <path d="M 1050 664 L 1050 698" class="edge" marker-end="url(#arr)"/>
+  <path d="M 1050 752 L 1050 786" class="edge" marker-end="url(#arr)"/>
+  <path d="M 1050 840 L 1050 874" class="edge" marker-end="url(#arr)"/>
+
+  <!-- External services -->
+  <rect class="subgroup" x="1265" y="560" width="370" height="455"/>
+  <text x="1285" y="583" class="group-title" text-anchor="start">External Services</text>
+
+  <rect class="node-ai" x="1285" y="620" width="330" height="54"/>
+  <text x="1450" y="640" class="label-sm">OpenAI GPT-4o</text>
+  <text x="1450" y="660" class="sub">evaluation - hints - validation - debate</text>
+
+  <rect class="node-ai" x="1285" y="712" width="330" height="54"/>
+  <text x="1450" y="732" class="label-sm">OpenAI gpt-5.4-mini</text>
+  <text x="1450" y="752" class="sub">optional GPT vision upload engine</text>
+
+  <rect class="node-ai" x="1285" y="804" width="330" height="54"/>
+  <text x="1450" y="824" class="label-sm">HuggingFace Gradio</text>
+  <text x="1450" y="844" class="sub">ttnguyen6716/MedGemma-1.5-4B</text>
+
+  <rect class="node-ext" x="1285" y="896" width="330" height="54"/>
+  <text x="1450" y="916" class="label-sm">Langfuse Cloud</text>
+  <text x="1450" y="936" class="sub">LLM/VLM spans and generations</text>
+
+  <!-- Backend internal connections -->
+  <path d="M 830 525 L 830 545 L 250 545 L 250 610" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="538" y="537" width="84" height="14"/>
+  <text x="580" y="545" class="edge-label">upload API</text>
+
+  <path d="M 830 545 L 650 545 L 650 610" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="690" y="537" width="100" height="14"/>
+  <text x="740" y="545" class="edge-label">practice/exam</text>
+
+  <path d="M 830 525 L 830 545 L 1050 545 L 1050 610" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="930" y="537" width="70" height="14"/>
+  <text x="965" y="545" class="edge-label">swap API</text>
+
+  <path d="M 815 740 L 1285 647" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1015" y="690" width="84" height="14"/>
+  <text x="1057" y="698" class="edge-label">LLM calls</text>
+
+  <path d="M 395 739 L 1265 647" class="edge-dim" marker-end="url(#arrDim)"/>
+  <rect class="edge-bg" x="760" y="675" width="110" height="14"/>
+  <text x="815" y="683" class="edge-label">validation call</text>
+
+  <path d="M 395 847 L 1265 831" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="760" y="831" width="128" height="14"/>
+  <text x="824" y="839" class="edge-label">VLM image analysis</text>
+
+  <path d="M 395 847 L 1265 739" class="edge-dim" marker-end="url(#arrDim)"/>
+  <rect class="edge-bg" x="650" y="780" width="126" height="14"/>
+  <text x="713" y="788" class="edge-label">GPT vision option</text>
+
+  <path d="M 1215 813 L 1285 647" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1228" y="710" width="88" height="14"/>
+  <text x="1272" y="718" class="edge-label">debate prompt</text>
+
+  <path d="M 815 901 L 1285 923" class="edge-dim" marker-end="url(#arrDim)"/>
+  <rect class="edge-bg" x="1000" y="902" width="50" height="14"/>
+  <text x="1025" y="910" class="edge-label">traces</text>
+
+  <!-- Client to backend -->
+  <path d="M 1185 281 L 1185 360 L 780 360 L 780 395" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1134" y="353" width="104" height="14"/>
+  <text x="1186" y="361" class="edge-label">multipart upload</text>
+
+  <path d="M 1385 281 L 1385 375 L 830 375 L 830 395" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1330" y="368" width="112" height="14"/>
+  <text x="1386" y="376" class="edge-label">cases/sessions</text>
+
+  <path d="M 1580 281 L 1580 360 L 880 360 L 880 395" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1482" y="353" width="166" height="14"/>
+  <text x="1565" y="361" class="edge-label">exam/swap + SSE</text>
+
+  <path d="M 340 185 L 600 185 L 600 380 L 720 380 L 720 408" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="430" y="178" width="122" height="14"/>
+  <text x="491" y="186" class="edge-label">seed/curate data</text>
+
+  <path d="M 940 420 L 985 420 L 985 130 L 1520 130 L 1520 140" class="edge-dim" marker-end="url(#arrDim)"/>
+  <rect class="edge-bg" x="1110" y="123" width="182" height="14"/>
+  <text x="1201" y="131" class="edge-label">JSON response / SSE stream</text>
+
+  <!-- Data layer -->
+  <rect class="group" x="40" y="1230" width="1620" height="290"/>
+  <text x="60" y="1254" class="group-title" text-anchor="start">Data Layer - Supabase</text>
+
+  <rect class="node-db" x="80" y="1285" width="280" height="90"/>
+  <text x="220" y="1310" class="label-sm">Supabase Auth</text>
+  <text x="220" y="1330" class="sub">register - login - JWT - auth.uid()</text>
+  <text x="220" y="1347" class="sub">Django verifies /auth/v1/user</text>
+
+  <g transform="translate(420,1285)">
+    <ellipse cx="160" cy="6" rx="158" ry="6" fill="#faf5ff" stroke="#a855f7" stroke-width="1.4"/>
+    <path d="M 2 6 L 2 100 A 158 6 0 0 0 318 100 L 318 6" fill="#faf5ff" stroke="#a855f7" stroke-width="1.4"/>
+    <ellipse cx="160" cy="6" rx="158" ry="6" fill="none" stroke="#a855f7" stroke-width="1.4"/>
+    <text x="160" y="36" class="label-sm">Object Storage</text>
+    <text x="160" y="58" class="sub">Bucket: images</text>
+    <text x="160" y="78" class="sub">case_images.image_url</text>
+  </g>
+
+  <g transform="translate(820,1275)">
+    <ellipse cx="400" cy="6" rx="398" ry="7" fill="#faf5ff" stroke="#a855f7" stroke-width="1.4"/>
+    <path d="M 2 6 L 2 220 A 398 7 0 0 0 798 220 L 798 6" fill="#faf5ff" stroke="#a855f7" stroke-width="1.4"/>
+    <ellipse cx="400" cy="6" rx="398" ry="7" fill="none" stroke="#a855f7" stroke-width="1.4"/>
+    <text x="400" y="36" class="label-sm" font-weight="600">PostgreSQL with RLS</text>
+
+    <text x="150" y="76" class="sub" font-weight="600">Users + Cases</text>
+    <text x="150" y="94" class="sub">users - cases - case_images</text>
+    <text x="150" y="110" class="sub">answer_keys - step_rubrics</text>
+    <text x="150" y="126" class="sub">disease_profiles</text>
+
+    <text x="400" y="76" class="sub" font-weight="600">Practice + Upload</text>
+    <text x="400" y="94" class="sub">sessions - step_attempts</text>
+    <text x="400" y="110" class="sub">pipeline_replays</text>
+    <text x="400" y="126" class="sub">upload_sessions - upload_messages</text>
+
+    <text x="650" y="76" class="sub" font-weight="600">Modes + Analytics</text>
+    <text x="650" y="94" class="sub">swap_sessions - swap_messages</text>
+    <text x="650" y="110" class="sub">swap_step_states - swap_step_scores</text>
+    <text x="650" y="126" class="sub">exam_sessions - exam_step_attempts</text>
+    <text x="650" y="142" class="sub">user_skill_profiles - recommendations</text>
+
+    <text x="400" y="190" class="sub" font-style="italic">All request-scoped queries use the incoming JWT where RLS requires auth.uid().</text>
+  </g>
+
+  <!-- Backend to data layer -->
+  <path d="M 720 420 L 55 420 L 55 1320 L 80 1320" class="edge-dim" marker-end="url(#arrDim)"/>
+  <rect class="edge-bg" x="14" y="860" width="84" height="14"/>
+  <text x="56" y="868" class="edge-label">JWT verify</text>
+
+  <path d="M 395 793 L 415 793 L 415 1100 L 580 1100 L 580 1285" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="430" y="1092" width="98" height="14"/>
+  <text x="479" y="1100" class="edge-label">image upload</text>
+
+  <path d="M 250 922 L 250 1130 L 1010 1130 L 1010 1281" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="610" y="1122" width="184" height="14"/>
+  <text x="702" y="1130" class="edge-label">create case/upload records</text>
+
+  <path d="M 815 632 L 850 632 L 850 1160 L 1220 1160 L 1220 1281" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="960" y="1152" width="220" height="14"/>
+  <text x="1070" y="1160" class="edge-label">read/write sessions and attempts</text>
+
+  <path d="M 1215 901 L 1245 901 L 1245 1190 L 1450 1190 L 1450 1281" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1276" y="1182" width="170" height="14"/>
+  <text x="1361" y="1190" class="edge-label">swap state/messages/scores</text>
+
+  <!-- Legend -->
+  <rect class="group" x="40" y="1540" width="1620" height="60"/>
+  <text x="60" y="1562" class="group-title" text-anchor="start">Legend</text>
+
+  <rect class="node-fe" x="60" y="1576" width="24" height="16"/>
+  <text x="92" y="1584" class="sub" text-anchor="start">Frontend</text>
+
+  <rect class="node-be" x="210" y="1576" width="24" height="16"/>
+  <text x="242" y="1584" class="sub" text-anchor="start">Backend service</text>
+
+  <rect class="node-ai" x="390" y="1576" width="24" height="16"/>
+  <text x="422" y="1584" class="sub" text-anchor="start">AI / LLM / VLM</text>
+
+  <rect class="node-db" x="570" y="1576" width="24" height="16"/>
+  <text x="602" y="1584" class="sub" text-anchor="start">Database / Storage</text>
+
+  <rect class="node-admin" x="770" y="1576" width="24" height="16"/>
+  <text x="802" y="1584" class="sub" text-anchor="start">Admin role</text>
+
+  <rect class="node-ext" x="910" y="1576" width="24" height="16"/>
+  <text x="942" y="1584" class="sub" text-anchor="start">External / observability</text>
+
+  <line x1="1130" y1="1584" x2="1180" y2="1584" class="edge" marker-end="url(#arr)"/>
+  <text x="1188" y="1584" class="sub" text-anchor="start">Primary request path</text>
+
+  <line x1="1350" y1="1584" x2="1400" y2="1584" class="edge-dim" marker-end="url(#arrDim)"/>
+  <text x="1408" y="1584" class="sub" text-anchor="start">Optional / async / trace</text>
+</svg>

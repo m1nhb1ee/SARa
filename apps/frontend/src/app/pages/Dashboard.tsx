@@ -407,8 +407,6 @@ export function Dashboard() {
                   {/* erase overlay — sweeps across when deleting */}
                   {isErasing && <div className={styles.eraseOverlay} />}
 
-                  <SketchBorder id={`card-${c.id}`} color="var(--ink-secondary)" opacity={0.5} />
-
                   {/* left accent strip */}
                   <div className={`${styles.cardAccent} ${accentClass[c.modality]}`} />
 
