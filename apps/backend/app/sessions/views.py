@@ -1,3 +1,4 @@
+import json
 import logging
 import unicodedata
 from datetime import timezone as dt_timezone
@@ -7,6 +8,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from app.core.step_codes import STEP_CODES, index_by_canonical_step, normalize_step_code
 from app.core.supabase_client import get_supabase, get_supabase_service_role
@@ -1070,3 +1072,49 @@ class StudentPerformanceViewSet(viewsets.ViewSet):
             'min_required': min_completed,
             'total_qualified': len(qualified),
         })
+
+
+class TranslateView(APIView):
+    """POST /api/v1/translate/
+    Body: { "fields": { "feedback": "...", "could_add": "...", ... } }
+    Returns: { "fields": { same keys, Vietnamese values } }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        fields = request.data.get('fields', {})
+        if not isinstance(fields, dict):
+            return Response({'error': 'fields must be an object'}, status=status.HTTP_400_BAD_REQUEST)
+
+        non_empty = {k: v for k, v in fields.items() if v and isinstance(v, str)}
+        if not non_empty:
+            return Response({'fields': {}})
+
+        try:
+            from openai import OpenAI
+            client = OpenAI()
+            response = client.chat.completions.create(
+                model='gpt-4o-mini',
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': (
+                            'You are a medical radiology translator. '
+                            'Translate the JSON fields from English to Vietnamese. '
+                            'Return ONLY a valid JSON object with the same keys. '
+                            'Preserve medical terms and formatting. Do not add commentary.'
+                        ),
+                    },
+                    {
+                        'role': 'user',
+                        'content': json.dumps(non_empty, ensure_ascii=False),
+                    },
+                ],
+                response_format={'type': 'json_object'},
+                temperature=0.1,
+            )
+            result = json.loads(response.choices[0].message.content)
+            return Response({'fields': result})
+        except Exception as e:
+            logger.error(f'TranslateView error: {e}')
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

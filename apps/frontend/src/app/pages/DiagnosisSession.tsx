@@ -101,6 +101,9 @@ export function DiagnosisSession() {
   const [input, setInput] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<FeedbackResult | null>(null);
+  const [translatedFeedback, setTranslatedFeedback] = useState<Record<string, string> | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [showVietnamese, setShowVietnamese] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
   const [shortAnswerError, setShortAnswerError] = useState<string | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
@@ -195,6 +198,30 @@ export function DiagnosisSession() {
     if (feedbackResult.passed || feedbackResult.force_advance) {
       // Pass or force-advance: show score modal and sync session
       setShowFeedback(true);
+      setShowVietnamese(false);
+      setTranslatedFeedback(null);
+
+      // Translate feedback fields in background
+      const feedbackText = typeof feedbackResult.attempt.feedback === 'string'
+        ? feedbackResult.attempt.feedback
+        : feedbackResult.attempt.feedback?.content ?? '';
+      const fieldsToTranslate: Record<string, string> = {};
+      if (feedbackText) fieldsToTranslate.feedback = feedbackText;
+      if (feedbackResult.positive_feedback) fieldsToTranslate.positive_feedback = feedbackResult.positive_feedback;
+      if (feedbackResult.could_add) fieldsToTranslate.could_add = feedbackResult.could_add;
+      if (feedbackResult.answer_key_preview) fieldsToTranslate.answer_key_preview = feedbackResult.answer_key_preview;
+
+      if (Object.keys(fieldsToTranslate).length > 0) {
+        setIsTranslating(true);
+        apiClient.translateFeedback(fieldsToTranslate).then((res) => {
+          if (res.data?.fields) setTranslatedFeedback(res.data.fields);
+        }).catch(() => {
+          // Translation failed silently — keep English
+        }).finally(() => {
+          setIsTranslating(false);
+        });
+      }
+
       setTimeout(() => refetchSession(), 300);
     } else {
       // Fail: show Socratic hint in chat — no score modal yet
@@ -615,9 +642,34 @@ export function DiagnosisSession() {
               {/* Modal Header */}
               <div className={styles.feedbackCardHeader}>
                 <span className={styles.feedbackStepChip}>{lastFeedback.attempt.step_name}</span>
-                <button onClick={() => setShowFeedback(false)} className={styles.feedbackCloseBtn}>
-                  <X size={18} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+                  {(translatedFeedback || isTranslating) && (
+                    <button
+                      onClick={() => setShowVietnamese(v => !v)}
+                      disabled={isTranslating}
+                      style={{
+                        padding: '2px 8px',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        border: '1px solid currentColor',
+                        borderRadius: 2,
+                        cursor: isTranslating ? 'wait' : 'pointer',
+                        background: showVietnamese ? 'var(--vj-terracotta)' : 'transparent',
+                        color: showVietnamese ? 'var(--vj-parchment)' : 'var(--vj-terracotta)',
+                        opacity: isTranslating ? 0.5 : 1,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {isTranslating ? '...' : showVietnamese ? 'eng' : 'vie'}
+                    </button>
+                  )}
+                  <button onClick={() => setShowFeedback(false)} className={styles.feedbackCloseBtn}>
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
               <div className={styles.feedbackBody}>
@@ -655,14 +707,22 @@ export function DiagnosisSession() {
                       {lastFeedback.passed ? "Dr. AI's Notes — Correct!" : "Dr. AI's Notes — Need Improvement"}
                     </span>
                   </div>
-                  <p className={styles.feedbackNoteText}>{typeof lastFeedback.attempt.feedback === 'string' ? lastFeedback.attempt.feedback : lastFeedback.attempt.feedback?.content}</p>
+                  <p className={styles.feedbackNoteText}>
+                    {showVietnamese && translatedFeedback?.feedback
+                      ? translatedFeedback.feedback
+                      : (typeof lastFeedback.attempt.feedback === 'string' ? lastFeedback.attempt.feedback : lastFeedback.attempt.feedback?.content)}
+                  </p>
                 </div>
 
                 {/* Positive feedback — force_advance only (pass already shows it in Dr. AI's Notes) */}
                 {lastFeedback.force_advance && lastFeedback.positive_feedback && (
                   <div className={styles.feedbackPositive}>
                     <p className={styles.feedbackSectionLabel} style={{ color: 'var(--vj-olive)' }}>Điểm tốt</p>
-                    <p className={styles.feedbackSectionText}>{lastFeedback.positive_feedback}</p>
+                    <p className={styles.feedbackSectionText}>
+                      {showVietnamese && translatedFeedback?.positive_feedback
+                        ? translatedFeedback.positive_feedback
+                        : lastFeedback.positive_feedback}
+                    </p>
                   </div>
                 )}
 
@@ -670,7 +730,11 @@ export function DiagnosisSession() {
                 {lastFeedback.could_add && (
                   <div className={styles.feedbackCouldAdd}>
                     <p className={styles.feedbackSectionLabel} style={{ color: 'var(--vj-faded)' }}>Có thể bổ sung</p>
-                    <p className={styles.feedbackSectionText}>{lastFeedback.could_add}</p>
+                    <p className={styles.feedbackSectionText}>
+                      {showVietnamese && translatedFeedback?.could_add
+                        ? translatedFeedback.could_add
+                        : lastFeedback.could_add}
+                    </p>
                   </div>
                 )}
 
@@ -678,7 +742,11 @@ export function DiagnosisSession() {
                 {lastFeedback.answer_key_preview && (
                   <div className={styles.feedbackAnswerKey}>
                     <p className={styles.feedbackSectionLabel} style={{ color: 'var(--vj-terracotta)' }}>Đáp án chuẩn</p>
-                    <p className={styles.feedbackSectionText}>{lastFeedback.answer_key_preview}</p>
+                    <p className={styles.feedbackSectionText}>
+                      {showVietnamese && translatedFeedback?.answer_key_preview
+                        ? translatedFeedback.answer_key_preview
+                        : lastFeedback.answer_key_preview}
+                    </p>
                   </div>
                 )}
 
