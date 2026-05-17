@@ -142,10 +142,10 @@ function SketchRect({ w, h, color = 'var(--ink-secondary)' }: { w: number; h: nu
       </filter>
       <g filter="url(#pencil)">
         {/* outer rough stroke */}
-        <rect x={10} y={10} width={w} height={h+87}
+        <rect x={10} y={10} width={w} height={h}
           fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
         {/* inner second stroke — sketch double-line effect */}
-        <rect x={10 + o} y={10 + o} width={w - o * 2} height={h +87 - o * 2}
+        <rect x={10 + o} y={10 + o} width={w - o * 2} height={h - o * 2}
           fill="none" stroke={color} strokeWidth="0.8" strokeLinecap="round"
           strokeDasharray="6 3 12 4 8 6" opacity="0.35" />
       </g>
@@ -188,7 +188,7 @@ export function LoginPage() {
   };
 
   const W = 340;
-  const H = 450;
+  const H = 570;
 
   return (
     <div style={{
@@ -209,6 +209,7 @@ export function LoginPage() {
       <div style={{
         position: 'relative',
         width: W, minHeight: H,
+        boxSizing: 'border-box',
         backgroundColor: 'var(--bg-surface)',
         padding: '44px 40px 36px',
         zIndex: 10,
@@ -237,8 +238,8 @@ export function LoginPage() {
 
         {/* ── Header ── */}
         <div style={{ textAlign: 'center', marginBottom: 30 }}>
-          <div style={{ marginBottom: 8 }}>
-            <BrainLogo size={52} color="var(--ink)" filterId="login" opacity={0.82} />
+          <div style={{ marginBottom: 4 }}>
+            <BrainLogo size={88} color="var(--ink)" filterId="login" opacity={0.9} />
           </div>
 
           <div style={{
