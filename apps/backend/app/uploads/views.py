@@ -152,7 +152,7 @@ class UserUploadedCaseViewSet(viewsets.ViewSet):
             if not title or title == 'Untitled Case':
                 title = findings.get('title', f'{modality} Case')
 
-            result = create_case_in_supabase(user_id, image_entries, modality, title, findings)
+            result = create_case_in_supabase(user_id, image_entries, modality, title, findings, region=region)
             result['findings'] = findings
             result['engine'] = engine
             logger.info(f"Case {result['case']['id']} created, upload_session {result['upload_session']['id']}")

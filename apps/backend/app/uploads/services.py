@@ -73,6 +73,7 @@ def create_case_in_supabase(
     title: str,
     findings: dict,
     clinical_history: str = '',
+    region: str = '',
 ) -> dict:
     """
     Ghi case + case_images + answer_keys + upload_session vào Supabase.
@@ -89,11 +90,14 @@ def create_case_in_supabase(
     if ai_difficulty not in ('easy', 'medium', 'hard'):
         ai_difficulty = 'medium'
 
+    normalized_modality = MODALITY_MAP.get(modality, 'X-ray')
+    region_label = region.strip().capitalize() if region else 'General'
     case_result = sb.table('cases').insert({
         'uploaded_by': user_id,
         'source': 'uploaded',
-        'title': title,
-        'modality': MODALITY_MAP.get(modality, 'X-ray'),
+        'title': f"{region_label} {normalized_modality}",
+        'disease_name': title,
+        'modality': normalized_modality,
         'difficulty': ai_difficulty,
         'clinical_history': (clinical_history or '').strip(),
         'status': 'published',
