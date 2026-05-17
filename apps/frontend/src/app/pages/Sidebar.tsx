@@ -3,6 +3,7 @@ import {
   Home, Upload, FolderOpen, User, Settings, LogOut, MessagesSquare, ClipboardList, Trophy
 } from 'lucide-react';
 import { useAuth } from '@/api/authContext';
+import { BrainLogo } from '@/app/components/shared/BrainLogo';
 import { SketchBorder } from '@/app/components/shared/SketchBorder';
 
 type NavItem = {
@@ -94,23 +95,7 @@ export function Sidebar() {
 
         {/* ── Logo ── */}
         <div className="flex flex-col items-center pt-6 pb-4 px-5" style={{ position: 'relative', zIndex: 1 }}>
-          <svg width="56" height="56" viewBox="0 0 72 72" fill="none">
-            <defs>
-              <filter id="logo-sketch" x="-8%" y="-8%" width="116%" height="116%">
-                <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" seed="9" result="noise" />
-                <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.0" xChannelSelector="R" yChannelSelector="G" />
-              </filter>
-            </defs>
-            <g filter="url(#logo-sketch)" stroke="var(--accent-gold)" fill="none">
-              <circle cx="36" cy="36" r="26" strokeWidth="1.4" opacity="0.9" />
-              <line x1="36" y1="14" x2="36" y2="22" strokeWidth="1.1" strokeLinecap="round" opacity="0.7" />
-              <line x1="36" y1="50" x2="36" y2="58" strokeWidth="1.1" strokeLinecap="round" opacity="0.7" />
-              <line x1="14" y1="36" x2="22" y2="36" strokeWidth="1.1" strokeLinecap="round" opacity="0.7" />
-              <line x1="50" y1="36" x2="58" y2="36" strokeWidth="1.1" strokeLinecap="round" opacity="0.7" />
-              <circle cx="36" cy="36" r="2" fill="var(--accent-gold)" stroke="none" />
-              <circle cx="36" cy="36" r="10" strokeWidth="0.7" strokeDasharray="4 3" opacity="0.4" />
-            </g>
-          </svg>
+          <BrainLogo size={56} />
 
           <div className="mt-2 text-center">
             <div
