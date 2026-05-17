@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-22 radiology cases across 6 body domains and 3 imaging modalities (X-ray, CT, MRI) were evaluated against both the GPT-4.1-mini and MedGemma-1.5-4B analysis engines. Six cases were classified as STAT (life-threatening emergencies).
+22 radiology cases across 6 body domains and 3 imaging modalities (X-ray, CT, MRI) were evaluated against both the GPT-5.4-mini and MedGemma-1.5-4B analysis engines. Six cases were classified as STAT (life-threatening emergencies).
 
 | Metric | GPT-5.4-mini | MedGemma-1.5-4B |
 |---|---|---|
@@ -22,7 +22,7 @@
 *\*Note: A discrepancy exists between the summary (0.167) and the CSV raw data (0/6 for all STAT cases). See Section 8 for details.*
 
 **Key findings:**
-- GPT-4.1-mini substantially outperforms MedGemma across all four metrics.
+- GPT-5.4-mini substantially outperforms MedGemma across all four metrics.
 - Both engines have critically low top-1 diagnostic accuracy (27% and 5% respectively) — insufficient for unsupervised clinical use.
 - Both engines produced false-negative extracted findings ("no acute finding" / "Normal") for all evaluated neuro-hemorrhagic STAT cases, representing a severe patient-safety risk that must be explicitly communicated to users.
 - Hallucination rates are high for both engines, with cross-organ confabulation observed (cardiac findings in abdominal cases, pulmonary findings in abdominal perforation cases).
@@ -72,7 +72,7 @@ Source: `Data/results/average_eval.md`
 ── Results summary ─────────────────────────────────────────────
   Cases evaluated : 22  (STAT: 6)
 
-  Metric                           GPT-4.1-mini   MedGemma
+  Metric                           GPT-5.4-mini   MedGemma
   ────────────────────────────── ────────────── ──────────
   Recall (STAT cases)                     0.833      0.167
   Top-1 Accuracy                          0.273      0.050
@@ -112,7 +112,7 @@ Sum of 20 non-null gemma_fidelity values = 9.60; 9.60/20 = 0.480 ✓
 
 ## 4. Per-Domain Performance
 
-### 4.1 Abdomen (4 cases · CT/X-ray · 0 STAT)
+### 5.4 Abdomen (4 cases · CT/X-ray · 0 STAT)
 
 | Case ID | Title | Modality | GPT Top-1 | Gemma Top-1 | GPT Halluc | Gemma Halluc | GPT Fidelity | Gemma Fidelity |
 |---|---|---|---|---|---|---|---|---|
@@ -207,7 +207,7 @@ This section focuses exclusively on the 6 is_stat=1 cases, which represent life-
 
 **Summary:**
 
-| | GPT-4.1-mini | MedGemma |
+| | GPT-5.4-mini | MedGemma |
 |---|---|---|
 | STAT cases flagged as urgent | 5/6 (83.3%) | 0/6 (0.0%)* |
 | STAT cases with correct extracted finding | 1/6 (Pneumothorax only) | 0/6 |
@@ -225,7 +225,7 @@ This section focuses exclusively on the 6 is_stat=1 cases, which represent life-
 
 ### 6.1 Distribution
 
-| Range | GPT-4.1-mini Cases | MedGemma Cases |
+| Range | GPT-5.4-mini Cases | MedGemma Cases |
 |---|---|---|
 | 0–2 | 8 cases | 8 cases |
 | 3–5 | 9 cases | 5 cases |
@@ -234,7 +234,7 @@ This section focuses exclusively on the 6 is_stat=1 cases, which represent life-
 
 ### 6.2 Highest-Hallucination Cases
 
-**GPT-4.1-mini:**
+**GPT-5.4-mini:**
 
 | Rank | Case | Hallucinations | Nature of Error |
 |---|---|---|---|
@@ -273,7 +273,7 @@ These represent the most dangerous hallucination type — the model's primary ex
 
 ## 7. Reasoning Fidelity Analysis
 
-### 7.1 GPT-4.1-mini Fidelity
+### 7.1 GPT-5.4-mini Fidelity
 
 All 22 cases scored either 0.8 (20 cases) or 0.6 (2 cases). No case scored below 0.6, meaning GPT's reasoning chain structure is consistently present even when the diagnosis is incorrect.
 
@@ -366,7 +366,7 @@ The following test cases from the Test Plan directly relate to AI analysis engin
 
 ### 10.1 Comparative Assessment
 
-GPT-4.1-mini is the significantly stronger analysis engine across all evaluated metrics and is the correct choice as the premium-tier engine. MedGemma-1.5-4B shows insufficient performance for clinical-educational use as-is, with near-zero top-1 accuracy and complete failure on all neuro STAT cases.
+GPT-5.4-mini is the significantly stronger analysis engine across all evaluated metrics and is the correct choice as the premium-tier engine. MedGemma-1.5-4B shows insufficient performance for clinical-educational use as-is, with near-zero top-1 accuracy and complete failure on all neuro STAT cases.
 
 ### 10.2 Recommendations
 
