@@ -21,6 +21,28 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
 MODALITY_MAP = {"X-ray": "X-ray", "CT": "CT", "MRI": "MRI"}
 
+REGION_FROM_CASE_ID = {
+    "neuro":     "Brain",
+    "chest":     "Chest",
+    "abdomen":   "Abdomen",
+    "msk":       "Musculoskeletal",
+    "spine":     "Spine",
+    "extremity": "Extremity",
+}
+
+
+def _derive_region(case_id: str, disease_dir: Path) -> str:
+    prefix = case_id.split("_")[0].lower()
+    if prefix in REGION_FROM_CASE_ID:
+        return REGION_FROM_CASE_ID[prefix]
+    # fallback: scan ancestor folder names (e.g. Data/Neuro/Neuro/...)
+    for part in disease_dir.parts:
+        key = part.lower()
+        for map_key, region in REGION_FROM_CASE_ID.items():
+            if key == map_key:
+                return region
+    return "General"
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -171,14 +193,17 @@ def run():
             if isinstance(clinical_history_raw, list)
             else str(clinical_history_raw)
         )
+        case_id_tag = rubric.get("case_id", disease_dir.name)
         disease_tag = (
-            rubric.get("case_id", disease_dir.name)
+            case_id_tag
             .lower()
             .replace(" ", "_")
             .replace("-", "_")
         )
+        region = _derive_region(case_id_tag, disease_dir)
+        subtitle = f"{region} {modality}"
 
-        print(f"── {title} ({modality})")
+        print(f"── {title} | {subtitle}")
 
         # Disease profile
         supabase.table("disease_profiles").upsert(
@@ -197,7 +222,8 @@ def run():
 
         # Insert case
         case_row = {
-            "title": title,
+            "title": subtitle,
+            "disease_name": title,
             "modality": modality,
             "difficulty": "medium",
             "clinical_history": clinical_history,
