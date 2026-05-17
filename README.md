@@ -11,6 +11,8 @@
 [![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
 
 ---
+Các tài liệu đi kèm như PRD, MVP Scope, architecture diagram, ai-log, evaluation report... được đặt trong thư mục submission_documents
+---
 
 ## Mô Tả Ngắn Gọn
 
