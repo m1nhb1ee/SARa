@@ -107,8 +107,7 @@ A20-App-076/
 ├── scripts/
 ├── JOURNAL.md
 ├── WORKLOG.md
-├── README.md
-└── README (8).md
+└── README.md
 ```
 
 ---
