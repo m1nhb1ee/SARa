@@ -248,3 +248,59 @@ Ghi lại hành trình xây dựng sản phẩm mỗi tuần — những gì đ�
 - **Backend:** Hoàn thiện refactor codebase, setup CI/CD pipeline, fix các bug còn lại.
 - **Frontend:** Hoàn thiện UI polish, test end-to-end flow toàn bộ tính năng.
 - **Chung:** Chuẩn bị hoàn thiện sản phẩm cuối
+
+---
+
+## Tuần 7 - 17/05/2026
+
+**Thành viên:** Nguyễn Trọng Tiến, Nguyễn Trọng Minh, Nguyễn Trọng Thiên Khôi
+
+**Checkpoint:** G6 — Sẵn sàng Demo (Ready to Demo)
+
+### Đã làm
+
+- **Mở rộng bộ data case:** Thêm data từ thư mục `Data/new data/` — các case mới với đa dạng anatomy hơn (Spine, Extremity). Viết `populate_all.py` thống nhất cả hai data root, tự động phát hiện độ khó dựa trên số lượng volume thay vì hardcode "medium".
+
+- **Refactor database schema lần cuối:** Rename cột `title` → `disease_name`, thêm cột `title` mới lưu label dạng `{region} {modality}` ("Brain CT", "Chest X-ray"). Thống nhất `step_code` toàn bộ về DESCRIBE (xóa OBSERVE). Hai migration SQL được viết và chạy trước khi seeder mới insert.
+
+- **Hoàn thiện Socratic agent:** Thêm intent classification phát hiện sinh viên "bỏ cuộc" (`không biết`, `chịu`) trả hint tier 1 mà không trừ điểm. DDx hint được nâng cấp — inject thẳng danh sách differential sai của sinh viên + `key_points` từ answer key để GPT giải thích vì sao từng differential đó bị loại trừ bởi imaging features thực tế. Thêm hint escalation: submit sai liên tiếp thì hint tier leo từ 1 → 2 → 3.
+
+- **Thêm Langfuse observability:** Wrap toàn bộ call GPT và MedGemma bằng `langfuse.trace()` và `langfuse.generation()`. Sau mỗi `evaluate_step()` log score và intent lên Langfuse dashboard. Có thể theo dõi chất lượng agent theo thời gian mà không cần debug log thủ công.
+
+- **Hoàn thiện frontend:** Exam mode (countdown timer, ẩn hint, score summary cuối), Performance analytics page (bar chart trung bình điểm theo bước, filter theo modality), swap/debate mode hiển thị hai AI response cạnh nhau cho blind scoring.
+
+- **CI/CD và test:** Set up GitHub Actions pipeline. Chạy toàn bộ Test Plan v2.0 (10 nhóm test case: TC-AUTH, TC-VAL, TC-UPLOAD, TC-ANAL, TC-CASE, TC-PRAC, TC-AK, TC-PERF, TC-UI, Regression). Viết Evaluation Report đầy đủ từ 22 cases (GPT recall=0.833, MedGemma recall=0.167) và đưa ra khuyến nghị P0/P1/P2.
+
+- **Chuẩn bị Demo Day:** Hoàn thiện README, Architecture Diagram, Pitch Deck. Chốt luồng live demo: đăng nhập → chọn case X-ray Ngực → DESCRIBE → REASONING → DDx → CONCLUSION → xem score + hint → chuyển sang exam mode.
+
+### Khó nhất tuần này
+
+- **Schema migration cuối giờ:** Rename `title` → `disease_name` xảy ra sau khi seeder đã chạy và có data trên Supabase. Migration phải đảm bảo không mất data cũ, không break frontend đang dùng field `title`. Phải kiểm tra tất cả query trong backend và serializer trước khi push.
+
+- **Đảm bảo deliverables đầy đủ:** Gate 6 yêu cầu 10 deliverables trên GitHub — source code, README, Pitch Deck, Architecture Diagram, Journal, Worklog, Test Plan, Evaluation Report, AI Log, ERD. Rà soát danh sách này cuối tuần và phát hiện còn thiếu AI Log — phải tổng hợp lại từ session logs.
+
+- **Kiểm tra end-to-end trên môi trường production (Railway):** Một số CORS issue khi frontend chạy port khác port 5173. Phải thêm origin mới vào `CORS_ALLOWED_ORIGINS` trong Django settings.
+
+### AI tool đã dùng
+
+| Tool | Dùng để làm gì | Kết quả |
+|---|---|---|
+| Claude Code | Viết `populate_all.py` để upload thêm case mẫu lên database, refactor Socratic agent | Hỗ trợ các tác vụ cuối dự án |
+| Codex (GitHub Copilot) | Hoàn thiện các trang frontend (ExamSession, PerformancePage, swap/debate mode), fix CORS | Tăng tốc frontend sprint cuối đáng kể |
+| GPT-4o (trong pipeline) | Semantic judge cho Evaluation Report, chuẩn hoá VLM output | Đánh giá chính xác hơn string match ~18% trên bộ test 22 cases |
+
+### Học được
+
+- **Deliverable checklist nên được tạo từ Gate 1, không phải Gate 6.** Rà soát lại và tổng hợp AI Log vào tuần cuối tốn nhiều thời gian hơn dự kiến. Nếu duy trì log liên tục từ đầu, tuần cuối chỉ cần format lại.
+
+- **Schema migration cuối sprint là rủi ro cao.** Rename cột trên bảng có data thật luôn tiềm ẩn nguy cơ mất data hoặc break API. Nên freeze schema sau Sprint 4, chỉ thêm cột mới (không rename, không xóa) từ Sprint 5 trở đi.
+
+- **Observability không phải "nice to have" khi đến demo.** Langfuse trace giúp debug nhanh hai vấn đề trong tuần này — thay vì phải đọc log thủ công, trace dashboard cho thấy ngay bước nào trả về score bất thường. Nên tích hợp observability từ Sprint 3.
+
+- **AI giúp tăng tốc ở giai đoạn cuối nhưng cần biết giới hạn:** AI tạo boilerplate nhanh nhưng logic nghiệp vụ đặc thù (rubric scoring, hint escalation, evaluation metric) vẫn cần con người review kỹ. Không thể trust 100% AI output mà không test thực tế.
+
+### Nhìn lại toàn dự án
+
+Tuần 7 là sprint cuối, nhóm không thêm tính năng mới mà tập trung hoàn thiện, kiểm thử, và đóng gói. Điều đó đúng nhưng đến hơi muộn: một số tính năng (exam mode, Performance page) đáng lẽ phải xong từ Sprint 4-5 để có thời gian test thực tế với người dùng. Mặc dù vậy, sản phẩm đã deployed ổn định trên Railway, pipeline AI 2 engine hoạt động nhất quán, và Socratic agent đã đủ thông minh để dẫn dắt sinh viên qua 4 bước chẩn đoán mà không lộ đáp án.
+
+Gate 6 - Ready to Demo. 
