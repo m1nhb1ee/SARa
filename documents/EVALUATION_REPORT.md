@@ -12,7 +12,7 @@
 
 22 radiology cases across 6 body domains and 3 imaging modalities (X-ray, CT, MRI) were evaluated against both the GPT-4.1-mini and MedGemma-1.5-4B analysis engines. Six cases were classified as STAT (life-threatening emergencies).
 
-| Metric | GPT-4.1-mini | MedGemma-1.5-4B |
+| Metric | GPT-5.4-mini | MedGemma-1.5-4B |
 |---|---|---|
 | STAT Recall | **0.833** (5/6) | **0.167** (1/6)* |
 | Top-1 Accuracy | **0.273** (6/22) | **0.050** (1/20) |
@@ -36,7 +36,7 @@
 
 | Engine | Model | Tier | Test Plan Reference |
 |---|---|---|---|
-| GPT | GPT-4.1-mini (OpenAI API) | Premium | TC-UPLOAD-002, TC-ANAL-003 |
+| GPT | GPT-5.4-mini (OpenAI API) | Premium | TC-UPLOAD-002, TC-ANAL-003 |
 | VLM | MedGemma-1.5-4B (HF Gradio: `ttnguyen6716/MedGemma-1.5-4B`) | Free | TC-UPLOAD-001, TC-ANAL-001 |
 
 ### 2.2 Evaluation Metrics
