@@ -71,7 +71,7 @@ Backend hiện tại là Django REST Framework, không phải FastAPI. Database 
 | **Storage** | Supabase Storage |
 | **AI** | OpenAI API · MedGemma/Hugging Face Space fallback tùy cấu hình |
 | **Observability** | Langfuse |
-| **Deployment** | Frontend Vite build · Backend Docker/Gunicorn |
+| **Deployment** | Railway Vite build · Docker |
 
 ---
 
