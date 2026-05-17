@@ -1,0 +1,363 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1700 1620" font-family="'Segoe UI', system-ui, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1e293b"/>
+    </marker>
+    <marker id="arrDim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <style><![CDATA[
+      .bg { fill: #ffffff; }
+      .group { fill: #fafbfc; stroke: #94a3b8; stroke-width: 1.4; stroke-dasharray: 6 4; rx: 10; }
+      .subgroup { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 4 3; rx: 8; }
+      .group-title { fill: #0f172a; font-weight: 600; font-size: 13px; }
+      .node-fe { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.4; rx: 6; }
+      .node-be { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.4; rx: 6; }
+      .node-ai { fill: #fff7ed; stroke: #f97316; stroke-width: 1.4; rx: 6; }
+      .node-db { fill: #faf5ff; stroke: #a855f7; stroke-width: 1.4; rx: 6; }
+      .node-admin { fill: #fefce8; stroke: #ca8a04; stroke-width: 1.4; rx: 6; }
+      .node-ext { fill: #f0fdfa; stroke: #14b8a6; stroke-width: 1.4; rx: 6; }
+      .label { fill: #0f172a; font-weight: 500; font-size: 13px; }
+      .label-sm { fill: #0f172a; font-weight: 500; font-size: 12px; }
+      .sub { fill: #64748b; font-size: 11px; }
+      .edge { stroke: #1e293b; stroke-width: 1.5; fill: none; }
+      .edge-dim { stroke: #94a3b8; stroke-width: 1.2; fill: none; stroke-dasharray: 5 3; }
+      .edge-label { fill: #334155; font-size: 11px; }
+      .edge-bg { fill: #ffffff; }
+      text { dominant-baseline: middle; text-anchor: middle; }
+    ]]></style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1700" height="1620"/>
+
+  <!-- ====== HEADER ====== -->
+  <text x="850" y="36" font-size="24" font-weight="700" fill="#0f172a">SARa â€” System Architecture</text>
+  <text x="850" y="62" font-size="13" fill="#64748b">Smart AI Radiology Â· Django REST Â· Supabase Â· OpenAI GPT-4o Â· MedGemma VLM</text>
+
+  <!-- ====== ADMIN PANEL ====== -->
+  <rect class="group" x="40" y="95" width="340" height="205"/>
+  <text x="60" y="120" class="group-title" text-anchor="start">ðŸ›  Admin Panel</text>
+
+  <rect class="node-admin" x="80" y="150" width="260" height="70"/>
+  <text x="210" y="172" class="label">Admin Upload</text>
+  <text x="210" y="192" class="sub">áº¢nh gá»‘c + ground truth label</text>
+  <text x="210" y="208" class="sub">(disease_profiles Â· answer_keys)</text>
+
+  <text x="210" y="250" class="sub">role: medical_advisor / admin</text>
+  <text x="210" y="270" class="sub">táº¡o case má»›i cho há»‡ thá»‘ng</text>
+
+  <!-- ====== CLIENT ====== -->
+  <rect class="group" x="1080" y="95" width="580" height="205"/>
+  <text x="1100" y="120" class="group-title" text-anchor="start">ðŸŒ Client â€” Browser / Mobile</text>
+
+  <rect class="node-fe" x="1410" y="140" width="220" height="56"/>
+  <text x="1520" y="160" class="label">React SPA</text>
+  <text x="1520" y="180" class="sub">Vite Â· TS Â· Tailwind Â· Radix UI</text>
+
+  <rect class="node-fe" x="1100" y="225" width="170" height="56"/>
+  <text x="1185" y="245" class="label">Upload áº£nh</text>
+  <text x="1185" y="265" class="sub">/upload</text>
+
+  <rect class="node-fe" x="1290" y="225" width="190" height="56"/>
+  <text x="1385" y="245" class="label">Duyá»‡t &amp; chá»n case</text>
+  <text x="1385" y="265" class="sub">/practice Â· /exam</text>
+
+  <rect class="node-fe" x="1500" y="225" width="160" height="56"/>
+  <text x="1580" y="245" class="label">Nháº­p cháº©n Ä‘oÃ¡n</text>
+  <text x="1580" y="265" class="sub">/session Â· /swap</text>
+
+  <!-- React SPA â†’ 3 children -->
+  <path d="M 1520 196 L 1520 210 L 1185 210 L 1185 225" class="edge" marker-end="url(#arr)"/>
+  <path d="M 1385 210 L 1385 225" class="edge" marker-end="url(#arr)"/>
+  <path d="M 1520 210 L 1580 210 L 1580 225" class="edge" marker-end="url(#arr)"/>
+
+  <!-- ====== BACKEND ====== -->
+  <rect class="group" x="40" y="340" width="1620" height="860"/>
+  <text x="60" y="364" class="group-title" text-anchor="start">ðŸ Backend â€” Django REST API (Gunicorn)</text>
+
+  <!-- API Gateway & Session Router -->
+  <rect class="node-be" x="720" y="395" width="220" height="55"/>
+  <text x="830" y="414" class="label">API Gateway / JWT</text>
+  <text x="830" y="432" class="sub">SupabaseJWTContextMiddleware</text>
+
+  <rect class="node-be" x="720" y="470" width="220" height="55"/>
+  <text x="830" y="489" class="label">Session Router</text>
+  <text x="830" y="507" class="sub">ViewSets: cases Â· sessions Â· exam Â· swap</text>
+
+  <path d="M 830 450 L 830 470" class="edge" marker-end="url(#arr)"/>
+
+  <!-- ============ Sub-group: Image Ingestion (col 1) ============ -->
+  <rect class="subgroup" x="65" y="560" width="370" height="455"/>
+  <text x="85" y="583" class="group-title" text-anchor="start">ðŸ“¥ Image Ingestion</text>
+
+  <rect class="node-be" x="105" y="610" width="290" height="42"/>
+  <text x="250" y="631" class="label-sm">Preprocess Service</text>
+
+  <rect class="node-be" x="105" y="664" width="290" height="42"/>
+  <text x="250" y="680" class="label-sm">Modality Router</text>
+  <text x="250" y="697" class="sub">X-ray Â· CT Â· MRI</text>
+
+  <rect class="node-be" x="105" y="718" width="290" height="42"/>
+  <text x="250" y="734" class="label-sm">Image Storage Upload</text>
+  <text x="250" y="751" class="sub">signed URL Â· 7-day TTL</text>
+
+  <rect class="node-ai" x="105" y="772" width="290" height="42"/>
+  <text x="250" y="788" class="label-sm">VLM Adapter</text>
+  <text x="250" y="805" class="sub">HuggingFace Gradio Client</text>
+
+  <rect class="node-be" x="105" y="826" width="290" height="42"/>
+  <text x="250" y="842" class="label-sm">Diagnosis Normalizer</text>
+  <text x="250" y="859" class="sub">findings â†’ case_images JSON</text>
+
+  <rect class="node-db" x="105" y="880" width="290" height="42"/>
+  <text x="250" y="896" class="label-sm">INSERT cases + images</text>
+  <text x="250" y="913" class="sub">source: 'uploaded'</text>
+
+  <path d="M 250 652 L 250 664" class="edge" marker-end="url(#arr)"/>
+  <path d="M 250 706 L 250 718" class="edge" marker-end="url(#arr)"/>
+  <path d="M 250 760 L 250 772" class="edge" marker-end="url(#arr)"/>
+  <path d="M 250 814 L 250 826" class="edge" marker-end="url(#arr)"/>
+  <path d="M 250 868 L 250 880" class="edge" marker-end="url(#arr)"/>
+
+  <!-- ============ Sub-group: Session Orchestration (col 2) ============ -->
+  <rect class="subgroup" x="465" y="560" width="370" height="455"/>
+  <text x="485" y="583" class="group-title" text-anchor="start">ðŸ§­ Session Orchestration</text>
+
+  <rect class="node-be" x="485" y="610" width="330" height="44"/>
+  <text x="650" y="628" class="label-sm">Session State Manager</text>
+  <text x="650" y="646" class="sub">sessions/services.py Â· current_step 0 â†’ 3</text>
+
+  <rect class="node-ai" x="485" y="664" width="330" height="42"/>
+  <text x="650" y="680" class="label-sm">Intent Classifier</text>
+  <text x="650" y="697" class="sub">cÃ¢u há»i Â· tráº£ lá»i Â· chat?</text>
+
+  <rect class="node-be" x="485" y="718" width="330" height="44"/>
+  <text x="650" y="736" class="label-sm">Prompt Builder</text>
+  <text x="650" y="754" class="sub">answer_key + rubric + history</text>
+
+  <rect class="node-ai" x="485" y="772" width="330" height="44"/>
+  <text x="650" y="790" class="label-sm">Swap Debate Agent</text>
+  <text x="650" y="808" class="sub">SSE streaming Â· peer persona</text>
+
+  <rect class="node-be" x="485" y="826" width="330" height="44"/>
+  <text x="650" y="844" class="label-sm">Exam Scorer</text>
+  <text x="650" y="862" class="sub">strict Â· timed Â· leaderboard</text>
+
+  <rect class="node-ext" x="485" y="880" width="330" height="42"/>
+  <text x="650" y="901" class="label-sm">Langfuse Tracing</text>
+
+  <path d="M 650 654 L 650 664" class="edge" marker-end="url(#arr)"/>
+  <path d="M 650 706 L 650 718" class="edge" marker-end="url(#arr)"/>
+
+  <!-- ============ Sub-group: AI Agents (col 3) ============ -->
+  <rect class="subgroup" x="865" y="560" width="370" height="455"/>
+  <text x="885" y="583" class="group-title" text-anchor="start">ðŸ¤– AI Agents</text>
+
+  <rect class="node-ai" x="885" y="620" width="330" height="54"/>
+  <text x="1050" y="640" class="label-sm">Socratic Agent</text>
+  <text x="1050" y="660" class="sub">get_socratic_hint() â€” gá»£i Ã½ cÃ¢u há»i</text>
+
+  <rect class="node-ai" x="885" y="712" width="330" height="54"/>
+  <text x="1050" y="732" class="label-sm">Answer Check Agent</text>
+  <text x="1050" y="752" class="sub">evaluate_answer() â€” score Â· errors</text>
+
+  <rect class="node-ai" x="885" y="804" width="330" height="54"/>
+  <text x="1050" y="824" class="label-sm">Case Recommender</text>
+  <text x="1050" y="844" class="sub">user_skill_profiles â†’ next case</text>
+
+  <text x="1050" y="908" class="sub">Má»—i agent Ä‘á»u Ä‘Æ°á»£c trace</text>
+  <text x="1050" y="924" class="sub">qua Langfuse Cloud</text>
+
+  <!-- Answer Check â†’ Case Recommender (vertical) -->
+  <path d="M 1050 766 L 1050 804" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1000" y="778" width="100" height="14"/>
+  <text x="1050" y="785" class="edge-label">score + errors</text>
+
+  <!-- ============ Sub-group: External Integrations (col 4) ============ -->
+  <rect class="subgroup" x="1265" y="560" width="370" height="455"/>
+  <text x="1285" y="583" class="group-title" text-anchor="start">ðŸŒ External Integrations</text>
+
+  <rect class="node-ai" x="1285" y="620" width="330" height="54"/>
+  <text x="1450" y="640" class="label-sm">OpenAI GPT-4o</text>
+  <text x="1450" y="660" class="sub">socratic Â· evaluate Â· feedback (vi)</text>
+
+  <rect class="node-ai" x="1285" y="712" width="330" height="54"/>
+  <text x="1450" y="732" class="label-sm">HuggingFace Â· MedGemma-1.5</text>
+  <text x="1450" y="752" class="sub">VLM â€” X-ray findings</text>
+
+  <rect class="node-ext" x="1285" y="804" width="330" height="54"/>
+  <text x="1450" y="824" class="label-sm">Langfuse Cloud</text>
+  <text x="1450" y="844" class="sub">LLM observability Â· traces</text>
+
+  <text x="1450" y="908" class="sub">Táº¥t cáº£ gá»i Ä‘á»u cÃ³</text>
+  <text x="1450" y="924" class="sub">fallback mock response</text>
+
+  <!-- ============ INTRA-BACKEND CONNECTIONS ============ -->
+
+  <!-- Session Router â†’ Image Ingestion (Preprocess Service) -->
+  <path d="M 830 525 L 830 545 L 250 545 L 250 610" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="540" y="537" width="80" height="14"/>
+  <text x="580" y="545" class="edge-label">ingest path</text>
+
+  <!-- Session Router â†’ Session State Manager -->
+  <path d="M 830 545 L 650 545 L 650 610" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="690" y="537" width="100" height="14"/>
+  <text x="740" y="545" class="edge-label">session/exam flow</text>
+
+  <!-- Intent Classifier â†’ Socratic Agent -->
+  <path d="M 815 685 L 850 685 L 850 647 L 885 647" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="822" y="660" width="68" height="14"/>
+  <text x="856" y="667" class="edge-label">? cÃ¢u há»i</text>
+
+  <!-- Prompt Builder â†’ Answer Check Agent -->
+  <path d="M 815 740 L 885 740" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="822" y="725" width="56" height="14"/>
+  <text x="850" y="733" class="edge-label">prompt</text>
+
+  <!-- Socratic Agent â†’ GPT-4o -->
+  <path d="M 1215 647 L 1285 647" class="edge" marker-end="url(#arr)"/>
+
+  <!-- Answer Check Agent â†’ GPT-4o (up-right path through gap) -->
+  <path d="M 1215 730 L 1245 730 L 1245 655 L 1285 655" class="edge" marker-end="url(#arr)"/>
+
+  <!-- Swap Debate Agent â†’ GPT-4o (via gap between Socratic and Answer Check) -->
+  <path d="M 815 794 L 855 794 L 855 690 L 1255 690 L 1255 663 L 1285 663" class="edge-dim" marker-end="url(#arrDim)"/>
+  <rect class="edge-bg" x="1010" y="682" width="100" height="14"/>
+  <text x="1060" y="690" class="edge-label">stream prompt</text>
+
+  <!-- Langfuse Tracing â†’ Langfuse Cloud (via gap below Case Recommender) -->
+  <path d="M 815 901 L 855 901 L 855 880 L 1255 880 L 1255 830 L 1285 830" class="edge-dim" marker-end="url(#arrDim)"/>
+  <rect class="edge-bg" x="1030" y="872" width="56" height="14"/>
+  <text x="1058" y="880" class="edge-label">traces</text>
+
+  <!-- VLM Adapter â†’ MedGemma (via bottom channel y=1045, gap col1-col2 + gap col3-col4) -->
+  <path d="M 395 793 L 445 793 L 445 1045 L 1245 1045 L 1245 738 L 1285 738" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="780" y="1037" width="90" height="14"/>
+  <text x="825" y="1045" class="edge-label">image bytes</text>
+
+  <!-- ============ CLIENT â†’ BACKEND ============ -->
+  <!-- 3 child boxes â†’ API Gateway -->
+  <path d="M 1185 281 L 1185 360 L 780 360 L 780 395" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1146" y="353" width="78" height="14"/>
+  <text x="1185" y="361" class="edge-label">multipart</text>
+
+  <path d="M 1385 281 L 1385 375 L 830 375 L 830 395" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1345" y="368" width="90" height="14"/>
+  <text x="1390" y="376" class="edge-label">GET /cases</text>
+
+  <path d="M 1580 281 L 1580 360 L 880 360 L 880 395" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1480" y="353" width="170" height="14"/>
+  <text x="1565" y="361" class="edge-label">POST submit_answer Â· SSE</text>
+
+  <!-- Admin Upload â†’ API Gateway -->
+  <path d="M 340 185 L 600 185 L 600 380 L 720 380 L 720 408 L 720 408" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="430" y="178" width="130" height="14"/>
+  <text x="495" y="186" class="edge-label">Ingest case (admin)</text>
+
+  <!-- ============ BACKEND â†’ CLIENT (response, dashed) ============ -->
+  <path d="M 940 420 L 985 420 L 985 130 L 1520 130 L 1520 140" class="edge-dim" marker-end="url(#arrDim)"/>
+  <rect class="edge-bg" x="1100" y="123" width="200" height="14"/>
+  <text x="1200" y="131" class="edge-label">feedback Â· score Â· stream</text>
+
+  <!-- ============ DATA LAYER ============ -->
+  <rect class="group" x="40" y="1230" width="1620" height="290"/>
+  <text x="60" y="1254" class="group-title" text-anchor="start">ðŸ—„ Data Layer â€” Supabase (PostgreSQL Â· Auth Â· Storage)</text>
+
+  <!-- Supabase Auth -->
+  <rect class="node-db" x="80" y="1285" width="280" height="90"/>
+  <text x="220" y="1310" class="label-sm">Supabase Auth (JWT)</text>
+  <text x="220" y="1330" class="sub">sign in Â· sign up Â· verify</text>
+  <text x="220" y="1347" class="sub">RLS: user_id = auth.uid()</text>
+
+  <!-- Object Storage cylinder -->
+  <g transform="translate(420,1285)">
+    <ellipse cx="160" cy="6" rx="158" ry="6" fill="#faf5ff" stroke="#a855f7" stroke-width="1.4"/>
+    <path d="M 2 6 L 2 100 A 158 6 0 0 0 318 100 L 318 6" fill="#faf5ff" stroke="#a855f7" stroke-width="1.4"/>
+    <ellipse cx="160" cy="6" rx="158" ry="6" fill="none" stroke="#a855f7" stroke-width="1.4"/>
+    <text x="160" y="36" class="label-sm">Object Storage</text>
+    <text x="160" y="58" class="sub">Bucket: images</text>
+    <text x="160" y="78" class="sub">Signed URLs Â· 7-day TTL</text>
+  </g>
+
+  <!-- PostgreSQL cylinder -->
+  <g transform="translate(820,1275)">
+    <ellipse cx="400" cy="6" rx="398" ry="7" fill="#faf5ff" stroke="#a855f7" stroke-width="1.4"/>
+    <path d="M 2 6 L 2 220 A 398 7 0 0 0 798 220 L 798 6" fill="#faf5ff" stroke="#a855f7" stroke-width="1.4"/>
+    <ellipse cx="400" cy="6" rx="398" ry="7" fill="none" stroke="#a855f7" stroke-width="1.4"/>
+    <text x="400" y="36" class="label-sm" font-weight="600">PostgreSQL â€” Row Level Security</text>
+
+    <text x="160" y="76" class="sub" font-weight="600">Core</text>
+    <text x="160" y="94" class="sub">users Â· cases Â· case_images</text>
+    <text x="160" y="110" class="sub">disease_profiles</text>
+
+    <text x="400" y="76" class="sub" font-weight="600">Sessions</text>
+    <text x="400" y="94" class="sub">sessions Â· step_attempts</text>
+    <text x="400" y="110" class="sub">step_rubrics Â· answer_keys</text>
+
+    <text x="640" y="76" class="sub" font-weight="600">Modes</text>
+    <text x="640" y="94" class="sub">swap_sessions Â· swap_messages</text>
+    <text x="640" y="110" class="sub">exam_sessions</text>
+
+    <text x="400" y="150" class="sub" font-weight="600">Analytics</text>
+    <text x="400" y="168" class="sub">user_skill_profiles Â· case_recommendations</text>
+
+    <text x="400" y="200" class="sub" font-style="italic">All tables RLS-enforced via JWT-bound context</text>
+  </g>
+
+  <!-- ============ BACKEND â†’ DATA LAYER (clean orthogonal channels) ============ -->
+
+  <!-- API Gateway â†’ Supabase Auth (via far-left margin x=55, dashed) -->
+  <path d="M 720 420 L 55 420 L 55 1320 L 80 1320" class="edge-dim" marker-end="url(#arrDim)"/>
+  <rect class="edge-bg" x="14" y="860" width="84" height="14"/>
+  <text x="56" y="868" class="edge-label">JWT verify</text>
+
+  <!-- Image Storage Upload â†’ Object Storage (channel y=1100, col1 inner margin x=415) -->
+  <path d="M 395 739 L 415 739 L 415 1100 L 580 1100 L 580 1285" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="430" y="1092" width="100" height="14"/>
+  <text x="480" y="1100" class="edge-label">PUT image blob</text>
+
+  <!-- INSERT cases â†’ PostgreSQL (channel y=1130) -->
+  <path d="M 250 922 L 250 1130 L 1000 1130 L 1000 1281" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="620" y="1122" width="170" height="14"/>
+  <text x="705" y="1130" class="edge-label">INSERT cases Â· case_images</text>
+
+  <!-- Session State Manager â†’ PostgreSQL (channel y=1160, col2-col3 gap x=850) -->
+  <path d="M 815 630 L 850 630 L 850 1160 L 1220 1160 L 1220 1281" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="990" y="1152" width="170" height="14"/>
+  <text x="1075" y="1160" class="edge-label">UPDATE sessions Â· attempts</text>
+
+  <!-- Answer Check â†’ PostgreSQL (channel y=1190, col3-col4 gap x=1245) -->
+  <path d="M 1215 750 L 1245 750 L 1245 1190 L 1450 1190 L 1450 1281" class="edge" marker-end="url(#arr)"/>
+  <rect class="edge-bg" x="1280" y="1182" width="160" height="14"/>
+  <text x="1360" y="1190" class="edge-label">INSERT step_attempts</text>
+
+  <!-- ============ LEGEND ============ -->
+  <rect class="group" x="40" y="1540" width="1620" height="60"/>
+  <text x="60" y="1562" class="group-title" text-anchor="start">Legend</text>
+
+  <rect class="node-fe" x="60" y="1576" width="24" height="16"/>
+  <text x="92" y="1584" class="sub" text-anchor="start">Frontend (React)</text>
+
+  <rect class="node-be" x="230" y="1576" width="24" height="16"/>
+  <text x="262" y="1584" class="sub" text-anchor="start">Backend (Django)</text>
+
+  <rect class="node-ai" x="410" y="1576" width="24" height="16"/>
+  <text x="442" y="1584" class="sub" text-anchor="start">AI / LLM agent</text>
+
+  <rect class="node-db" x="560" y="1576" width="24" height="16"/>
+  <text x="592" y="1584" class="sub" text-anchor="start">Database / Storage</text>
+
+  <rect class="node-admin" x="760" y="1576" width="24" height="16"/>
+  <text x="792" y="1584" class="sub" text-anchor="start">Admin</text>
+
+  <rect class="node-ext" x="870" y="1576" width="24" height="16"/>
+  <text x="902" y="1584" class="sub" text-anchor="start">External / Observability</text>
+
+  <line x1="1090" y1="1584" x2="1140" y2="1584" class="edge" marker-end="url(#arr)"/>
+  <text x="1148" y="1584" class="sub" text-anchor="start">Synchronous call</text>
+
+  <line x1="1310" y1="1584" x2="1360" y2="1584" class="edge-dim" marker-end="url(#arrDim)"/>
+  <text x="1368" y="1584" class="sub" text-anchor="start">Async Â· trace Â· RLS</text>
+
+</svg>
