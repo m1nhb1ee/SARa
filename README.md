@@ -80,7 +80,7 @@ Backend hiện tại là Django REST Framework. Database chính là Supabase/Pos
 ## Cấu Trúc Thư Mục
 
 ```text
-Sara/
+SARa/
 ├── apps/
 │   ├── backend/
 │   │   ├── app/
