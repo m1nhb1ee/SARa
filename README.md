@@ -264,4 +264,4 @@ SARa chỉ dành cho mục đích học tập và luyện tư duy chẩn đoán 
 
 ---
 
-*SARa MVP · Group 076 · VinUniversity AI20K · 2026*
+*SARa MVP · 2026*
