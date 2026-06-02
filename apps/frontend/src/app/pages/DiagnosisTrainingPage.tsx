@@ -1,24 +1,22 @@
 /**
- * DiagnosisTrainingPage - Luyện tập chẩn đoán từng bước  
- * 6 bước: OBSERVE → DESCRIBE → INTERPRET → HYPOTHESIS → DDx → CONCLUSION
+ * DiagnosisTrainingPage - Luyện tập chẩn đoán từng bước
+ * 4 bước: OBSERVE → REASONING → DDx → CONCLUSION
  */
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { useCaseDetail, useCreateSession, useSessionDetail, useSubmitAnswer, useGetAnswerKey } from '@/api/hooks';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Textarea } from '@/app/components/ui/textarea';
 import { AlertCircle, CheckCircle2, Lightbulb, TrendingUp } from 'lucide-react';
 
-const STEPS = ['OBSERVE', 'DESCRIBE', 'INTERPRET', 'HYPOTHESIS', 'DDx', 'CONCLUSION'];
+const STEPS = ['DESCRIBE', 'REASONING', 'DDx', 'CONCLUSION'];
 
 const STEP_DESCRIPTIONS = {
-  OBSERVE: 'Quan sát ảnh. Bạn thấy gì ở trên ảnh? Có gì khác lạ?',
-  DESCRIBE: 'Mô tả chi tiết những gì bạn thấy. Kích thước, hình dạng, vị trí?',
-  INTERPRET: 'Diễn giải ý nghĩa. Những điểm này có thể do nguyên nhân nào?',
-  HYPOTHESIS: 'Giả thuyết chẩn đoán. Đâu là chẩn đoán chính?',
-  DDx: 'Chẩn đoán phân biệt. Còn những chẩn đoán khác nào?',
+  DESCRIBE: 'Quan sát ảnh. Bạn thấy gì ở trên ảnh? Xác định vùng bất thường và mô tả kích thước, hình dạng, vị trí, mật độ.',
+  REASONING: 'Lý luận lâm sàng. Diễn giải ý nghĩa các phát hiện và đề xuất chẩn đoán làm việc chính.',
+  DDx: 'Chẩn đoán phân biệt. Còn những chẩn đoán khác nào cần loại trừ?',
   CONCLUSION: 'Kết luận. Chẩn đoán cuối cùng của bạn là gì?',
 };
 
@@ -97,32 +95,15 @@ export function DiagnosisTrainingPage() {
     // CRITICAL: Use next_step from API response, NOT refetch timing
     if (!feedback) return;
     
-    // Check if score too low
     if (feedback.attempt.score < 0.7) {
-      console.log(`⚠️ Score ${(feedback.attempt.score * 100).toFixed(1)}% < 70%, staying on step ${feedback.attempt.step_index}`);
       setShowFeedback(false);
       setFeedback(null);
       return;
     }
-    
-    // Validate next_step from API
-    let nextStep = feedback.next_step;
-    if (nextStep === undefined) {
-      // Fallback: calculate from current attempt
-      nextStep = feedback.attempt.step_index + 1;
-      console.log(`⚡ Calculated nextStep: ${nextStep} (from step ${feedback.attempt.step_index})`);
-    } else {
-      console.log(`✅ Using next_step from API: ${nextStep}`);
-    }
-    
-    // Close feedback modal
+
     setShowFeedback(false);
     setFeedback(null);
-    
-    // Clear answer for next step
     setStudentAnswer('');
-    
-    console.log(`📍 Step progression: ${feedback.attempt.step_index} → ${nextStep}`);
   };
 
   const currentStep = sessionData?.current_step || 0;

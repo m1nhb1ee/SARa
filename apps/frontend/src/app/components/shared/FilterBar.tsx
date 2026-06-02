@@ -16,7 +16,7 @@ export function FilterBar({ groups }: Props) {
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
       {groups.map((group) => (
         <div key={group.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#6B4C3B', fontSize: 11, fontFamily: "'Special Elite', cursive", letterSpacing: '0.08em' }}>{group.label}:</span>
+          <span style={{ color: 'var(--ink-secondary)', fontSize: 10, fontFamily: "var(--font-mono)", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{group.label}:</span>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {group.options.map((opt) => (
               <button

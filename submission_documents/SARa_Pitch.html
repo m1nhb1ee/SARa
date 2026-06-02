@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SARa · Smart AI Radiology — Pitch Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Dancing+Script:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f6ecd2;
+    --paper-2:#efe1b8;
+    --paper-edge:#d9c184;
+    --ink:#3b2a17;
+    --ink-soft:#6b5435;
+    --accent:#b8541a;
+    --accent-2:#1f5d4c;
+    --hi:#f0c33b;
+    --rule:#2b1d0d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#2c2418;color:var(--ink);font-family:'Patrick Hand','Segoe UI',Tahoma,sans-serif;height:100%;overflow:hidden}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #443824 0%, #2c2418 60%) fixed,
+      #2c2418;
+  }
+  .deck{
+    width:100vw;height:100vh;position:relative;
+  }
+  .slide{
+    position:absolute;
+    inset:0;
+    margin:auto;
+    width:min(1180px, 96vw);
+    height:min(820px, 94vh);
+    background:var(--paper);
+    background-image:
+      radial-gradient(800px 400px at 20% 10%, rgba(255,240,200,.6), transparent 60%),
+      radial-gradient(600px 300px at 90% 90%, rgba(180,140,80,.18), transparent 60%),
+      repeating-linear-gradient(0deg, transparent 0 38px, rgba(120,90,40,.07) 38px 39px);
+    color:var(--ink);
+    padding:54px 60px 60px;
+    border-radius:6px;
+    box-shadow:
+      0 30px 60px rgba(0,0,0,.45),
+      inset 0 0 0 1px rgba(120,90,40,.25),
+      inset 0 0 90px rgba(120,80,30,.15);
+    border:1px solid var(--paper-edge);
+    overflow-y:auto;
+    overflow-x:hidden;
+    scrollbar-width:none;          /* Firefox */
+    -ms-overflow-style:none;       /* IE/Edge */
+    opacity:0;visibility:hidden;
+    transition:opacity .35s ease;
+    cursor:pointer;
+  }
+  .slide::-webkit-scrollbar{display:none;width:0;height:0} /* Chrome/Safari */
+  .slide.active{opacity:1;visibility:visible}
+  /* navigation UI */
+  .nav-arrow{
+    position:fixed;top:50%;transform:translateY(-50%);
+    width:54px;height:54px;border-radius:50%;
+    background:rgba(246,236,210,.85);color:var(--rule);
+    border:2px solid var(--rule);
+    font-size:28px;font-family:'Patrick Hand',sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;z-index:50;user-select:none;
+    box-shadow:3px 3px 0 rgba(0,0,0,.3);
+    transition:transform .15s ease;
+  }
+  .nav-arrow:hover{transform:translateY(-50%) scale(1.08)}
+  .nav-arrow:active{transform:translateY(-50%) scale(.94)}
+  .nav-arrow.prev{left:24px}
+  .nav-arrow.next{right:24px}
+  .nav-arrow.disabled{opacity:.25;pointer-events:none}
+  .counter{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+    font-family:'Patrick Hand',sans-serif;color:#f0c33b;
+    background:rgba(0,0,0,.4);padding:6px 18px;border-radius:30px;
+    font-size:18px;z-index:50;letter-spacing:1px;
+  }
+  .counter .sep{opacity:.5;margin:0 6px}
+  .hint{
+    position:fixed;top:18px;right:24px;
+    font-family:'Patrick Hand',sans-serif;color:#c5b18a;font-size:14px;
+    background:rgba(0,0,0,.3);padding:4px 12px;border-radius:20px;z-index:50;
+    opacity:.75;
+  }
+  .slide::before{
+    /* torn / taped corner */
+    content:"";
+    position:absolute; top:-14px; left:50%; transform:translateX(-50%) rotate(-2deg);
+    width:160px; height:28px;
+    background:rgba(255, 235, 170, .75);
+    border:1px dashed rgba(120,90,40,.4);
+    box-shadow:0 4px 8px rgba(0,0,0,.15);
+  }
+  .slide::after{
+    content:"";
+    position:absolute; inset:8px;
+    border:1.5px dashed rgba(80,55,20,.25);
+    border-radius:4px;
+    pointer-events:none;
+  }
+  .num{
+    font-family:'Patrick Hand'; font-size:22px; color:var(--accent);
+    position:absolute; top:18px; right:30px; transform:rotate(3deg);
+    background:#fff5d6; padding:2px 10px; border:1.5px solid var(--accent);
+    border-radius:30px;
+  }
+  h1,h2,h3{font-family:'Patrick Hand','Segoe Script',cursive;margin:0;color:var(--rule);line-height:1.05}
+  h1{font-size:84px;letter-spacing:1px}
+  h2{font-size:54px}
+  h3{font-size:34px;color:var(--accent)}
+  p,li{font-family:'Patrick Hand','Segoe UI',Tahoma,sans-serif;font-size:22px;line-height:1.5;color:var(--ink)}
+  .hand{font-family:'Patrick Hand','Segoe Script',cursive}
+  .scribble{font-family:'Dancing Script','Patrick Hand',cursive}
+  .underline{
+    background:linear-gradient(transparent 70%, var(--hi) 70% 95%, transparent 95%);
+    padding:0 4px;
+  }
+  .tag{
+    display:inline-block; font-family:'Patrick Hand'; font-size:22px;
+    border:2px solid var(--ink); padding:2px 14px; border-radius:30px;
+    margin:4px 6px 4px 0; transform:rotate(-1deg);
+    background:rgba(255,255,255,.3);
+  }
+  .tag.alt{border-color:var(--accent);color:var(--accent)}
+  .tag.green{border-color:var(--accent-2);color:var(--accent-2)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:30px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+  .card{
+    background:rgba(255,250,225,.7);
+    border:1.5px solid rgba(80,55,20,.35);
+    border-radius:8px;
+    padding:18px 20px;
+    position:relative;
+    box-shadow:2px 3px 0 rgba(80,55,20,.15);
+  }
+  .card h3{font-size:28px;margin-bottom:6px}
+  .arrow{
+    font-family:'Patrick Hand';color:var(--accent);font-size:34px;
+    display:inline-block;transform:rotate(-4deg);
+  }
+  .strike{text-decoration:line-through;text-decoration-color:var(--accent);text-decoration-thickness:2px}
+  .pill{
+    display:inline-block;background:var(--rule);color:var(--paper);
+    padding:2px 12px;border-radius:30px;font-family:'Patrick Hand';font-size:22px;
+    transform:rotate(-2deg);
+  }
+  .big-stat{
+    font-family:'Patrick Hand';font-size:96px;color:var(--accent);
+    line-height:.9;letter-spacing:-1px;
+  }
+  .big-stat small{display:block;font-size:24px;color:var(--ink);font-family:'Patrick Hand'}
+  ul{padding-left:28px}
+  ul.bullets li{margin:6px 0;list-style:none;position:relative;padding-left:6px}
+  ul.bullets li::before{
+    content:"✦";position:absolute;left:-22px;color:var(--accent);font-size:20px;
+  }
+  .quote{
+    font-family:'Dancing Script','Patrick Hand',cursive;font-size:30px;color:var(--ink-soft);
+    border-left:4px double var(--accent); padding:6px 0 6px 18px; margin:14px 0;
+    transform:rotate(-.4deg);
+  }
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0}
+  .flow .step{
+    background:#fff5d6;border:2px solid var(--ink);border-radius:10px;
+    padding:8px 14px;font-family:'Patrick Hand';font-size:26px;
+    box-shadow:3px 3px 0 var(--accent);
+    transform:rotate(-1deg);
+  }
+  .flow .arr{font-family:'Patrick Hand';font-size:36px;color:var(--accent)}
+  .stamp{
+    position:absolute;right:36px;bottom:30px;
+    border:3px double var(--accent);color:var(--accent);
+    font-family:'Patrick Hand';font-size:24px;padding:6px 16px;border-radius:6px;
+    transform:rotate(-8deg);opacity:.85;
+  }
+  table{width:100%;border-collapse:collapse;margin-top:10px;background:rgba(255,250,225,.5)}
+  th,td{border:1.5px dashed rgba(80,55,20,.45);padding:8px 10px;font-family:'Patrick Hand';font-size:20px;text-align:left}
+  th{background:rgba(240,195,59,.3);font-family:'Patrick Hand';font-size:24px}
+  .footer{text-align:center;color:#c5b18a;font-family:'Patrick Hand';font-size:22px;padding-top:10px}
+  .title-hero{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:580px;text-align:center;
+  }
+  .title-hero h1{font-size:140px;color:var(--accent);text-shadow:3px 3px 0 #f0c33b}
+  .title-hero .sub{font-family:'Patrick Hand';font-size:42px;color:var(--ink)}
+  .doodle{position:absolute;font-family:'Patrick Hand';color:var(--accent);opacity:.7}
+  .kpi{
+    display:flex;gap:30px;justify-content:space-around;margin-top:12px;flex-wrap:wrap;
+  }
+  .kpi .item{text-align:center}
+  .kpi .num-big{font-family:'Patrick Hand';font-size:72px;color:var(--accent-2);line-height:1}
+  .kpi .lbl{font-family:'Patrick Hand';font-size:18px;color:var(--ink-soft)}
+  .vs{
+    display:grid;grid-template-columns:1fr auto 1fr;gap:20px;align-items:stretch;margin-top:14px;
+  }
+  .vs .col{padding:16px;border-radius:8px}
+  .vs .bad{background:rgba(184,84,26,.08);border:1.5px dashed var(--accent)}
+  .vs .good{background:rgba(31,93,76,.08);border:1.5px solid var(--accent-2)}
+  .vs .center{display:flex;align-items:center;justify-content:center;font-family:'Patrick Hand';font-size:50px;color:var(--accent)}
+  .ascii{
+    font-family:'Patrick Hand';white-space:pre;background:#fff8dd;border:1.5px dashed var(--ink);
+    padding:14px;border-radius:8px;font-size:18px;line-height:1.4;overflow-x:auto;
+  }
+  .arch-svg-wrap{
+    background:#fff8dd;border:1.5px dashed var(--ink);border-radius:8px;
+    padding:18px 22px;margin-top:8px;
+  }
+  .arch-svg-wrap svg{display:block;width:100%;height:auto}
+  .ribbon{
+    display:inline-block;background:var(--accent);color:#fff8dd;font-family:'Patrick Hand';
+    font-size:24px;padding:4px 14px;transform:rotate(-2deg);box-shadow:3px 3px 0 var(--rule);
+  }
+  hr.dash{border:none;border-top:2px dashed var(--ink);opacity:.4;margin:18px 0}
+</style>
+</head>
+<body>
+<div class="hint">← → để chuyển slide · click vào slide để tiếp</div>
+<div class="nav-arrow prev" id="prevBtn" title="Slide trước (←)">‹</div>
+<div class="nav-arrow next" id="nextBtn" title="Slide tiếp (→)">›</div>
+<div class="counter"><span id="curIdx">1</span><span class="sep">/</span><span id="totalIdx">11</span></div>
+<div class="deck">
+
+<!-- =================== SLIDE 1 — TITLE =================== -->
+<section class="slide title-hero">
+  <span class="doodle" style="left:60px;top:60px;transform:rotate(-12deg);font-size:30px">~ April 2026 ~</span>
+  <span class="doodle" style="right:60px;top:80px;transform:rotate(8deg);font-size:30px">Group 076</span>
+  <div class="num">00</div>
+  <span class="ribbon">Vingroup University · Cohort 1</span>
+  <h1 style="margin-top:14px">SARa</h1>
+  <div class="sub">Smart <span class="underline">AI Radiology</span></div>
+  <p style="font-size:26px;margin-top:18px;max-width:720px">
+    Nền tảng luyện đọc phim X-quang / CT / MRI dành cho sinh viên y khoa —
+    <span class="hand" style="color:var(--accent);font-size:30px">dạy tư duy, không dạy đáp án.</span>
+  </p>
+  <div style="margin-top:20px">
+    <span class="tag">#HealthTech</span>
+    <span class="tag alt">#EdTech</span>
+    <span class="tag green">#AI Agents</span>
+    <span class="tag">#MVP</span>
+    <span class="tag alt">#Pre-seed</span>
+  </div>
+  <div class="stamp">CONFIDENTIAL</div>
+</section>
+
+<!-- =================== SLIDE 2 — USER & STATUS QUO =================== -->
+<section class="slide">
+  <div class="num">01 · The User</div>
+  <h2>Bạn đang ở năm 4. <span class="underline">Bạn vừa cầm một tấm X-quang.</span></h2>
+  <p class="quote">"Tôi nhìn vào ảnh… và tôi không biết nên bắt đầu từ đâu."</p>
+
+  <div class="grid2" style="margin-top:18px">
+    <div>
+      <h3>Họ là ai?</h3>
+      <ul class="bullets">
+        <li><b>10.000 – 15.000</b> sinh viên y năm 4–5 tại Việt Nam đang trong rotation Chẩn đoán hình ảnh.</li>
+        <li>Bác sĩ nội trú radiology cần ôn tập <i>async</i>.</li>
+        <li>34+ cơ sở đào tạo y khoa, môn CĐHA là bắt buộc.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Hiện tại họ học bằng cách nào?</h3>
+      <ul class="bullets">
+        <li><span class="strike">Slide bài giảng</span> — bị động, 60%</li>
+        <li><span class="strike">Google / YouTube</span> — rời rạc, 50%</li>
+        <li><span class="strike">Sách giáo khoa</span> — không có ca thật, 40%</li>
+        <li><span class="strike">Nhắn giảng viên qua Messenger</span> — chờ 1–2 ngày, 30%</li>
+        <li><span class="strike">Hỏi anh chị khóa trên</span> — không bảo đảm</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="dash" />
+  <p style="font-size:24px"><span class="ribbon">Điểm chung</span>
+   &nbsp; Tất cả đều cho <b>đáp án cuối</b>. Không ai chỉ ra bạn <b>sai ở bước nào</b>.</p>
+</section>
+
+<!-- =================== SLIDE 3 — PROBLEM =================== -->
+<section class="slide">
+  <div class="num">02 · The Problem</div>
+  <h2>Vấn đề không phải <span class="strike">thiếu tài liệu</span>.<br/>
+      Vấn đề là <span class="underline">thiếu một vòng phản hồi có cấu trúc</span>.</h2>
+
+  <div class="kpi" style="margin-top:24px">
+    <div class="item">
+      <div class="num-big">72%</div>
+      <div class="lbl">SV cho biết đào tạo CĐHA<br/>là <b>không đủ</b></div>
+    </div>
+    <div class="item">
+      <div class="num-big">50%</div>
+      <div class="lbl">SV năm 3–4 <b>thiếu tự tin</b><br/>khi đọc phim</div>
+    </div>
+    <div class="item">
+      <div class="num-big">2–3h</div>
+      <div class="lbl">thời gian tự ôn<br/>cho <b>mỗi 1 ca</b></div>
+    </div>
+    <div class="item">
+      <div class="num-big">1–2<br/><small style="font-size:24px">ngày</small></div>
+      <div class="lbl">chờ feedback<br/>từ giảng viên</div>
+    </div>
+  </div>
+
+  <hr class="dash" />
+  <p class="quote" style="font-size:32px">
+    Hậu quả: <b style="color:var(--accent)">"premature closure"</b> —
+    nhìn ảnh là đoán bệnh luôn. Bỏ qua bước Mô tả &amp; DDx.
+    Thói quen tư duy sai được củng cố mỗi ngày.
+  </p>
+</section>
+
+<!-- =================== SLIDE 4 — BOTTLENECK & IMPACT =================== -->
+<section class="slide">
+  <div class="num">03 · Bottlenecks</div>
+  <h2>Ba nút thắt — và cái giá phải trả</h2>
+
+  <div class="grid3" style="margin-top:14px">
+    <div class="card">
+      <h3>① Feedback "đúng/sai"</h3>
+      <p>Không có công cụ nào nói: <i>"Bạn sai ở bước <b>Describe</b>, cụ thể là bỏ qua bờ tổn thương."</i></p>
+    </div>
+    <div class="card">
+      <h3>② Feedback đến quá chậm</h3>
+      <p>Số SV tăng, số bệnh viện thực hành không tăng. Messenger không phải hệ thống học tập.</p>
+    </div>
+    <div class="card">
+      <h3>③ Củng cố thói quen sai</h3>
+      <p>Mỗi buổi tự học không có hướng dẫn = một lần củng cố thêm <b>premature closure</b>.</p>
+    </div>
+  </div>
+
+  <hr class="dash"/>
+  <h3 style="margin-top:10px">Kết quả?</h3>
+  <ul class="bullets">
+    <li>SV làm <b>hàng trăm ca</b> nhưng <i>radiology pattern recognition</i> không hình thành.</li>
+    <li>Mất tự tin trước ward round &amp; kỳ thi thực hành.</li>
+    <li>Góp phần vào <b>thiếu hụt bác sĩ CĐHA</b> tại Việt Nam (Korean J. Radiology, 2023).</li>
+  </ul>
+</section>
+
+<!-- =================== SLIDE 5 — ALTERNATIVES =================== -->
+<section class="slide">
+  <div class="num">04 · Alternatives</div>
+  <h2>Đã có những cách nào? Vì sao chúng <span class="underline">chưa giải quyết được</span>?</h2>
+
+  <table>
+    <thead><tr><th>Cách hiện có</th><th>Họ làm gì</th><th>Vì sao chưa đủ</th></tr></thead>
+    <tbody>
+      <tr><td><b>Giáo trình &amp; sách</b></td>
+          <td>Trình bày lý thuyết tổng quát</td>
+          <td>Không có ca thật, không có phản hồi cá nhân</td></tr>
+      <tr><td><b>Google / YouTube</b></td>
+          <td>Tìm thông tin rời rạc</td>
+          <td>Không chuyên hóa, không biết mình hỏi đúng câu chưa</td></tr>
+      <tr><td><b>ChatGPT &amp; chatbot tổng quát</b></td>
+          <td>Trả lời tự do, có thể gợi đáp án</td>
+          <td><span class="strike">Lộ đáp án ngay lập tức</span> · không ép đi qua pipeline · hallucinate · không có các case để thực hành</td></tr>
+      <tr><td><b>Giảng viên qua Messenger</b></td>
+          <td>Hỗ trợ 1-1 không đồng bộ</td>
+          <td>Chờ 1–2 ngày · không khả thi cho hàng nghìn SV</td></tr>
+      <tr><td><b>Khóa học CĐHA online</b></td>
+          <td>Video bài giảng được biên tập</td>
+          <td>Vẫn là <i>passive learning</i>. Không đo được SV sai ở đâu</td></tr>
+    </tbody>
+  </table>
+
+  <p class="quote" style="margin-top:18px">
+    Không cái nào ép sinh viên <b>đi đủ pipeline</b>.
+    Không cái nào chỉ ra <b>sai tại bước nào</b>.
+    Và không cái nào có đầy đủ data các case để sinh viên có thể tự học.
+  </p>
+</section>
+
+<!-- =================== SLIDE 6 — OUR SOLUTION =================== -->
+<section class="slide">
+  <div class="num">05 · Our Solution</div>
+  <span class="ribbon">Đây là SARa.</span>
+  <h2 style="margin-top:10px">Không phải chatbot.<br/>
+   Là một <span class="underline">vòng lặp tư duy lâm sàng</span> — bị ép đi đúng từng bước.</h2>
+
+  <div class="flow">
+    <span class="step">DESCRIBE</span><span class="arr">→</span>
+    <span class="step">REASONING</span><span class="arr">→</span>
+    <span class="step">DDx</span><span class="arr">→</span>
+    <span class="step">CONCLUSION</span>
+  </div>
+  <p>Sinh viên <b>không thể nhảy cóc</b>. Không thể bỏ bước.
+     Không thể thấy đáp án trước khi hoàn thành cả 4 bước —
+     <span class="hand" style="font-size:28px;color:var(--accent)">enforce ở server-side</span>.</p>
+
+  <hr class="dash"/>
+  <h3>SARa giải quyết được gì?</h3>
+  <div class="grid3">
+    <div class="card">
+      <h3>Feedback tức thì</h3>
+      <p>Từ <b>1–2 ngày</b> → <b>vài giây</b>. Tại từng bước. Chỉ ra <i>sai ở đâu</i>, không phải "đúng/sai".</p>
+    </div>
+    <div class="card">
+      <h3>Ép đi đúng pipeline</h3>
+      <p>Không bao giờ tiết lộ chẩn đoán sớm. Diệt <b>premature closure</b> từ gốc.</p>
+    </div>
+    <div class="card">
+      <h3>Pattern recognition thật</h3>
+      <p>SV nhìn ảnh → mô tả → suy luận → loại trừ → kết luận. <i>Đúng cách một bác sĩ phải đi.</i></p>
+    </div>
+  </div>
+</section>
+
+<!-- =================== SLIDE 7 — TECH / ARCHITECTURE =================== -->
+<section class="slide">
+  <div class="num">06 · Architecture</div>
+  <h2>Ba AI agent — một bộ não phân vai.</h2>
+
+  <div class="grid3" style="margin-top:14px">
+    <div class="card">
+      <h3>👁 CV Agent</h3>
+      <p>Đọc ảnh y tế (X-ray / CT / MRI), trả về <code>findings JSON</code>:<br/>
+         <i>regions, density, anomalies, laterality.</i></p>
+      <span class="pill">HuggingFace + MedGemma Vision</span>
+    </div>
+    <div class="card">
+      <h3>🦉 Socratic Agent</h3>
+      <p>Đặt câu hỏi dẫn dắt theo từng bước.<br/>
+         <b>Không bao giờ</b> nêu tên bệnh hay tiết lộ đáp án.</p>
+      <span class="pill">System prompt khoá đáp án</span>
+    </div>
+    <div class="card">
+      <h3>✓ Answer-Check Agent</h3>
+      <p>Đánh giá câu trả lời tự do theo <code>rubric JSON</code> đã được bác sĩ duyệt.
+         Trả về <i>score · errors · feedback</i>.</p>
+      <span class="pill">Rubric-constrained</span>
+    </div>
+  </div>
+
+  <hr class="dash"/>
+  <h3>Kiến trúc thực tế</h3>
+  <div class="arch-svg-wrap">
+    <svg viewBox="0 0 1000 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Kien truc SARa">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#3b2a17"/>
+        </marker>
+        <style>
+          .box  { fill:#fff8dd; stroke:#3b2a17; stroke-width:2; }
+          .box-accent { fill:#fdf1c7; stroke:#b8541a; stroke-width:2; }
+          .pill { fill:#fff5d6; stroke:#3b2a17; stroke-width:1.8; }
+          .lbl     { font-family:'Patrick Hand','Segoe UI',sans-serif; font-size:18px; fill:#3b2a17; }
+          .lbl-sm  { font-family:'Patrick Hand','Segoe UI',sans-serif; font-size:15px; fill:#6b5435; }
+          .lbl-hd  { font-family:'Patrick Hand','Segoe UI',sans-serif; font-size:22px; font-weight:700; fill:#b8541a; }
+          .lbl-pill{ font-family:'Patrick Hand','Segoe UI',sans-serif; font-size:17px; fill:#3b2a17; }
+          .edge    { stroke:#3b2a17; stroke-width:2; fill:none; }
+          .edge-lbl{ font-family:'Patrick Hand','Segoe UI',sans-serif; font-size:14px; fill:#6b5435; }
+        </style>
+      </defs>
+
+      <!-- FRONTEND -->
+      <rect class="box" x="180" y="20" width="640" height="70" rx="10" ry="10"/>
+      <text class="lbl-hd" x="210" y="48">FRONTEND</text>
+      <text class="lbl"    x="210" y="74">React 18  ·  Vite  ·  Tailwind  ·  shadcn / Radix  ·  MUI</text>
+
+      <!-- Arrow FE -> BE -->
+      <line class="edge" x1="500" y1="92" x2="500" y2="138" marker-end="url(#arr)"/>
+      <text class="edge-lbl" x="510" y="118">REST · JSON · JWT</text>
+
+      <!-- BACKEND -->
+      <rect class="box-accent" x="80" y="140" width="840" height="320" rx="10" ry="10"/>
+      <text class="lbl-hd" x="110" y="170">BACKEND  ·  Django + DRF</text>
+
+      <text class="lbl"    x="110" y="208">Pipeline State Machine</text>
+      <text class="lbl-sm" x="298" y="208">(server-side · anti-skip · score gate)</text>
+
+      <!-- 4 pipeline pills -->
+      <g transform="translate(110,224)">
+        <rect class="pill" x="0"   y="0" width="155" height="38" rx="18" ry="18"/>
+        <text class="lbl-pill" x="77" y="25" text-anchor="middle">DESCRIBE</text>
+        <line class="edge" x1="160" y1="19" x2="184" y2="19" marker-end="url(#arr)"/>
+
+        <rect class="pill" x="190" y="0" width="165" height="38" rx="18" ry="18"/>
+        <text class="lbl-pill" x="272" y="25" text-anchor="middle">REASONING</text>
+        <line class="edge" x1="358" y1="19" x2="382" y2="19" marker-end="url(#arr)"/>
+
+        <rect class="pill" x="388" y="0" width="90" height="38" rx="18" ry="18"/>
+        <text class="lbl-pill" x="433" y="25" text-anchor="middle">DDx</text>
+        <line class="edge" x1="482" y1="19" x2="506" y2="19" marker-end="url(#arr)"/>
+
+        <rect class="pill" x="512" y="0" width="170" height="38" rx="18" ry="18"/>
+        <text class="lbl-pill" x="597" y="25" text-anchor="middle">CONCLUSION</text>
+      </g>
+
+      <line x1="110" y1="296" x2="890" y2="296" stroke="#b8541a" stroke-width="1" stroke-dasharray="4 4" opacity=".5"/>
+
+      <text class="lbl-hd" x="110" y="324" style="font-size:20px">Agent Orchestrator</text>
+
+      <g transform="translate(110,340)">
+        <rect class="box" x="0"   y="0" width="240" height="92" rx="10" ry="10"/>
+        <text class="lbl"    x="14" y="26">Socratic Agent</text>
+        <text class="lbl-sm" x="14" y="50">đặt câu hỏi dẫn dắt</text>
+        <text class="lbl-sm" x="14" y="74" fill="#b8541a">→  LLM (GPT-4o)</text>
+
+        <rect class="box" x="260" y="0" width="240" height="92" rx="10" ry="10"/>
+        <text class="lbl"    x="274" y="26">Answer-Check Agent</text>
+        <text class="lbl-sm" x="274" y="50">chấm theo rubric JSON</text>
+        <text class="lbl-sm" x="274" y="74" fill="#b8541a">→  LLM (GPT-4o)</text>
+
+        <rect class="box" x="520" y="0" width="260" height="92" rx="10" ry="10"/>
+        <text class="lbl"    x="534" y="26">Image Analysis</text>
+        <text class="lbl-sm" x="534" y="50">đọc X-ray / CT / MRI</text>
+        <text class="lbl-sm" x="534" y="74" fill="#b8541a">→  MedGemma + GPT Vision</text>
+      </g>
+
+      <!-- arrows to data / observability -->
+      <line class="edge" x1="280" y1="462" x2="280" y2="508" marker-end="url(#arr)"/>
+      <line class="edge" x1="720" y1="462" x2="720" y2="508" marker-end="url(#arr)"/>
+
+      <rect class="box" x="100" y="510" width="360" height="92" rx="10" ry="10"/>
+      <text class="lbl-hd" x="120" y="540">Supabase</text>
+      <text class="lbl"    x="120" y="566">Postgres  ·  Storage  ·  Auth (RLS)</text>
+      <text class="lbl-sm" x="120" y="588">users · cases · sessions · attempts · rubric</text>
+
+      <rect class="box" x="540" y="510" width="360" height="92" rx="10" ry="10"/>
+      <text class="lbl-hd" x="560" y="540">Langfuse</text>
+      <text class="lbl"    x="560" y="566">Observability</text>
+      <text class="lbl-sm" x="560" y="588">generation traces · token cost · latency</text>
+    </svg>
+  </div>
+</section>
+
+<!-- =================== SLIDE 8 — WHY WE'RE BETTER =================== -->
+<section class="slide">
+  <div class="num">07 · Why we win</div>
+  <h2>SARa vs. mọi thứ khác — <span class="underline">khác về bản chất</span>.</h2>
+
+  <div class="vs">
+    <div class="col bad">
+      <h3 style="color:var(--accent)">Cách thông thường</h3>
+      <ul class="bullets">
+        <li>Trả lời đáp án cuối <i>"đúng/sai"</i></li>
+        <li>Lộ chẩn đoán ngay khi hỏi</li>
+        <li>Không ép qua từng bước tư duy</li>
+        <li>Ground truth do AI tự bịa → <i>hallucination</i></li>
+        <li>Feedback chậm hoặc tổng quát</li>
+        <li>Không đo được tiến bộ theo bước</li>
+      </ul>
+    </div>
+    <div class="center">VS</div>
+    <div class="col good">
+      <h3 style="color:var(--accent-2)">SARa</h3>
+      <ul class="bullets">
+        <li><b>Error localisation</b> — chỉ ra sai ở bước nào, vì sao</li>
+        <li>State machine server-side: <b>không thể nhảy cóc</b></li>
+        <li>Ground truth lấy từ các trang <b>uy tín</b>, LLM chỉ chấm theo rubric</li>
+        <li>Feedback <b>&lt; 4 giây</b> · cá nhân hoá theo câu trả lời</li>
+        <li>Dashboard performance <b>theo từng bước</b></li>
+        <li>Chuẩn đoán với hình ảnh do <b>user upload</b></li>
+        <li>Luyện tập trao đổi, thảo luận với <b>bác sĩ giả lập</b></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- =================== SLIDE 9 — METRICS / IMPACT =================== -->
+<section class="slide">
+  <div class="num">08 · Impact in numbers</div>
+  <h2>Đây là <span class="underline">đòn bẩy kinh tế</span> của SARa.</h2>
+
+  <div class="grid2" style="margin-top:14px">
+    <div class="card">
+      <h3>⏱ Thời gian học mỗi ca</h3>
+      <p><span class="big-stat" style="font-size:68px">2–3h <span class="arrow">→</span> &lt;30'</span></p>
+      <p>Giảm <b>~80%</b> thời gian / ca.
+         Một SV có thể đi qua <b>5–10 ca / tuần</b> thay vì 2 ca.</p>
+    </div>
+    <div class="card">
+      <h3>💸 Chi phí vận hành</h3>
+      <p><span class="big-stat" style="font-size:68px">$0.01<small style="font-size:20px">/session</small></span></p>
+      <p>Chi phí AI ~ <b>$0.010–0.015</b> mỗi session hoàn thành.<br/>
+         Ở 200 WAU × 5 ca/tuần → <b>~$150 / tháng</b>.
+         Prompt caching giảm thêm <b>20–40%</b>.</p>
+    </div>
+    <div class="card">
+      <h3>⌛ Vòng phản hồi</h3>
+      <p><span class="big-stat" style="font-size:68px">1–2 ngày <span class="arrow">→</span> 4s</span></p>
+      <p>Từ phụ thuộc giảng viên → <b>autonomous learning</b>.</p>
+    </div>
+    <div class="card">
+      <h3>🎯 North-star metric</h3>
+      <p><span class="big-stat" style="font-size:68px">≥ 40%</span></p>
+      <p>Người dùng tự quay lại làm <b>ca thứ 2 trong 7 ngày</b>, không cần ai nhắc — đó là tín hiệu sản phẩm đã <i>"click"</i>.</p>
+    </div>
+  </div>
+
+  <hr class="dash"/>
+  <table>
+    <thead><tr><th>KPI</th><th>Mục tiêu</th><th>Thời điểm</th></tr></thead>
+    <tbody>
+      <tr><td>Weekly Active Users</td><td>≥ 200 (1% SAM)</td><td>Tháng 3</td></tr>
+      <tr><td>Retention tuần 4</td><td>40 – 50%</td><td>Cohort analysis</td></tr>
+      <tr><td>Diagnosis accuracy Δ</td><td>+20 – 30%</td><td>A/B pre/post 2 tuần</td></tr>
+      <tr><td>NPS</td><td>≥ 50</td><td>Tháng 6</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =================== SLIDE 10 — WORKFLOW / DEMO =================== -->
+<section class="slide">
+  <div class="num">09 · Workflow</div>
+  <h2>Một session — 5 cảnh.</h2>
+
+  <ol style="font-family:'Patrick Hand';font-size:22px;line-height:1.5">
+    <li><b>Chọn ca.</b> SV duyệt Case Library — lọc theo modality &amp; độ khó. Mỗi ca có 1–3 ảnh + lịch sử lâm sàng ngắn. <i>Không hiển thị đáp án.</i></li>
+    <li><b>Bắt đầu chẩn đoán.</b> CV Agent chạy <i>async</i> trong nền. Socratic AI mở bước <span class="pill">DESCRIBE</span> — đặt câu hỏi <b>tự do</b>, không multiple choice.</li>
+    <li><b>Trả lời &amp; nhận feedback.</b> Answer-Check chấm theo rubric trong &lt;4 giây. Card hiện rõ <i>"Làm đúng / Cần cải thiện / Gợi ý"</i>.</li>
+    <li><b>Tiến qua pipeline.</b> Đạt ngưỡng → mở bước tiếp. Chưa đạt → Socratic Agent dẫn dắt thêm. <b>Không bao giờ chặn</b> tiến trình.</li>
+    <li><b>Mở khóa answer key.</b> Chỉ khi hoàn thành cả 4 bước. Kèm dashboard: điểm theo bước, bước yếu nhất, streak, lịch sử ca.</li>
+  </ol>
+
+  <hr class="dash"/>
+  <div class="flow">
+    <span class="step">Browse</span><span class="arr">→</span>
+    <span class="step">Start session</span><span class="arr">→</span>
+    <span class="step">Pipeline 4 bước</span><span class="arr">→</span>
+    <span class="step">Feedback / step</span><span class="arr">→</span>
+    <span class="step">Answer key + Dashboard</span>
+  </div>
+  <p class="quote">Sản phẩm không hứa thay thế giảng viên — nó hứa biến mỗi đêm tự học thành một buổi tutor 1-1.</p>
+</section>
+
+<!-- =================== SLIDE 11 — THE ASK =================== -->
+<section class="slide">
+  <div class="num">10 · The Ask</div>
+  <h2>Chúng tôi đang ở đâu - và cần gì.</h2>
+
+  <div class="grid2" style="margin-top:14px">
+    <div>
+      <h3>Hiện tại</h3>
+      <ul class="bullets">
+        <li>MVP demo chạy được. 3 agent online.</li>
+        <li>Case library đang được bác sĩ review.</li>
+        <li>Pilot <b>30 SV</b> tại VinUniversity — chuẩn bị triển khai.</li>
+        <li>Chi phí vận hành: <b>~$15 / tháng</b> ở giai đoạn pilot.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Validation Trigger</h3>
+      <p class="quote">≥ 15 / 30 SV tự hoàn thành ≥ 3 ca trong 7 ngày, <b>không cần ai nhắc</b>.</p>
+      <p>Đạt → mở rộng <b>100 ca</b>, partner với <b>VinUni &amp; Hanoi Medical University</b>, gọi <b>seed funding</b>.</p>
+    </div>
+  </div>
+
+  <hr class="dash"/>
+  <h3 style="text-align:center">Đầu tư vào SARa là đầu tư vào…</h3>
+  <div class="kpi">
+    <div class="item"><div class="num-big">15K</div><div class="lbl">SV y năm và bác sĩ nội trú Việt Nam</div></div>
+    <div class="item"><div class="num-big">$3.35B</div><div class="lbl">thị trường online radiology<br/>edu toàn cầu 2030</div></div>
+    <div class="item"><div class="num-big">7.7%</div><div class="lbl">CAGR · cửa sổ thời gian<br/>đang mở</div></div>
+    <div class="item"><div class="num-big">3</div><div class="lbl">tuần tới validation</div></div>
+  </div>
+
+  <p style="text-align:center;font-family:'Patrick Hand';font-size:42px;color:var(--accent);margin-top:20px">
+    SARa không dạy đáp án — SARa dạy <span class="underline">cách nghĩ như một bác sĩ</span>.
+  </p>
+  <div class="stamp">Thank you</div>
+</section>
+
+</div>
+<script>
+(function(){
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const curIdx  = document.getElementById('curIdx');
+  const totalIdx= document.getElementById('totalIdx');
+  totalIdx.textContent = slides.length;
+  let i = 0;
+
+  function show(n){
+    i = Math.max(0, Math.min(slides.length-1, n));
+    slides.forEach((s,k)=>s.classList.toggle('active', k===i));
+    curIdx.textContent = i+1;
+    prevBtn.classList.toggle('disabled', i===0);
+    nextBtn.classList.toggle('disabled', i===slides.length-1);
+    // reset scroll inside slide
+    slides[i].scrollTop = 0;
+  }
+  function next(){ if(i<slides.length-1) show(i+1) }
+  function prev(){ if(i>0) show(i-1) }
+
+  // Init
+  show(0);
+
+  // Buttons
+  prevBtn.addEventListener('click', e=>{ e.stopPropagation(); prev() });
+  nextBtn.addEventListener('click', e=>{ e.stopPropagation(); next() });
+
+  // Click on slide → next. Click on left third → prev.
+  slides.forEach(s => s.addEventListener('click', e=>{
+    const x = e.clientX;
+    const w = window.innerWidth;
+    if (x < w*0.25) prev(); else next();
+  }));
+
+  // Keyboard
+  document.addEventListener('keydown', e=>{
+    if (e.key==='ArrowRight' || e.key===' ' || e.key==='PageDown') { e.preventDefault(); next(); }
+    else if (e.key==='ArrowLeft' || e.key==='PageUp') { e.preventDefault(); prev(); }
+    else if (e.key==='Home') show(0);
+    else if (e.key==='End')  show(slides.length-1);
+  });
+
+  // Hide hint after 6s
+  setTimeout(()=>{
+    const h = document.querySelector('.hint');
+    if (h) h.style.transition='opacity 1s', h.style.opacity='0';
+  }, 6000);
+})();
+</script>
+</body>
+</html>

@@ -3,11 +3,12 @@
  */
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AuthService, User, AuthState } from './auth';
+import { AuthService, AuthState, ProfileUpdatePayload } from './auth';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  updateProfile: (payload: ProfileUpdatePayload) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -91,8 +92,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const updateProfile = async (payload: ProfileUpdatePayload) => {
+    const result = await AuthService.updateCurrentUser(payload);
+    if (result.success && result.user) {
+      setState((prev) => ({ ...prev, user: result.user ?? prev.user }));
+      return { success: true };
+    }
+    return { success: false, error: result.error };
+  };
+
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ ...state, login, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

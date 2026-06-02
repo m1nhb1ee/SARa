@@ -3,9 +3,9 @@ import type { CaseItem } from '@/types';
 import { difficultyStyle, modalityStyle } from '@/constants/styles';
 
 const statusConfig = {
-  'Chưa làm':  { icon: Clock,        color: '#8B6355',  label: 'Chưa làm' },
-  'Đang làm':  { icon: RefreshCw,    color: '#C9882A',  label: 'Đang làm' },
-  'Hoàn thành':{ icon: CheckCircle2, color: '#7D9B76',  label: 'Hoàn thành' },
+  'Chưa làm':  { icon: Clock,        color: 'var(--ink-secondary)', label: 'Chưa làm' },
+  'Đang làm':  { icon: RefreshCw,    color: 'var(--accent-ochre)',  label: 'Đang làm' },
+  'Hoàn thành':{ icon: CheckCircle2, color: 'var(--accent-sage)',   label: 'Hoàn thành' },
 } as const;
 
 interface Props {
@@ -20,10 +20,10 @@ export function CaseCard({ item, onClick }: Props) {
   const mod = modalityStyle[item.modality];
 
   const actionStyle = item.status === 'Đang làm'
-    ? { border: '1px solid #C9882A', color: '#C9882A' }
+    ? { border: '1px solid var(--accent-ochre)', color: 'var(--accent-ochre)', backgroundColor: 'transparent' }
     : item.status === 'Hoàn thành'
-    ? { border: '1px solid #7D9B76', color: '#7D9B76' }
-    : { border: '1px solid #C0392B', backgroundColor: '#C0392B', color: '#F5EDD6' };
+    ? { border: '1px solid var(--accent-sage)', color: 'var(--accent-sage)', backgroundColor: 'transparent' }
+    : { border: '1px solid var(--accent-gold)', backgroundColor: 'var(--accent-gold)', color: 'var(--ink-on-accent)' };
 
   const actionLabel = item.status === 'Đang làm' ? 'Tiếp tục' : item.status === 'Hoàn thành' ? 'Làm lại' : 'Bắt đầu';
 
@@ -31,18 +31,27 @@ export function CaseCard({ item, onClick }: Props) {
     <div
       onClick={onClick}
       style={{
-        backgroundColor: '#EDE0C4',
-        border: '1px solid #C4A882',
-        borderRadius: 2,
+        backgroundColor: 'var(--bg-surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
         overflow: 'hidden',
         cursor: 'pointer',
-        transition: 'border-color 0.2s, transform 0.2s',
+        boxShadow: 'var(--shadow-xs)',
+        transition: 'box-shadow 0.2s, transform 0.2s, border-color 0.2s',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+        e.currentTarget.style.borderColor = 'var(--border-strong)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
+        e.currentTarget.style.borderColor = 'var(--border)';
       }}
     >
       {/* Thumbnail */}
       <div style={{
         height: 140,
-        backgroundColor: '#2C1810',
+        backgroundColor: '#1A1A1A',
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
@@ -51,43 +60,45 @@ export function CaseCard({ item, onClick }: Props) {
         <div className={`img-${item.imageKey}`} style={{ width: '100%', height: '100%', opacity: 0.85 }} />
         <span style={{
           position: 'absolute', top: 8, left: 8,
-          padding: '3px 10px', borderRadius: 2, fontSize: 11, fontWeight: 500,
-          fontFamily: "'Special Elite', cursive", letterSpacing: '0.05em',
-          backgroundColor: diff.bg, color: diff.color, border: `1px solid ${diff.color}44`,
+          padding: '3px 10px', borderRadius: 'var(--radius-sm)', fontSize: 11, fontWeight: 600,
+          fontFamily: 'var(--font-typewriter)', letterSpacing: '0.03em',
+          backgroundColor: diff.bg, color: diff.color,
+          border: `1px solid ${diff.color}`,
         }}>
           {item.difficulty}
         </span>
         <span style={{
           position: 'absolute', top: 8, right: 8,
-          padding: '3px 10px', borderRadius: 2, fontSize: 11, fontWeight: 600,
-          fontFamily: "'Special Elite', cursive", letterSpacing: '0.05em',
-          backgroundColor: mod.bg, color: mod.color, border: `1px solid ${mod.color}44`,
+          padding: '3px 10px', borderRadius: 'var(--radius-sm)', fontSize: 11, fontWeight: 600,
+          fontFamily: 'var(--font-typewriter)', letterSpacing: '0.03em',
+          backgroundColor: mod.bg, color: mod.color,
+          border: `1px solid ${mod.color}`,
         }}>
           {item.modality}
         </span>
       </div>
 
       {/* Content */}
-      <div style={{ padding: 12 }}>
+      <div style={{ padding: 14 }}>
         <h3 style={{
-          fontSize: 14, fontWeight: 600,
-          fontFamily: "'Playfair Display', serif",
-          color: '#2C1810', marginBottom: 4, lineHeight: 1.3,
+          fontSize: 16, fontWeight: 700,
+          fontFamily: 'var(--font-display)',
+          color: 'var(--ink)', marginBottom: 6, lineHeight: 1.35,
         }}>
           {item.title}
         </h3>
         <p style={{
-          fontSize: 12, color: '#6B4C3B', marginBottom: 10, lineHeight: 1.5,
-          fontFamily: "'Lora', serif", fontStyle: 'italic',
+          fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12, lineHeight: 1.55,
+          fontFamily: 'var(--font-body)', fontStyle: 'italic',
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>
           {item.hint}
         </p>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <StatusIcon size={13} color={status.color} />
-            <span style={{ fontSize: 12, color: status.color, fontWeight: 500, fontFamily: "'Courier Prime', monospace" }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <StatusIcon size={13} style={{ color: status.color }} />
+            <span style={{ fontSize: 12, color: status.color, fontWeight: 500, fontFamily: 'var(--font-mono)' }}>
               {status.label}
             </span>
           </div>
@@ -95,10 +106,10 @@ export function CaseCard({ item, onClick }: Props) {
             onClick={(e) => { e.stopPropagation(); onClick(); }}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 12px', borderRadius: 2,
+              padding: '6px 12px', borderRadius: 'var(--radius-sm)',
               fontSize: 12, fontWeight: 600,
-              fontFamily: "'Special Elite', cursive", letterSpacing: '0.05em',
-              cursor: 'pointer', backgroundColor: 'transparent',
+              fontFamily: 'var(--font-typewriter)', letterSpacing: '0.02em',
+              cursor: 'pointer',
               transition: 'all 0.2s', ...actionStyle,
             }}
           >

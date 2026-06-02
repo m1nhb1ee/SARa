@@ -30,7 +30,7 @@ async function resolveQuery<T>(
 
 // ── Query hooks ───────────────────────────────────────────────────────────────
 
-export function useCases(params?: { modality?: string; difficulty?: string; search?: string; page?: number }) {
+export function useCases(params?: { modality?: string; difficulty?: string; search?: string; page?: number; is_valid?: string }) {
   const [state, patch] = useQueryState<any>();
   const paramsKey = JSON.stringify(params);
 
@@ -52,6 +52,16 @@ export function useCaseDetail(caseId: string | null) {
   return state;
 }
 
+export function useExamCases() {
+  const [state, patch] = useQueryState<any>();
+
+  const refetch = useCallback(() => resolveQuery(() => apiClient.getExamCases(), patch), []);
+
+  useEffect(() => { refetch(); }, []);
+
+  return { ...state, refetch };
+}
+
 export function useSessions(params?: { status?: string; page?: number }) {
   const [state, patch] = useQueryState<any>();
   const paramsKey = JSON.stringify(params);
@@ -59,6 +69,16 @@ export function useSessions(params?: { status?: string; page?: number }) {
   const refetch = useCallback(() => resolveQuery(() => apiClient.getSessions(params), patch), [paramsKey]);
 
   useEffect(() => { refetch(); }, [paramsKey]);
+
+  return { ...state, refetch };
+}
+
+export function useSwapSessions() {
+  const [state, patch] = useQueryState<any>();
+
+  const refetch = useCallback(() => resolveQuery(() => apiClient.listSwapSessions(), patch), []);
+
+  useEffect(() => { refetch(); }, []);
 
   return { ...state, refetch };
 }
@@ -80,6 +100,16 @@ export function useMyStats() {
   const [state, patch] = useQueryState<any>();
 
   useEffect(() => { resolveQuery(() => apiClient.getMyStats(), patch); }, []);
+
+  return state;
+}
+
+export function useLeaderboard(type: 'exam' | 'case', limit = 50) {
+  const [state, patch] = useQueryState<any>();
+
+  useEffect(() => {
+    resolveQuery(() => apiClient.getLeaderboard(type, limit), patch);
+  }, [type, limit]);
 
   return state;
 }
@@ -155,4 +185,9 @@ export function useDeleteUploadedCase() {
     apiClient.deleteUploadedCase(uploadSessionId)
   );
   return { deleteCase: mutate, loading, error };
+}
+
+export function useCreateExamSession() {
+  const { mutate, loading, error } = useMutation((caseId: string) => apiClient.createExamSession(caseId));
+  return { createExamSession: mutate, loading, error };
 }

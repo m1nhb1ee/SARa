@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+import logging
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -11,8 +12,8 @@ def _ensure_user_profile(sb, user, full_name: str = '') -> None:
     payload = {
         'id': str(user.id),
         'email': user.email,
-        'role': role,
         'full_name': full_name or '',
+        'role': role,
     }
     sb.table('users').upsert(payload, on_conflict='id').execute()
 
@@ -57,10 +58,11 @@ class RegisterView(APIView):
             else:
                 # Email confirmation required
                 return Response({
-                    'message': 'Đăng ký thành công! Vui lòng kiểm tra email để xác nhận tài khoản.',
+                    'message': 'Đăng ký thành công! Vui lòng check email',
                     'requires_confirmation': True,
                 }, status=status.HTTP_201_CREATED)
         except Exception as e:
+            logging.exception('RegisterView: error during sign_up')
             err = str(e).lower()
             if 'already registered' in err or 'already been registered' in err:
                 return Response(
@@ -94,21 +96,34 @@ class LoginView(APIView):
             session = res.session
             _ensure_user_profile(sb, user, (user.user_metadata or {}).get('full_name', ''))
             role = (user.app_metadata or {}).get('role', 'student')
+            profile = sb.table('users').select('is_premium').eq('id', str(user.id)).single().execute()
+            is_premium = bool((profile.data or {}).get('is_premium', False))
             return Response({
                 'user': {
                     'id': str(user.id),
                     'email': user.email,
                     'role': role,
+                    'is_premium': is_premium,
                 },
                 'access_token': session.access_token,
                 'refresh_token': session.refresh_token,
                 'expires_at': session.expires_at,
             })
-        except Exception:
+        except Exception as e:
+            logging.exception('LoginView: error during sign_in_with_password')
+            err = str(e).lower()
+            if 'email not confirmed' in err or 'not confirmed' in err:
+                return Response(
+                    {'error': 'Email chưa được xác nhận', 'requires_confirmation': True},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
             return Response(
                 {'error': 'Email hoặc mật khẩu không đúng'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+
+PROFILE_FIELDS = ('full_name', 'user_name', 'dob', 'university')
 
 
 class MeView(APIView):
@@ -116,14 +131,45 @@ class MeView(APIView):
 
     def get(self, request):
         user = request.user
+        sb = get_supabase()
+        profile = sb.table('users').select(
+            'is_premium, full_name, user_name, dob, university'
+        ).eq('id', str(user['id'])).single().execute()
+        data = profile.data or {}
         return Response({
             'user': {
                 'id': user['id'],
                 'email': user['email'],
-                'full_name': user.get('full_name', ''),
+                'full_name': data.get('full_name') or user.get('full_name', ''),
+                'user_name': data.get('user_name'),
+                'dob': data.get('dob'),
+                'university': data.get('university'),
                 'role': user.get('role', 'student'),
+                'is_premium': bool(data.get('is_premium', False)),
             }
         })
+
+    def patch(self, request):
+        user = request.user
+        payload = {k: request.data.get(k) for k in PROFILE_FIELDS if k in request.data}
+        for key in ('full_name', 'user_name', 'university'):
+            if key in payload and payload[key] is not None:
+                payload[key] = str(payload[key]).strip() or None
+        if 'dob' in payload and payload['dob'] in ('', None):
+            payload['dob'] = None
+        if not payload:
+            return Response({'error': 'No fields to update'}, status=status.HTTP_400_BAD_REQUEST)
+        sb = get_supabase()
+        try:
+            if payload.get('user_name'):
+                existing = sb.table('users').select('id').ilike('user_name', payload['user_name']).neq('id', str(user['id'])).execute()
+                if existing.data:
+                    return Response({'error': 'Username đã được sử dụng'}, status=status.HTTP_409_CONFLICT)
+            sb.table('users').update(payload).eq('id', str(user['id'])).execute()
+        except Exception:
+            logging.exception('MeView.patch: update failed')
+            return Response({'error': 'Cập nhật thất bại'}, status=status.HTTP_400_BAD_REQUEST)
+        return self.get(request)
 
 
 class LogoutView(APIView):

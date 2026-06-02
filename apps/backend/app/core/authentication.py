@@ -1,6 +1,7 @@
 import os
 import httpx
 from rest_framework.authentication import BaseAuthentication
+import logging
 from rest_framework.exceptions import AuthenticationFailed
 from app.core.supabase_client import get_supabase
 
@@ -40,6 +41,11 @@ class SupabaseJWTAuthentication(BaseAuthentication):
                 timeout=10,
             )
             if resp.status_code != 200:
+                # log response for debugging
+                try:
+                    logging.error('Supabase user lookup failed: status=%s body=%s', resp.status_code, resp.text)
+                except Exception:
+                    logging.exception('Supabase user lookup failed and resp.text could not be read')
                 raise AuthenticationFailed('Invalid or expired Supabase token.')
             user = resp.json()
             role = (user.get('app_metadata') or {}).get('role', 'student')

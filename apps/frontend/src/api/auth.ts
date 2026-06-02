@@ -6,7 +6,18 @@ export interface User {
   id: string;
   email: string;
   role: string;
+  is_premium: boolean;
+  full_name?: string | null;
+  user_name?: string | null;
+  dob?: string | null;
+  university?: string | null;
 }
+
+export type ProfileUpdatePayload = {
+  user_name?: string | null;
+  dob?: string | null;
+  university?: string | null;
+};
 
 export interface AuthState {
   user: User | null;
@@ -84,6 +95,34 @@ export class AuthService {
       return null;
     } catch {
       return null;
+    }
+  }
+
+  static async updateCurrentUser(payload: ProfileUpdatePayload): Promise<{ success: boolean; user?: User; error?: string }> {
+    const token = this.getStoredToken();
+    if (!token) return { success: false, error: 'Not authenticated' };
+
+    try {
+      const response = await fetch(`${this.baseURL}/auth/me/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        return { success: false, error: data.error || `HTTP ${response.status}` };
+      }
+
+      const data = await response.json();
+      const user: User = data.user;
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+      return { success: true, user };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Update failed' };
     }
   }
 
