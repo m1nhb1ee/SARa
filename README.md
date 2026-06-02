@@ -11,7 +11,7 @@
 [![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
 
 ---
-Các tài liệu đi kèm như PRD, MVP Scope, architecture diagram, ai-log, evaluation report... được đặt trong thư mục submission_documents
+Các tài liệu đi kèm như PRD, MVP Scope, architecture diagram, ai-log, evaluation report... được đặt trong thư mục docs
 ---
 
 ## Mô Tả Ngắn Gọn
@@ -59,7 +59,7 @@ User
   -> Supabase PostgreSQL + Supabase Storage
 ```
 
-Backend hiện tại là Django REST Framework, không phải FastAPI. Database chính là Supabase/PostgreSQL; ảnh case được lưu qua Supabase Storage.
+Backend hiện tại là Django REST Framework. Database chính là Supabase/PostgreSQL; ảnh case được lưu qua Supabase Storage.
 
 ---
 
@@ -105,10 +105,7 @@ A20-App-076/
 │       │   └── types/
 │       ├── package.json
 │       └── vite.config.ts
-├── documents/                   # Product docs, slides, test/evaluation docs
-├── scripts/
-├── JOURNAL.md
-├── WORKLOG.md
+├── docs/                   # Product docs, slides, test/evaluation docs
 └── README.md
 ```
 
