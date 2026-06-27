@@ -200,7 +200,7 @@
     display:grid;grid-template-columns:1fr auto 1fr;gap:20px;align-items:stretch;margin-top:14px;
   }
   .vs .col{padding:16px;border-radius:8px}
-  .vs .bad{background:rgba(184,84,26,.08);border:1.5px dashed var(--accent)}
+  .vs .bad{background:rgba(80,55,20,.05);border:1.5px dashed rgba(80,55,20,.4)}
   .vs .good{background:rgba(31,93,76,.08);border:1.5px solid var(--accent-2)}
   .vs .center{display:flex;align-items:center;justify-content:center;font-family:'Patrick Hand';font-size:50px;color:var(--accent)}
   .ascii{
@@ -217,6 +217,32 @@
     font-size:24px;padding:4px 14px;transform:rotate(-2deg);box-shadow:3px 3px 0 var(--rule);
   }
   hr.dash{border:none;border-top:2px dashed var(--ink);opacity:.4;margin:18px 0}
+
+  /* ---------- Print / PDF export ---------- */
+  @page{ size:1180px 1000px; margin:0 }
+  @media print{
+    html,body{height:auto;overflow:visible;background:#fff}
+    .hint,.nav-arrow,.counter{display:none !important}
+    .deck{position:static;width:auto;height:auto}
+    .slide{
+      position:relative; inset:auto; margin:0 auto;
+      width:1180px; min-height:960px; height:auto;
+      opacity:1 !important; visibility:visible !important;
+      overflow:visible; border-radius:0;
+      box-shadow:inset 0 0 0 1px rgba(120,90,40,.25);
+      transition:none; cursor:default;
+      padding:42px 56px 46px;
+      page-break-after:always; break-after:page;
+    }
+    .slide:last-child{ page-break-after:auto; break-after:auto }
+    /* pin the tall architecture diagram to a fixed height so the slide fits one page */
+    .arch-svg-wrap{ height:380px; padding:8px 14px; margin-top:6px }
+    .arch-svg-wrap svg{ width:100%; height:100% }
+    .card{ padding:14px 16px }
+    .big-stat{ font-size:54px !important }
+    th,td{ padding:6px 9px; font-size:18px }
+    th{ font-size:21px }
+  }
 </style>
 </head>
 <body>
@@ -417,10 +443,10 @@
 
   <div class="grid3" style="margin-top:14px">
     <div class="card">
-      <h3>👁 CV Agent</h3>
+      <h3>👁 Image Analysis Agent</h3>
       <p>Đọc ảnh y tế (X-ray / CT / MRI), trả về <code>findings JSON</code>:<br/>
-         <i>regions, density, anomalies, laterality.</i></p>
-      <span class="pill">HuggingFace + MedGemma Vision</span>
+         <i>vùng tổn thương, mật độ, bất thường, bên trái/phải.</i></p>
+      <span class="pill">MedGemma + GPT Vision</span>
     </div>
     <div class="card">
       <h3>🦉 Socratic Agent</h3>
@@ -554,9 +580,9 @@
         <li>State machine server-side: <b>không thể nhảy cóc</b></li>
         <li>Ground truth lấy từ các trang <b>uy tín</b>, LLM chỉ chấm theo rubric</li>
         <li>Feedback <b>&lt; 4 giây</b> · cá nhân hoá theo câu trả lời</li>
-        <li>Dashboard performance <b>theo từng bước</b></li>
-        <li>Chuẩn đoán với hình ảnh do <b>user upload</b></li>
-        <li>Luyện tập trao đổi, thảo luận với <b>bác sĩ giả lập</b></li>
+        <li>Dashboard tiến bộ <b>theo từng bước</b></li>
+        <li>Chẩn đoán trên <b>ảnh do người dùng tự upload</b></li>
+        <li>Chế độ <b>Thi</b> &amp; <b>tranh luận với bác sĩ AI</b></li>
       </ul>
     </div>
   </div>
@@ -629,17 +655,56 @@
   <p class="quote">Sản phẩm không hứa thay thế giảng viên — nó hứa biến mỗi đêm tự học thành một buổi tutor 1-1.</p>
 </section>
 
-<!-- =================== SLIDE 11 — THE ASK =================== -->
+<!-- =================== SLIDE 11 — ROADMAP =================== -->
 <section class="slide">
-  <div class="num">10 · The Ask</div>
+  <div class="num">10 · Roadmap</div>
+  <span class="ribbon">Sau MVP — SARa đi tiếp về đâu.</span>
+  <h2 style="margin-top:10px">Từ một công cụ luyện tập →
+     <span class="underline">một hệ sinh thái học chẩn đoán hình ảnh</span>.</h2>
+
+  <h3 style="margin-top:14px">Nâng cấp lõi AI</h3>
+  <div class="grid3">
+    <div class="card">
+      <h3>① Tách luồng theo loại phim</h3>
+      <p>X-quang · CT · MRI mỗi loại một luồng riêng — đúng đặc thù, dễ mở rộng sang siêu âm.</p>
+    </div>
+    <div class="card">
+      <h3>② Model chuyên biệt</h3>
+      <p>Chọn &amp; fine-tune model riêng cho từng loại phim. <b>Đo trước khi đổi</b>, không bỏ sót ca nguy kịch.</p>
+    </div>
+    <div class="card">
+      <h3>③ YOLO khoanh vùng</h3>
+      <p>Khi đã xác định có bệnh → khoanh đúng vị trí bất thường trên ảnh, hiện <b>sau khi</b> SV tự mô tả.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:16px">Mở rộng cộng đồng</h3>
+  <div class="grid2">
+    <div class="card">
+      <h3>④ Diễn đàn &amp; kho kiến thức</h3>
+      <p>Học không còn một mình: hỏi đáp, thảo luận ca khó, đọc kiến thức như một <b>quyển sách</b> — có kiểm duyệt y khoa.</p>
+    </div>
+    <div class="card">
+      <h3>⑤ Cùng chẩn đoán</h3>
+      <p>Nhiều người cùng làm một ca, so cách tiếp cận và chốt kết luận chung. Mở rộng từ chế độ tranh luận với AI.</p>
+    </div>
+  </div>
+
+  <p class="quote" style="margin-top:14px">Lõi chuyên môn sâu hơn · cộng đồng rộng hơn — cùng một sứ mệnh: <b>dạy cách nghĩ như một bác sĩ</b>.</p>
+</section>
+
+<!-- =================== SLIDE 12 — THE ASK =================== -->
+<section class="slide">
+  <div class="num">11 · The Ask</div>
   <h2>Chúng tôi đang ở đâu - và cần gì.</h2>
 
   <div class="grid2" style="margin-top:14px">
     <div>
       <h3>Hiện tại</h3>
       <ul class="bullets">
-        <li>MVP demo chạy được. 3 agent online.</li>
-        <li>Case library đang được bác sĩ review.</li>
+        <li>MVP đã <b>lên production</b> — chạy thật trên Railway.</li>
+        <li>3 agent online: Socratic · Answer-Check · Image Analysis.</li>
+        <li>Case library X-quang / CT / MRI, đang được bác sĩ review.</li>
         <li>Pilot <b>30 SV</b> tại VinUniversity — chuẩn bị triển khai.</li>
         <li>Chi phí vận hành: <b>~$15 / tháng</b> ở giai đoạn pilot.</li>
       </ul>
