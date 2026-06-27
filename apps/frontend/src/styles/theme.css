@@ -154,6 +154,20 @@
 
   --emphasis: var(--accent-gold);
 
+  /* ─── Legacy token aliases (pre-journal naming) ────────────────
+     Some pages (PracticePage, ComingSoon, Dashboard) were authored
+     against the old token names. Map them onto the journal tokens
+     so they render correctly instead of falling back to inherited. */
+  --text-primary: var(--ink);
+  --text-sec:     var(--ink-secondary);
+  --text-muted:   var(--ink-muted);
+  --ink-faded:    var(--ink-muted);
+  --border-dim:   var(--border);
+  --bg-base:      var(--bg-page);
+  --accent-hover: var(--accent-gold-hover);
+  --accent-dim:   var(--accent-gold-soft);
+  --error:        var(--danger);
+
   /* ─── Medical Images (single set, light only) ──────────────── */
   --img-body: url("../../assets/images/body_light.png");
   --img-hand: url("../../assets/images/hand_light.png");

@@ -283,28 +283,24 @@ export function Dashboard() {
         {/* ── Stats ── */}
         <div className={styles.statsRow}>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier" color="var(--ink)" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.total }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.total}</div>
             <div className={styles.statLbl}>Total Cases</div>
             <div className={styles.statSub}>Tổng số ca học</div>
           </div>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier2" color="var(--accent-sage)" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.done }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.done}</div>
             <div className={styles.statLbl}>Completed</div>
             <div className={styles.statSub}>{completionPct}% completion</div>
           </div>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier3" color="var(--ink-secondary)" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.inProgress }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.inProgress}</div>
             <div className={styles.statLbl}>In Progress</div>
             <div className={styles.statSub}>Đang làm dở</div>
           </div>
           <div className={styles.statCard}>
-            <SketchBorder id="prof-dossier4" color="var(--accent-clay)" opacity={0.7} />
             <div className={styles.statAccent} style={{ background: STAT_COLORS.notStarted }} />
             <div className={styles.statVal}>{casesLoading ? '—' : stats.notStarted}</div>
             <div className={styles.statLbl}>New Cases</div>
